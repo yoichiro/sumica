@@ -667,29 +667,7 @@ function App() {
                     </p>
                   </div>
                 </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '40px 0' }}>
-                  <div style={{
-                    width: '80px',
-                    height: '80px',
-                    borderRadius: '50%',
-                    background: 'rgba(250, 82, 82, 0.05)',
-                    border: '2px dashed rgba(250, 82, 82, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--danger)'
-                  }}>
-                    <AlertTriangle size={36} />
-                  </div>
-                  <div>
-                    <h3 style={{ color: 'var(--text-primary)', fontSize: '18px', marginBottom: '6px', fontWeight: '800' }}>画像生成エラー ❌</h3>
-                    <p style={{ fontSize: '14px', maxWidth: '340px', margin: '0 auto', lineHeight: '1.5' }}>
-                      生成中にエラーが発生しました。接続設定（右上⚙️）やローカルサーバーの起動状態を確認してください。
-                    </p>
-                  </div>
-                </div>
-              )
+              ) : null
             )}
           </div>
 
