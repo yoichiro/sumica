@@ -609,18 +609,20 @@ function App() {
         </section>
 
         {/* RIGHT COLUMN: PREVIEW & HISTORY GRID */}
-        <section style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '24px', 
+        <section style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px',
           overflowY: 'auto',
-          paddingRight: '4px'
+          paddingRight: '4px',
+          minHeight: 0
         }}>
           {/* GENERATION PREVIEW STAGE */}
-          <div className="glass-panel" style={{ 
-            padding: '24px', 
-            borderRadius: '20px', 
+          <div className="glass-panel" style={{
+            padding: '24px',
+            borderRadius: '20px',
             minHeight: '380px',
+            flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
@@ -629,12 +631,12 @@ function App() {
           }}>
             {currentGeneration ? (
               <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
-                {/* Image Frame */}
-                <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid #dee2e6', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
-                  <img 
-                    src={currentGeneration.imageUrl} 
-                    alt="Generated output" 
-                    style={{ width: '100%', height: 'auto', display: 'block' }}
+                {/* Image Frame — hugs the image and centers within its grid track */}
+                <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid #dee2e6', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', justifySelf: 'center', maxWidth: '100%', minHeight: 0 }}>
+                  <img
+                    src={currentGeneration.imageUrl}
+                    alt="Generated output"
+                    style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }}
                   />
                   <div style={{ 
                     position: 'absolute', 
@@ -666,8 +668,8 @@ function App() {
                   </div>
                 </div>
 
-                {/* Prompt Info */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+                {/* Prompt Info — scrolls vertically when taller than the image area */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', maxHeight: '48vh', overflowY: 'auto', minHeight: 0, paddingRight: '4px' }}>
                   <div>
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>元プロンプト</span>
                     <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{currentGeneration.originalPrompt}</p>
@@ -738,9 +740,10 @@ function App() {
 
           {/* PROCESS TRACKER STAGE */}
           {genStatus !== 'idle' && (
-            <div className="glass-panel" style={{ 
-              padding: '20px 24px', 
-              borderRadius: '20px', 
+            <div className="glass-panel" style={{
+              padding: '20px 24px',
+              borderRadius: '20px',
+              flexShrink: 0,
               display: 'flex',
               flexDirection: 'column',
               gap: '16px',
@@ -927,7 +930,7 @@ function App() {
           )}
 
           {/* HISTORY GALLERY */}
-          <div>
+          <div style={{ flexShrink: 0 }}>
             <h3 style={{ fontSize: '16px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--text-secondary)' }}>
               <History size={18} />
               <span>生成履歴ギャラリー 📸 ({history.length})</span>
@@ -952,10 +955,10 @@ function App() {
                       position: 'relative'
                     }}
                   >
-                    <img 
-                      src={item.imageUrl} 
-                      alt={item.originalPrompt} 
-                      style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }}
+                    <img
+                      src={item.imageUrl}
+                      alt={item.originalPrompt}
+                      style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa' }}
                       loading="lazy"
                     />
                     
