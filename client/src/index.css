@@ -106,25 +106,20 @@ body {
   border: 2px solid var(--pop-blue-dark);
   font-weight: 700;
   cursor: pointer;
-  box-shadow: var(--shadow-button);
   transition: all 0.15s ease-in-out;
 }
 
 .btn-neon:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 0px var(--pop-blue-dark);
   background: #4dabf7;
 }
 
 .btn-neon:active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 0px var(--pop-blue-dark);
+  transform: scale(0.98);
 }
 
 .btn-neon:disabled {
   background: var(--text-muted);
   border-color: var(--text-muted);
-  box-shadow: none;
   color: #fff;
   cursor: not-allowed;
   transform: none;
