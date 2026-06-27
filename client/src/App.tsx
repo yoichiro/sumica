@@ -133,8 +133,6 @@ function App() {
   type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
   const [errorStep, setErrorStep] = useState<number | null>(null);
-  const [enhancedPositive, setEnhancedPositive] = useState('');
-  const [enhancedNegative, setEnhancedNegative] = useState('');
 
   const API_BASE = 'http://127.0.0.1:5000/api';
 
@@ -206,8 +204,6 @@ function App() {
     setErrorStep(null);
     setGenStatus('enhancing');
     setCurrentGeneration(null); // Clear preview on start
-    setEnhancedPositive('');     // Reset enhanced positive
-    setEnhancedNegative('');     // Reset enhanced negative
     setLoadingStep(1); // Start Step 1: Prompt Enhancement
 
     let currentStep = 1;
@@ -226,8 +222,6 @@ function App() {
       }
 
       const enhanceResult = await enhanceRes.json();
-      setEnhancedPositive(enhanceResult.positive);
-      setEnhancedNegative(enhanceResult.negative);
 
       // --- Transition to Step 2: Image Generation ---
       currentStep = 2;
@@ -868,64 +862,6 @@ function App() {
                   </div>
                 </div>
               </div>
-
-              {/* Bottom row: Realtime Prompts Display */}
-              {(enhancedPositive || enhancedNegative) && (
-                <div className="fade-in" style={{ 
-                  borderTop: '2px solid #e9ecef', 
-                  paddingTop: '16px', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '12px', 
-                  width: '100%', 
-                  textAlign: 'left' 
-                }}>
-                  {enhancedPositive && (
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                        <Sparkles size={11} /> 拡張プロンプト (ポジティブ)
-                      </span>
-                      <p style={{ 
-                        fontSize: '12.5px', 
-                        marginTop: '4px', 
-                        color: 'var(--text-secondary)', 
-                        fontStyle: 'italic', 
-                        lineHeight: '1.4', 
-                        background: '#f8f9fa', 
-                        padding: '10px', 
-                        borderRadius: '8px', 
-                        border: '2px solid #e9ecef',
-                        wordBreak: 'break-all',
-                        margin: 0
-                      }}>
-                        {enhancedPositive}
-                      </p>
-                    </div>
-                  )}
-
-                  {enhancedNegative && (
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                        ❌ ネガティブプロンプト
-                      </span>
-                      <p style={{ 
-                        fontSize: '12px', 
-                        marginTop: '4px', 
-                        color: 'var(--text-secondary)', 
-                        lineHeight: '1.4', 
-                        background: '#fff5f5', 
-                        padding: '10px', 
-                        borderRadius: '8px', 
-                        border: '2px solid #ffe3e3', 
-                        wordBreak: 'break-all',
-                        margin: 0
-                      }}>
-                        {enhancedNegative}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
 
