@@ -74,6 +74,7 @@ interface GenerationMetadata {
   height: number | string;
   steps: number | string;
   cfgScale: number | string;
+  model: string | null;
   imageUrl: string;
   storagePath?: string;
   localPath?: string;
@@ -174,11 +175,12 @@ async function generateImage(
   width = 512,
   height = 512,
   steps = 20,
-  cfgScale = 7
+  cfgScale = 7,
+  model = ''
 ): Promise<string> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
-    const response = await axios.post(`${stableDiffusionUrl}/sdapi/v1/txt2img`, {
+    const payload: Record<string, unknown> = {
       prompt,
       negative_prompt: negativePrompt || 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry',
       steps,
@@ -186,7 +188,12 @@ async function generateImage(
       width,
       height,
       sampler_name: 'Euler a',
-    }, { timeout: 180000 }); // 3 minutes timeout
+    };
+    // Switch checkpoint for this request; SD keeps it loaded for subsequent generations.
+    if (model) {
+      payload.override_settings = { sd_model_checkpoint: model };
+    }
+    const response = await axios.post(`${stableDiffusionUrl}/sdapi/v1/txt2img`, payload, { timeout: 180000 }); // 3 minutes timeout
 
     if (response.data && response.data.images && response.data.images[0]) {
       return response.data.images[0]; // Returns base64 image string
@@ -247,7 +254,7 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
@@ -276,7 +283,8 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       width ? parseInt(width) : 512,
       height ? parseInt(height) : 512,
       steps ? parseInt(steps) : 20,
-      cfgScale ? parseFloat(cfgScale) : 7
+      cfgScale ? parseFloat(cfgScale) : 7,
+      model || ''
     );
 
     const imageBuffer = Buffer.from(base64Image, 'base64');
@@ -305,6 +313,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         height: height || 512,
         steps: steps || 20,
         cfgScale: cfgScale || 7,
+        model: model || null,
         imageUrl,
         storagePath,
         timestamp,
@@ -335,6 +344,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         height: height || 512,
         steps: steps || 20,
         cfgScale: cfgScale || 7,
+        model: model || null,
         imageUrl,
         localPath: localFilePath,
         timestamp,
@@ -420,6 +430,25 @@ app.get('/api/health', async (_req: Request, res: Response) => {
     checkStableDiffusion(),
   ]);
   res.json({ lmStudio, stableDiffusion });
+});
+
+// 6. List Stable Diffusion checkpoints and the currently active one (for the model picker).
+// Always responds 200; on failure returns an empty list so the client can disable the selector.
+app.get('/api/sd-models', async (_req: Request, res: Response) => {
+  try {
+    const [listRes, optionsRes] = await Promise.all([
+      axios.get(`${stableDiffusionUrl}/sdapi/v1/sd-models`, { timeout: 5000 }),
+      axios.get(`${stableDiffusionUrl}/sdapi/v1/options`, { timeout: 5000 }),
+    ]);
+    const models = Array.isArray(listRes.data)
+      ? listRes.data.map((m: { title?: string }) => m.title).filter((t): t is string => Boolean(t))
+      : [];
+    const current = optionsRes.data?.sd_model_checkpoint ?? null;
+    res.json({ models, current });
+  } catch (error) {
+    console.error('Failed to fetch SD models:', (error as Error).message);
+    res.json({ models: [], current: null });
+  }
 });
 
 // Start Express Server

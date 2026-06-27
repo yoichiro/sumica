@@ -33,7 +33,7 @@ Two packages, each collapsed into a single source file:
 The enhance and generate steps are **split into two client requests on purpose** so the UI can render a live step indicator (`loadingStep` 1→2→3). Editing one side without the other will break this:
 
 1. Client `POST /api/enhance` → server `enhancePrompt()` asks LM Studio (`/v1/chat/completions`, OpenAI-compatible) to translate+expand the prompt. The LLM is instructed to reply with `<prompts><positive>…</positive><negative>…</negative></prompts>`, which the server **parses by regex**. If the model omits the tags, it falls back to the raw prompt / a default negative.
-2. Client `POST /api/generate` with the returned positive/negative and **`skipEnhance: true`**. That flag tells the server to skip a second enhancement — `/api/generate` *can* enhance on its own, but the client never lets it (it already enhanced in step 1). `generateImage()` then calls Stable Diffusion `/sdapi/v1/txt2img` (180s timeout) and gets a base64 PNG.
+2. Client `POST /api/generate` with the returned positive/negative and **`skipEnhance: true`**. That flag tells the server to skip a second enhancement — `/api/generate` *can* enhance on its own, but the client never lets it (it already enhanced in step 1). `generateImage()` then calls Stable Diffusion `/sdapi/v1/txt2img` (180s timeout) and gets a base64 PNG. An optional `model` in the request is passed as `override_settings.sd_model_checkpoint` (SD switches checkpoint and keeps it loaded), and the chosen model is persisted in the generation metadata.
 3. Server persists and returns metadata; client fires confetti and refreshes history.
 
 ### Storage: Firebase ↔ local fallback
@@ -42,7 +42,7 @@ On startup the server tries to init Firebase Admin from `FIREBASE_KEY_PATH`. **I
 
 ### Runtime-mutable config
 
-`lmStudioUrl`, `stableDiffusionUrl`, and `lmStudioModel` are **module-level mutable variables**, seeded from `.env` but rewritable at runtime via `POST /api/settings` (driven by the UI gear panel). They are in-memory only — not persisted, reset on restart. `GET /api/status` exposes current values + mode. `/api/settings` validates that submitted URLs use the `http(s)` scheme via `isValidHttpUrl` (SSRF hardening); loopback/LAN hosts stay allowed on purpose since the legitimate LM Studio / SD targets are local. `GET /api/health` pings both upstreams (LM Studio `/v1/models`, SD `/sdapi/v1/sd-models`) and always returns 200 with per-service `connected` flags — the client polls it every 20s to drive the top-right status badges.
+`lmStudioUrl`, `stableDiffusionUrl`, and `lmStudioModel` are **module-level mutable variables**, seeded from `.env` but rewritable at runtime via `POST /api/settings` (driven by the UI gear panel). They are in-memory only — not persisted, reset on restart. `GET /api/status` exposes current values + mode. `/api/settings` validates that submitted URLs use the `http(s)` scheme via `isValidHttpUrl` (SSRF hardening); loopback/LAN hosts stay allowed on purpose since the legitimate LM Studio / SD targets are local. `GET /api/health` pings both upstreams (LM Studio `/v1/models`, SD `/sdapi/v1/sd-models`) and always returns 200 with per-service `connected` flags — the client polls it every 20s to drive the top-right status badges. `GET /api/sd-models` proxies SD's `/sdapi/v1/sd-models` + `/sdapi/v1/options` to return `{ models, current }` for the checkpoint picker in the advanced-settings UI.
 
 ### Client ↔ server wiring
 

@@ -23,6 +23,7 @@ interface GenerationData {
   height: number;
   steps: number;
   cfgScale: number;
+  model?: string | null;
   imageUrl: string;
   timestamp: number;
   createdAt: string;
@@ -120,6 +121,8 @@ function App() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthChecking, setHealthChecking] = useState(false);
   const healthInFlight = useRef(false);
+  const [sdModels, setSdModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
@@ -140,10 +143,19 @@ function App() {
     fetchHistory();
     fetchStatus();
     fetchHealth();
+    fetchSdModels();
     // Re-check upstream connectivity every 20s so the badges stay fresh.
     const healthInterval = setInterval(fetchHealth, 20000);
     return () => clearInterval(healthInterval);
   }, []);
+
+  // (Re)load the SD model list whenever Stable Diffusion becomes reachable,
+  // so the picker populates even if SD started after the page loaded.
+  useEffect(() => {
+    if (health?.stableDiffusion.connected) {
+      fetchSdModels();
+    }
+  }, [health?.stableDiffusion.connected]);
 
   const fetchHistory = async () => {
     try {
@@ -193,6 +205,22 @@ function App() {
     }
   };
 
+  // Fetch the Stable Diffusion checkpoint list. Defaults the selection to SD's
+  // active model the first time, but preserves an explicit user choice afterwards.
+  const fetchSdModels = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sd-models`);
+      if (res.ok) {
+        const data = await res.json();
+        const models: string[] = Array.isArray(data.models) ? data.models : [];
+        setSdModels(models);
+        setSelectedModel((prev) => prev || data.current || '');
+      }
+    } catch (error) {
+      console.error('Failed to fetch SD models:', error);
+    }
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || loading) return;
@@ -239,6 +267,7 @@ function App() {
           height,
           steps,
           cfgScale,
+          model: selectedModel || undefined, // Override SD checkpoint when one is selected
           skipEnhance: true // Skip enhancement since we already did it!
         })
       });
@@ -307,6 +336,7 @@ function App() {
         setSettingsSuccess(true);
         fetchStatus();
         fetchHealth(); // Re-check connectivity against the newly saved URLs
+        fetchSdModels(); // Refresh model list against the newly saved SD URL
         addToast('設定を保存しました！⚙️', 'success');
         setTimeout(() => {
           setSettingsSuccess(false);
@@ -484,6 +514,28 @@ function App() {
                 overflowY: 'auto'
               }}>
                 {/* Negative Prompt auto-applied by backend */}
+
+                {/* Stable Diffusion Model Selector */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>モデル (Stable Diffusion)</label>
+                  {sdModels.length > 0 ? (
+                    <select
+                      className="input-field"
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      disabled={loading}
+                      style={{ borderRadius: '8px' }}
+                    >
+                      {sdModels.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
+                      <option>モデル一覧を取得できません（SD未接続）</option>
+                    </select>
+                  )}
+                </div>
 
                 {/* Size Select with Swap Button */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.2fr', gap: '8px', alignItems: 'end', textAlign: 'left' }}>
@@ -709,6 +761,12 @@ function App() {
                       <span>CFG: </span>
                       <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.cfgScale}</strong>
                     </div>
+                    {currentGeneration.model && (
+                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
+                        <span>モデル: </span>
+                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.model}</strong>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1096,6 +1154,12 @@ function App() {
                   <span style={{ color: 'var(--text-secondary)' }}>サンプラー: </span>
                   <strong style={{ color: 'var(--text-primary)' }}>Euler a</strong>
                 </div>
+                {selectedItem.model && (
+                  <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>モデル: </span>
+                    <strong style={{ color: 'var(--text-primary)' }}>{selectedItem.model}</strong>
+                  </div>
+                )}
               </div>
             </div>
           </div>
