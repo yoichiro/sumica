@@ -89,7 +89,10 @@ function App() {
   
   // Detail views
   const [selectedItem, setSelectedItem] = useState<GenerationData | null>(null);
-  const [hasAttempted, setHasAttempted] = useState(false);
+  
+  type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
+  const [genStatus, setGenStatus] = useState<GenStatus>('idle');
+  const [errorStep, setErrorStep] = useState<number | null>(null);
 
   const API_BASE = 'http://localhost:5000/api';
 
@@ -131,13 +134,16 @@ function App() {
     e.preventDefault();
     if (!prompt.trim() || loading) return;
 
-    // Backup current generation to restore in case of error
-    const prevGen = currentGeneration;
-
-    setHasAttempted(true);
     setLoading(true);
-    setCurrentGeneration(null);
+    setErrorStep(null);
+    setGenStatus('enhancing');
     setLoadingStep(1); // Always start with prompt enhancement
+
+    // Simulate step transition (since LM Studio prompt enhancement is usually quick)
+    const stepTimer = setTimeout(() => {
+      setLoadingStep(2);
+      setGenStatus('generating');
+    }, 1500);
 
     try {
       const res = await fetch(`${API_BASE}/generate`, {
@@ -160,7 +166,10 @@ function App() {
         throw new Error(errorData.error || 'Failed to generate image');
       }
 
+      clearTimeout(stepTimer);
       setLoadingStep(3); // Saving & Uploading
+      setGenStatus('saving');
+      
       const result = await res.json();
       
       if (result.success && result.data) {
@@ -173,17 +182,21 @@ function App() {
         });
         
         setCurrentGeneration(result.data);
+        setGenStatus('success');
         fetchHistory();
         addToast('画像を生成しました！🎨⚡️', 'success');
       }
     } catch (error: any) {
       console.error(error);
-      // Restore the previous image so the canvas doesn't stay blank on error
-      setCurrentGeneration(prevGen);
+      clearTimeout(stepTimer);
+      
+      // Determine which step failed based on current loadingStep
+      setErrorStep(loadingStep);
+      setGenStatus('error');
+      
       addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
     } finally {
       setLoading(false);
-      setLoadingStep(0);
     }
   };
 
@@ -511,63 +524,8 @@ function App() {
             position: 'relative',
             overflow: 'hidden'
           }}>
-            {/* Loading Overlay */}
-            {loading && (
-              <div style={{ 
-                position: 'absolute', 
-                inset: 0, 
-                backgroundColor: 'rgba(248, 249, 250, 0.92)', 
-                backdropFilter: 'blur(6px)',
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                zIndex: 10,
-                gap: '24px'
-              }}>
-                <div style={{ position: 'relative', width: '80px', height: '80px' }}>
-                  <div style={{ 
-                    position: 'absolute', 
-                    inset: 0, 
-                    border: '5px solid rgba(51, 154, 240, 0.15)', 
-                    borderRadius: '50%' 
-                  }}></div>
-                  <div style={{ 
-                    position: 'absolute', 
-                    inset: 0, 
-                    border: '5px solid transparent', 
-                    borderTopColor: 'var(--pop-blue)', 
-                    borderRightColor: 'var(--pop-teal)',
-                    borderRadius: '50%',
-                  }} className="animate-spin-custom"></div>
-                  <Sparkles style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--pop-blue)' }} className="animate-bounce-custom" size={26} />
-                </div>
-                
-                {/* Stepper Logic */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '80%', maxWidth: '320px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: loadingStep > 1 ? 'var(--success)' : loadingStep === 1 ? 'var(--pop-blue)' : 'none', border: '2px solid var(--text-muted)', color: loadingStep >= 1 ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
-                      {loadingStep > 1 ? '✓' : '1'}
-                    </div>
-                    <span>LM Studio でプロンプトを拡張中... 🪄</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: loadingStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: loadingStep > 2 ? 'var(--success)' : loadingStep === 2 ? 'var(--pop-teal)' : 'none', border: '2px solid var(--text-muted)', color: loadingStep >= 2 ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
-                      {loadingStep > 2 ? '✓' : '2'}
-                    </div>
-                    <span>Stable Diffusion で画像を生成中... 🎨</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: loadingStep >= 3 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: loadingStep === 3 ? 'var(--pop-orange)' : 'none', border: '2px solid var(--text-muted)', color: loadingStep === 3 ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
-                      {loadingStep === 3 ? '...' : '3'}
-                    </div>
-                    <span>画像をストレージに保存中... ☁️</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {currentGeneration ? (
+            {/* Stage Selector */}
+            {genStatus === 'success' && currentGeneration ? (
               <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
                 {/* Image Frame */}
                 <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid #dee2e6', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
@@ -644,30 +602,85 @@ function App() {
                   </div>
                 </div>
               </div>
-            ) : (
-              !hasAttempted ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '40px 0' }}>
-                  <div style={{
-                    width: '80px',
-                    height: '80px',
-                    borderRadius: '50%',
-                    background: 'rgba(51, 154, 240, 0.05)',
-                    border: '2px dashed rgba(51, 154, 240, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--pop-blue)'
-                  }}>
-                    <ImageIcon size={36} />
+            ) : (genStatus === 'enhancing' || genStatus === 'generating' || genStatus === 'saving' || genStatus === 'error') ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', padding: '40px 0' }}>
+                <div style={{ position: 'relative', width: '80px', height: '80px' }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    inset: 0, 
+                    border: '5px solid rgba(51, 154, 240, 0.15)', 
+                    borderRadius: '50%' 
+                  }}></div>
+                  {genStatus !== 'error' ? (
+                    <div style={{ 
+                      position: 'absolute', 
+                      inset: 0, 
+                      border: '5px solid transparent', 
+                      borderTopColor: 'var(--pop-blue)', 
+                      borderRightColor: 'var(--pop-teal)',
+                      borderRadius: '50%',
+                    }} className="animate-spin-custom"></div>
+                  ) : (
+                    <div style={{ 
+                      position: 'absolute', 
+                      inset: 0, 
+                      border: '5px solid var(--danger)', 
+                      borderRadius: '50%',
+                    }}></div>
+                  )}
+                  {genStatus !== 'error' ? (
+                    <Sparkles style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--pop-blue)' }} className="animate-bounce-custom" size={26} />
+                  ) : (
+                    <AlertTriangle style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--danger)' }} size={26} />
+                  )}
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '80%', maxWidth: '320px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep > 1 ? 'var(--success)' : loadingStep === 1 ? 'var(--pop-blue)' : 'none', border: '2px solid ' + ((genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : 'var(--text-muted)'), color: (loadingStep >= 1 || (genStatus === 'error' && errorStep === 1)) ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
+                      {(genStatus === 'error' && errorStep === 1) ? '✗' : loadingStep > 1 ? '✓' : '1'}
+                    </div>
+                    <span>LM Studio でプロンプトを拡張中... 🪄</span>
+                    {(genStatus === 'error' && errorStep === 1) && <span style={{ fontSize: '11px', color: 'var(--danger)', fontWeight: 'normal', marginLeft: 'auto' }}>エラー</span>}
                   </div>
-                  <div>
-                    <h3 style={{ color: 'var(--text-primary)', fontSize: '18px', marginBottom: '6px', fontWeight: '800' }}>画像の生成準備完了 🖼️</h3>
-                    <p style={{ fontSize: '14px', maxWidth: '340px', margin: '0 auto', lineHeight: '1.5' }}>
-                      プロンプトを入力して「画像を生成する」ボタンを押すと、AIが素敵な画像を生成します。
-                    </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep > 2 ? 'var(--success)' : loadingStep === 2 ? 'var(--pop-teal)' : 'none', border: '2px solid ' + ((genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : 'var(--text-muted)'), color: (loadingStep >= 2 || (genStatus === 'error' && errorStep === 2)) ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
+                      {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 ? '✓' : '2'}
+                    </div>
+                    <span>Stable Diffusion で画像を生成中... 🎨</span>
+                    {(genStatus === 'error' && errorStep === 2) && <span style={{ fontSize: '11px', color: 'var(--danger)', fontWeight: 'normal', marginLeft: 'auto' }}>エラー</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep >= 3 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep === 3 ? 'var(--pop-orange)' : 'none', border: '2px solid ' + ((genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : 'var(--text-muted)'), color: (loadingStep === 3 || (genStatus === 'error' && errorStep === 3)) ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
+                      {(genStatus === 'error' && errorStep === 3) ? '✗' : '3'}
+                    </div>
+                    <span>画像をストレージに保存中... ☁️</span>
+                    {(genStatus === 'error' && errorStep === 3) && <span style={{ fontSize: '11px', color: 'var(--danger)', fontWeight: 'normal', marginLeft: 'auto' }}>エラー</span>}
                   </div>
                 </div>
-              ) : null
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '40px 0' }}>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '50%',
+                  background: 'rgba(51, 154, 240, 0.05)',
+                  border: '2px dashed rgba(51, 154, 240, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--pop-blue)'
+                }}>
+                  <ImageIcon size={36} />
+                </div>
+                <div>
+                  <h3 style={{ color: 'var(--text-primary)', fontSize: '18px', marginBottom: '6px', fontWeight: '800' }}>画像の生成準備完了 🖼️</h3>
+                  <p style={{ fontSize: '14px', maxWidth: '340px', margin: '0 auto', lineHeight: '1.5' }}>
+                    プロンプトを入力して「画像を生成する」ボタンを押すと、AIが素敵な画像を生成します。
+                  </p>
+                </div>
+              </div>
             )}
           </div>
 
