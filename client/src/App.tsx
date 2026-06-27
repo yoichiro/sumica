@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, 
-  Settings, 
-  History, 
-  Image as ImageIcon, 
+  Settings,
+  Image as ImageIcon,
   RotateCw, 
   Cloud, 
   Folder,
@@ -961,11 +960,6 @@ function App() {
           {/* HISTORY GALLERY */}
           {rightTab === 'gallery' && (
           <div style={{ flexShrink: 0 }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--text-secondary)' }}>
-              <History size={18} />
-              <span>生成履歴ギャラリー 📸</span>
-            </h3>
-
             {history.length > 0 ? (
               <div style={{ 
                 display: 'grid', 
