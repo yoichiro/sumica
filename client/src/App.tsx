@@ -123,6 +123,7 @@ function App() {
   const healthInFlight = useRef(false);
   const [sdModels, setSdModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [showSettings, setShowSettings] = useState(false);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
@@ -230,6 +231,7 @@ function App() {
 
     setLoading(true);
     setErrorStep(null);
+    setRightTab('preview'); // Surface progress/result even if the gallery tab was open
     setGenStatus('enhancing');
     setCurrentGeneration(null); // Clear preview on start
     setLoadingStep(1); // Start Step 1: Prompt Enhancement
@@ -659,15 +661,42 @@ function App() {
           </form>
         </section>
 
-        {/* RIGHT COLUMN: PREVIEW & HISTORY GRID */}
+        {/* RIGHT COLUMN: PREVIEW & HISTORY GRID (tabbed) */}
         <section style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: '24px',
-          overflowY: 'auto',
-          paddingRight: '4px',
-          minHeight: 0
+          minHeight: 0,
+          overflow: 'hidden'
         }}>
+          {/* TAB BAR */}
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginBottom: '16px', background: '#f1f3f5', padding: '6px', borderRadius: '14px' }}>
+            {([['preview', '🎨 プレビュー＆進捗'], ['gallery', `🖼️ 履歴ギャラリー (${history.length})`]] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRightTab(key)}
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  background: rightTab === key ? '#ffffff' : 'transparent',
+                  color: rightTab === key ? 'var(--pop-blue)' : 'var(--text-secondary)',
+                  boxShadow: rightTab === key ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* TAB CONTENT (scrollable) */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {rightTab === 'preview' && (<>
           {/* GENERATION PREVIEW STAGE */}
           <div className="glass-panel" style={{
             padding: '24px',
@@ -927,12 +956,14 @@ function App() {
               </div>
             </div>
           )}
+          </>)}
 
           {/* HISTORY GALLERY */}
+          {rightTab === 'gallery' && (
           <div style={{ flexShrink: 0 }}>
             <h3 style={{ fontSize: '16px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--text-secondary)' }}>
               <History size={18} />
-              <span>生成履歴ギャラリー 📸 ({history.length})</span>
+              <span>生成履歴ギャラリー 📸</span>
             </h3>
 
             {history.length > 0 ? (
@@ -1005,6 +1036,8 @@ function App() {
                 生成履歴はありません。最初の画像を生成してみましょう！🎨⚡️
               </div>
             )}
+          </div>
+          )}
           </div>
         </section>
       </main>
