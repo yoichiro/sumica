@@ -89,6 +89,7 @@ function App() {
   
   // Detail views
   const [selectedItem, setSelectedItem] = useState<GenerationData | null>(null);
+  const [hasAttempted, setHasAttempted] = useState(false);
 
   const API_BASE = 'http://localhost:5000/api';
 
@@ -133,6 +134,7 @@ function App() {
     // Backup current generation to restore in case of error
     const prevGen = currentGeneration;
 
+    setHasAttempted(true);
     setLoading(true);
     setCurrentGeneration(null);
     setLoadingStep(1); // Always start with prompt enhancement
@@ -643,27 +645,51 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '40px 0' }}>
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '50%',
-                  background: 'rgba(51, 154, 240, 0.05)',
-                  border: '2px dashed rgba(51, 154, 240, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--pop-blue)'
-                }}>
-                  <ImageIcon size={36} />
+              !hasAttempted ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '40px 0' }}>
+                  <div style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '50%',
+                    background: 'rgba(51, 154, 240, 0.05)',
+                    border: '2px dashed rgba(51, 154, 240, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--pop-blue)'
+                  }}>
+                    <ImageIcon size={36} />
+                  </div>
+                  <div>
+                    <h3 style={{ color: 'var(--text-primary)', fontSize: '18px', marginBottom: '6px', fontWeight: '800' }}>画像の生成準備完了 🖼️</h3>
+                    <p style={{ fontSize: '14px', maxWidth: '340px', margin: '0 auto', lineHeight: '1.5' }}>
+                      プロンプトを入力して「画像を生成する」ボタンを押すと、AIが素敵な画像を生成します。
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 style={{ color: 'var(--text-primary)', fontSize: '18px', marginBottom: '6px', fontWeight: '800' }}>画像の生成準備完了 🖼️</h3>
-                  <p style={{ fontSize: '14px', maxWidth: '340px', margin: '0 auto', lineHeight: '1.5' }}>
-                    プロンプトを入力して「画像を生成する」ボタンを押すと、AIが素敵な画像を生成します。
-                  </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '40px 0' }}>
+                  <div style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '50%',
+                    background: 'rgba(250, 82, 82, 0.05)',
+                    border: '2px dashed rgba(250, 82, 82, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--danger)'
+                  }}>
+                    <AlertTriangle size={36} />
+                  </div>
+                  <div>
+                    <h3 style={{ color: 'var(--text-primary)', fontSize: '18px', marginBottom: '6px', fontWeight: '800' }}>画像生成エラー ❌</h3>
+                    <p style={{ fontSize: '14px', maxWidth: '340px', margin: '0 auto', lineHeight: '1.5' }}>
+                      生成中にエラーが発生しました。接続設定（右上⚙️）やローカルサーバーの起動状態を確認してください。
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )
             )}
           </div>
 
