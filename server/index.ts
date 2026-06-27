@@ -451,6 +451,57 @@ app.get('/api/sd-models', async (_req: Request, res: Response) => {
   }
 });
 
+// 7. Delete selected generations (image files + metadata, or Firestore docs + Storage objects).
+app.post('/api/generations/delete', async (req: Request, res: Response) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'A non-empty ids array is required' });
+  }
+
+  let deleted = 0;
+  try {
+    if (firebaseEnabled && db && bucket) {
+      for (const id of ids) {
+        try {
+          const docRef = db.collection('generations').doc(String(id));
+          const snap = await docRef.get();
+          if (!snap.exists) continue;
+          const storagePath = snap.data()?.storagePath;
+          if (storagePath) {
+            await bucket.file(storagePath).delete({ ignoreNotFound: true });
+          }
+          await docRef.delete();
+          deleted++;
+        } catch (e) {
+          console.error(`Failed to delete generation ${id}:`, (e as Error).message);
+        }
+      }
+    } else {
+      const idSet = new Set(ids.map(String));
+      const remaining: GenerationMetadata[] = [];
+      for (const item of getLocalHistory()) {
+        if (item.id && idSet.has(item.id)) {
+          if (item.localPath && fs.existsSync(item.localPath)) {
+            try {
+              fs.unlinkSync(item.localPath);
+            } catch (e) {
+              console.error(`Failed to remove file ${item.localPath}:`, (e as Error).message);
+            }
+          }
+          deleted++;
+        } else {
+          remaining.push(item);
+        }
+      }
+      saveLocalHistory(remaining);
+    }
+    res.json({ success: true, deleted });
+  } catch (error) {
+    console.error('Delete failed:', error);
+    res.status(500).json({ error: (error as Error).message || 'Failed to delete generations.' });
+  }
+});
+
 // Start Express Server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT} 🚀`);

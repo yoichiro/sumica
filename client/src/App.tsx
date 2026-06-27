@@ -9,7 +9,8 @@ import {
   X,
   ArrowLeftRight,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Trash2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -123,7 +124,49 @@ function App() {
   const [sdModels, setSdModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Stable id for a history item (Firestore id or local timestamp).
+  const itemKey = (it: GenerationData) => it.id ?? String(it.timestamp);
+
+  // Single-click toggles selection. (A double-click fires onClick twice — toggling
+  // back to the original state — then onDoubleClick opens the popup.)
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      return next;
+    });
+  };
+
+  // Delete the selected generations (only invoked after the confirm modal).
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_BASE}/generations/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to delete');
+      }
+      const data = await res.json();
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+      await fetchHistory();
+      addToast(`${data.deleted}件の画像を削除しました 🗑️`, 'success');
+    } catch (error: any) {
+      addToast(`削除に失敗しました。\n\n詳細: ${error.message}`, 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
   const [showSettings, setShowSettings] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
   const [newLmStudioModel, setNewLmStudioModel] = useState('');
@@ -960,6 +1003,46 @@ function App() {
           {/* HISTORY GALLERY */}
           {rightTab === 'gallery' && (
           <div style={{ flexShrink: 0 }}>
+            <div style={{
+              marginBottom: '16px',
+              padding: '8px 16px',
+              background: 'var(--panel-bg)',
+              border: '2px solid var(--panel-border)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-soft)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              minHeight: '40px'
+            }}>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
+                {selectedIds.size}件選択
+              </span>
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="scale-hover"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'rgba(255, 107, 107, 0.1)',
+                    border: '2px solid rgba(255, 107, 107, 0.3)',
+                    color: 'var(--danger)',
+                    borderRadius: '10px',
+                    padding: '6px 14px',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Trash2 size={15} />
+                  <span>削除</span>
+                </button>
+              )}
+            </div>
             {history.length > 0 ? (
               <div style={{ 
                 display: 'grid', 
@@ -967,15 +1050,17 @@ function App() {
                 gap: '18px' 
               }}>
                 {history.map((item) => (
-                  <div 
-                    key={item.id || item.timestamp}
-                    className="glass-panel scale-hover" 
-                    onClick={() => setSelectedItem(item)}
-                    style={{ 
-                      borderRadius: '12px', 
-                      overflow: 'hidden', 
+                  <div
+                    key={itemKey(item)}
+                    className="glass-panel scale-hover"
+                    onClick={() => toggleSelected(itemKey(item))}
+                    onDoubleClick={() => setSelectedItem(item)}
+                    style={{
+                      borderRadius: '12px',
+                      overflow: 'hidden',
                       cursor: 'pointer',
-                      border: '2px solid #e9ecef',
+                      border: selectedIds.has(itemKey(item)) ? '2px solid var(--pop-blue)' : '2px solid #e9ecef',
+                      boxShadow: selectedIds.has(itemKey(item)) ? '0 0 0 3px rgba(51, 154, 240, 0.25)' : 'none',
                       position: 'relative'
                     }}
                   >
@@ -985,7 +1070,27 @@ function App() {
                       style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa' }}
                       loading="lazy"
                     />
-                    
+
+                    {/* Selected check (top-left) */}
+                    {selectedIds.has(itemKey(item)) && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '6px',
+                        left: '6px',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: 'var(--pop-blue)',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+                      }}>✓</div>
+                    )}
+
                     {/* Badge indicator */}
                     <div style={{ 
                       position: 'absolute', 
@@ -1188,6 +1293,66 @@ function App() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE CONFIRMATION */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 120,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '420px',
+            borderRadius: '20px',
+            padding: '28px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            textAlign: 'center',
+            border: '2px solid var(--danger)',
+            background: '#ffffff'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255, 107, 107, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Trash2 size={26} color="var(--danger)" />
+              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
+                {selectedIds.size}件の画像を削除しますか？
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                選択した画像とその生成情報が完全に削除されます。<br />この操作は取り消せません。
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="scale-hover"
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e9ecef', background: '#fff', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={deleting}
+                className="scale-hover"
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: 'var(--danger)', color: '#fff', fontWeight: '800', cursor: deleting ? 'wait' : 'pointer', opacity: deleting ? 0.7 : 1 }}
+              >
+                {deleting ? '削除中...' : '削除する'}
+              </button>
             </div>
           </div>
         </div>
