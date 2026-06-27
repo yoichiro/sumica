@@ -580,10 +580,21 @@ function App() {
                   {currentGeneration.enhancedPrompt !== currentGeneration.originalPrompt && (
                     <div>
                       <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                        <Sparkles size={11} /> 拡張プロンプト
+                        <Sparkles size={11} /> 拡張プロンプト (ポジティブ)
                       </span>
-                      <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: '#f8f9fa', padding: '10px', borderRadius: '8px', border: '2px solid #e9ecef' }}>
+                      <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: '#f8f9fa', padding: '10px', borderRadius: '8px', border: '2px solid #e9ecef', wordBreak: 'break-all' }}>
                         {currentGeneration.enhancedPrompt}
+                      </p>
+                    </div>
+                  )}
+
+                  {currentGeneration.negativePrompt && (
+                    <div>
+                      <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
+                        ❌ ネガティブプロンプト
+                      </span>
+                      <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: '#fff5f5', padding: '10px', borderRadius: '8px', border: '2px solid #ffe3e3', wordBreak: 'break-all' }}>
+                        {currentGeneration.negativePrompt}
                       </p>
                     </div>
                   )}
@@ -922,7 +933,7 @@ function App() {
               {selectedItem.enhancedPrompt !== selectedItem.originalPrompt && (
                 <div>
                   <h4 style={{ fontSize: '12px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                    <Sparkles size={12} /> 拡張プロンプト (LM Studio)
+                    <Sparkles size={12} /> 拡張プロンプト (ポジティブ)
                   </h4>
                   <div style={{ 
                     background: '#f8f9fa', 
@@ -932,7 +943,8 @@ function App() {
                     fontSize: '13px', 
                     color: 'var(--text-secondary)',
                     lineHeight: '1.5',
-                    fontStyle: 'italic'
+                    fontStyle: 'italic',
+                    wordBreak: 'break-all'
                   }}>
                     {selectedItem.enhancedPrompt}
                   </div>
@@ -941,8 +953,21 @@ function App() {
 
               {selectedItem.negativePrompt && (
                 <div>
-                  <h4 style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', fontWeight: '700' }}>ネガティブプロンプト</h4>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.4' }}>{selectedItem.negativePrompt}</p>
+                  <h4 style={{ fontSize: '12px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
+                    ❌ ネガティブプロンプト
+                  </h4>
+                  <div style={{ 
+                    background: '#fff5f5', 
+                    border: '2px solid #ffe3e3', 
+                    borderRadius: '10px', 
+                    padding: '14px', 
+                    fontSize: '12px', 
+                    color: 'var(--text-secondary)',
+                    lineHeight: '1.5',
+                    wordBreak: 'break-all'
+                  }}>
+                    {selectedItem.negativePrompt}
+                  </div>
                 </div>
               )}
 
