@@ -12,19 +12,20 @@ Run from the **repository root** unless noted:
 
 ```bash
 npm install        # installs root, client, and server deps in one shot
-npm run dev        # concurrently runs server (nodemon) + client (vite)
+npm run dev        # concurrently runs server (tsx watch) + client (vite)
 npm run dev:server # server only — http://localhost:5000
 npm run dev:client # client only — http://localhost:5173
 ```
 
 - **Lint** (client): `npm run lint --prefix client` (uses **oxlint**, not ESLint; config in `client/.oxlintrc.json`).
 - **Type-check / build** (client): `npm run build --prefix client` (`tsc -b && vite build`).
+- **Type-check** (server): `npm run typecheck --prefix server` (`tsc --noEmit`). The server runs `.ts` directly via **tsx** — there is no build step and no `dist/`; `tsc` is type-checking only.
 - **Tests**: none exist. `npm test` is a placeholder that exits 1 at every level.
 
 ## Architecture
 
 Two packages, each collapsed into a single source file:
-- **`server/index.js`** — Express 5 (ESM) API, all routes + the LLM/SD pipeline.
+- **`server/index.ts`** — Express 5 (TypeScript, ESM) API, all routes + the LLM/SD pipeline. Run on the fly with tsx.
 - **`client/src/App.tsx`** — the entire React 19 UI (~1200 lines, one component tree).
 
 ### The generation pipeline (the key flow)
@@ -53,5 +54,6 @@ Server reads `server/.env`: `PORT`, `LM_STUDIO_URL`, `STABLE_DIFFUSION_URL`, `LM
 
 ## Conventions
 
-- Both packages are ESM (`"type": "module"`); use `import`, and the `__dirname` shim already present in `server/index.js`.
+- Both packages are ESM (`"type": "module"`); use `import`, and the `__dirname` shim already present in `server/index.ts`.
+- The server uses **firebase-admin's modular API** (`firebase-admin/app`, `/firestore`, `/storage`), not the legacy default `admin.*` namespace — required for clean types under `nodenext`.
 - Client stack is intentionally lean: React 19 + Vite 8 + TypeScript, `lucide-react` for icons, `canvas-confetti` for the success effect. No router, no state library, no CSS framework — styling lives in `App.css`/`index.css`.

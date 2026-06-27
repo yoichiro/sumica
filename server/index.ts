@@ -1,11 +1,13 @@
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import admin from 'firebase-admin';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 // Load environment variables
 dotenv.config();
@@ -26,8 +28,9 @@ if (!fs.existsSync(outputsDir)) {
 }
 
 // Initialize Firebase Admin
-let db = null;
-let bucket = null;
+type Bucket = ReturnType<ReturnType<typeof getStorage>['bucket']>;
+let db: Firestore | null = null;
+let bucket: Bucket | null = null;
 let firebaseEnabled = false;
 
 const firebaseKeyPath = process.env.FIREBASE_KEY_PATH;
@@ -36,36 +39,54 @@ const storageBucketName = process.env.FIREBASE_STORAGE_BUCKET;
 if (firebaseKeyPath && fs.existsSync(firebaseKeyPath)) {
   try {
     const serviceAccount = JSON.parse(fs.readFileSync(firebaseKeyPath, 'utf8'));
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+    initializeApp({
+      credential: cert(serviceAccount),
       storageBucket: storageBucketName || `${serviceAccount.project_id}.firebasestorage.app`
     });
-    db = admin.firestore();
-    bucket = admin.storage().bucket();
+    db = getFirestore();
+    bucket = getStorage().bucket();
     firebaseEnabled = true;
     console.log('Firebase Admin SDK initialized successfully! 🎉');
   } catch (error) {
-    console.error('Failed to initialize Firebase Admin SDK:', error.message);
+    console.error('Failed to initialize Firebase Admin SDK:', (error as Error).message);
     console.log('Falling back to Local Storage mode.');
   }
 } else {
   console.log('FIREBASE_KEY_PATH not set or service account file not found. Running in Local Storage mode. 📁');
 }
 
+// Shape of a single generation record persisted to Firestore or local metadata.json
+interface GenerationMetadata {
+  id?: string;
+  originalPrompt: string;
+  enhancedPrompt: string;
+  negativePrompt: string;
+  width: number | string;
+  height: number | string;
+  steps: number | string;
+  cfgScale: number | string;
+  imageUrl: string;
+  storagePath?: string;
+  localPath?: string;
+  timestamp: number;
+  createdAt: string;
+  backendMode: 'firebase' | 'local';
+}
+
 // Local history metadata helper
 const metadataPath = path.join(outputsDir, 'metadata.json');
-const getLocalHistory = () => {
+const getLocalHistory = (): GenerationMetadata[] => {
   if (!fs.existsSync(metadataPath)) {
     return [];
   }
   try {
     return JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
-  } catch (e) {
+  } catch {
     return [];
   }
 };
 
-const saveLocalHistory = (history) => {
+const saveLocalHistory = (history: GenerationMetadata[]): void => {
   fs.writeFileSync(metadataPath, JSON.stringify(history, null, 2));
 };
 
@@ -74,8 +95,13 @@ let lmStudioUrl = process.env.LM_STUDIO_URL || 'http://127.0.0.1:1234';
 let stableDiffusionUrl = process.env.STABLE_DIFFUSION_URL || 'http://127.0.0.1:7860';
 let lmStudioModel = process.env.LM_STUDIO_MODEL || ''; // Empty string means using the currently loaded model
 
+interface EnhancedPrompt {
+  positive: string;
+  negative: string;
+}
+
 // Helper: Translate and enhance prompt via LM Studio, returning positive and negative prompts in XML format
-async function enhancePrompt(userPrompt) {
+async function enhancePrompt(userPrompt: string): Promise<EnhancedPrompt> {
   const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
   try {
     console.log(`Sending prompt to LM Studio (${lmStudioUrl}/v1/chat/completions)...`);
@@ -103,7 +129,7 @@ Do not include any introductory or concluding text, explanations, or notes. Repl
     });
 
     if (response.data && response.data.choices && response.data.choices[0]) {
-      const content = response.data.choices[0].message.content.trim();
+      const content: string = response.data.choices[0].message.content.trim();
       console.log(`LM Studio Raw Response:\n${content}`);
 
       const positiveMatch = content.match(/<positive>([\s\S]*?)<\/positive>/);
@@ -116,13 +142,20 @@ Do not include any introductory or concluding text, explanations, or notes. Repl
     }
     throw new Error('Unexpected response format from LM Studio');
   } catch (error) {
-    console.error('LM Studio prompt enhancement failed:', error.message);
-    throw new Error(`LM Studioへの接続またはパースに失敗しました: ${error.message}`);
+    console.error('LM Studio prompt enhancement failed:', (error as Error).message);
+    throw new Error(`LM Studioへの接続またはパースに失敗しました: ${(error as Error).message}`);
   }
 }
 
 // Helper: Generate Image via Stable Diffusion sdapi/v1/txt2img
-async function generateImage(prompt, negativePrompt, width = 512, height = 512, steps = 20, cfgScale = 7) {
+async function generateImage(
+  prompt: string,
+  negativePrompt: string,
+  width = 512,
+  height = 512,
+  steps = 20,
+  cfgScale = 7
+): Promise<string> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
     const response = await axios.post(`${stableDiffusionUrl}/sdapi/v1/txt2img`, {
@@ -140,7 +173,7 @@ async function generateImage(prompt, negativePrompt, width = 512, height = 512, 
     }
     throw new Error('No image returned from Stable Diffusion API');
   } catch (error) {
-    console.error('Stable Diffusion generation failed:', error.message);
+    console.error('Stable Diffusion generation failed:', (error as Error).message);
     throw error;
   }
 }
@@ -151,7 +184,7 @@ app.use('/api/outputs', express.static(outputsDir));
 // --- API ROUTES ---
 
 // 1. New Prompt Enhance Endpoint
-app.post('/api/enhance', async (req, res) => {
+app.post('/api/enhance', async (req: Request, res: Response) => {
   const { prompt } = req.body;
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
@@ -164,12 +197,12 @@ app.post('/api/enhance', async (req, res) => {
       negative: enhanced.negative
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: (error as Error).message });
   }
 });
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', async (req: Request, res: Response) => {
   const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance } = req.body;
 
   if (!prompt) {
@@ -179,7 +212,7 @@ app.post('/api/generate', async (req, res) => {
   const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
   let finalPrompt = prompt;
   let finalNegativePrompt = negativePrompt || defaultNegative;
-  let finalOriginalPrompt = originalPrompt || prompt;
+  const finalOriginalPrompt = originalPrompt || prompt;
 
   try {
     // Step 1: Enhance prompt using LM Studio if not skipped
@@ -220,7 +253,7 @@ app.post('/api/generate', async (req, res) => {
       storagePath = `images/${fileName}`;
 
       console.log('Firebase mode: Saving metadata to Firestore...');
-      const metadata = {
+      const metadata: GenerationMetadata = {
         originalPrompt: finalOriginalPrompt,
         enhancedPrompt: finalPrompt,
         negativePrompt: finalNegativePrompt,
@@ -236,20 +269,20 @@ app.post('/api/generate', async (req, res) => {
       };
 
       const docRef = await db.collection('generations').add(metadata);
-      
-      res.json({ 
-        success: true, 
-        data: { id: docRef.id, ...metadata } 
+
+      res.json({
+        success: true,
+        data: { id: docRef.id, ...metadata }
       });
     } else {
       // Local Fallback Mode
       console.log('Local mode: Saving image to outputs/ directory...');
       const localFilePath = path.join(outputsDir, fileName);
       fs.writeFileSync(localFilePath, imageBuffer);
-      
+
       imageUrl = `http://localhost:${PORT}/api/outputs/${fileName}`;
 
-      const metadata = {
+      const metadata: GenerationMetadata = {
         id: `local_${timestamp}`,
         originalPrompt: finalOriginalPrompt,
         enhancedPrompt: finalPrompt,
@@ -273,19 +306,19 @@ app.post('/api/generate', async (req, res) => {
     }
   } catch (error) {
     console.error('Generation pipeline failed:', error);
-    res.status(500).json({ error: error.message || 'Image generation pipeline failed.' });
+    res.status(500).json({ error: (error as Error).message || 'Image generation pipeline failed.' });
   }
 });
 
 // 2. Retrieve History
-app.get('/api/history', async (req, res) => {
+app.get('/api/history', async (_req: Request, res: Response) => {
   try {
     if (firebaseEnabled && db) {
       console.log('Fetching history from Firestore...');
       const snapshot = await db.collection('generations').orderBy('timestamp', 'desc').limit(50).get();
-      const history = [];
+      const history: GenerationMetadata[] = [];
       snapshot.forEach(doc => {
-        history.push({ id: doc.id, ...doc.data() });
+        history.push({ id: doc.id, ...doc.data() } as GenerationMetadata);
       });
       res.json(history);
     } else {
@@ -299,7 +332,7 @@ app.get('/api/history', async (req, res) => {
 });
 
 // 3. System status endpoints
-app.get('/api/status', (req, res) => {
+app.get('/api/status', (_req: Request, res: Response) => {
   res.json({
     firebaseEnabled,
     lmStudioUrl,
@@ -311,9 +344,9 @@ app.get('/api/status', (req, res) => {
 });
 
 // 4. Update API Configuration
-app.post('/api/settings', (req, res) => {
+app.post('/api/settings', (req: Request, res: Response) => {
   const { newLmStudioUrl, newStableDiffusionUrl, newLmStudioModel } = req.body;
-  
+
   if (newLmStudioUrl) lmStudioUrl = newLmStudioUrl;
   if (newStableDiffusionUrl) stableDiffusionUrl = newStableDiffusionUrl;
   if (newLmStudioModel !== undefined) lmStudioModel = newLmStudioModel;
