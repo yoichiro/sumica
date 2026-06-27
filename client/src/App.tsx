@@ -1019,29 +1019,24 @@ function App() {
               <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
                 {selectedIds.size}件選択
               </span>
-              {selectedIds.size > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="scale-hover"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(255, 107, 107, 0.1)',
-                    border: '2px solid rgba(255, 107, 107, 0.3)',
-                    color: 'var(--danger)',
-                    borderRadius: '10px',
-                    padding: '6px 14px',
-                    fontSize: '13px',
-                    fontWeight: 800,
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Trash2 size={15} />
-                  <span>削除</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={selectedIds.size === 0}
+                className={selectedIds.size === 0 ? '' : 'scale-hover'}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: selectedIds.size === 0 ? 'var(--text-muted)' : 'var(--danger)',
+                  padding: '4px 8px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: selectedIds.size === 0 ? 'not-allowed' : 'pointer',
+                  opacity: selectedIds.size === 0 ? 0.6 : 1
+                }}
+              >
+                削除
+              </button>
             </div>
             {history.length > 0 ? (
               <div style={{ 
