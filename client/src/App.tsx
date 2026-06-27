@@ -134,9 +134,13 @@ function App() {
     e.preventDefault();
     if (!prompt.trim() || loading) return;
 
+    // Backup current generation to restore on error
+    const prevGen = currentGeneration;
+
     setLoading(true);
     setErrorStep(null);
     setGenStatus('enhancing');
+    setCurrentGeneration(null); // Clear preview on start
     setLoadingStep(1); // Always start with prompt enhancement
 
     // Simulate step transition (since LM Studio prompt enhancement is usually quick)
@@ -189,6 +193,9 @@ function App() {
     } catch (error: any) {
       console.error(error);
       clearTimeout(stepTimer);
+      
+      // Restore previous generation to keep it visible on error
+      setCurrentGeneration(prevGen);
       
       // Determine which step failed based on current loadingStep
       setErrorStep(loadingStep);
@@ -513,20 +520,19 @@ function App() {
           overflowY: 'auto',
           paddingRight: '4px'
         }}>
-          {/* GENERATION LIVE STAGE */}
+          {/* GENERATION PREVIEW STAGE */}
           <div className="glass-panel" style={{ 
             padding: '24px', 
             borderRadius: '20px', 
-            minHeight: '400px',
+            minHeight: '380px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             position: 'relative',
             overflow: 'hidden'
           }}>
-            {/* Stage Selector */}
-            {genStatus === 'success' && currentGeneration ? (
-              <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
+            {currentGeneration ? (
+              <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
                 {/* Image Frame */}
                 <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid #dee2e6', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
                   <img 
@@ -568,102 +574,41 @@ function App() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                   <div>
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>元プロンプト</span>
-                    <p style={{ fontSize: '16px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)' }}>{currentGeneration.originalPrompt}</p>
+                    <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{currentGeneration.originalPrompt}</p>
                   </div>
                   
                   {currentGeneration.enhancedPrompt !== currentGeneration.originalPrompt && (
                     <div>
                       <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                        <Sparkles size={11} /> 拡張プロンプト (LM Studio)
+                        <Sparkles size={11} /> 拡張プロンプト
                       </span>
-                      <p style={{ fontSize: '13px', marginTop: '6px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.5', background: '#f8f9fa', padding: '12px', borderRadius: '8px', border: '2px solid #e9ecef' }}>
+                      <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: '#f8f9fa', padding: '10px', borderRadius: '8px', border: '2px solid #e9ecef' }}>
                         {currentGeneration.enhancedPrompt}
                       </p>
                     </div>
                   )}
 
-                  <div style={{ borderTop: '2px solid #e9ecef', paddingTop: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
+                  <div style={{ borderTop: '2px solid #e9ecef', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
                     <div>
                       <span>解像度: </span>
                       <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.width}x{currentGeneration.height}</strong>
                     </div>
                     <div>
-                      <span>サンプリングステップ: </span>
+                      <span>ステップ: </span>
                       <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.steps}</strong>
                     </div>
                     <div>
-                      <span>CFGスケール: </span>
+                      <span>CFG: </span>
                       <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.cfgScale}</strong>
                     </div>
-                    <div>
-                      <span>保存先: </span>
-                      <strong style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{currentGeneration.backendMode}</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (genStatus === 'enhancing' || genStatus === 'generating' || genStatus === 'saving' || genStatus === 'error') ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', padding: '40px 0' }}>
-                <div style={{ position: 'relative', width: '80px', height: '80px' }}>
-                  <div style={{ 
-                    position: 'absolute', 
-                    inset: 0, 
-                    border: '5px solid rgba(51, 154, 240, 0.15)', 
-                    borderRadius: '50%' 
-                  }}></div>
-                  {genStatus !== 'error' ? (
-                    <div style={{ 
-                      position: 'absolute', 
-                      inset: 0, 
-                      border: '5px solid transparent', 
-                      borderTopColor: 'var(--pop-blue)', 
-                      borderRightColor: 'var(--pop-teal)',
-                      borderRadius: '50%',
-                    }} className="animate-spin-custom"></div>
-                  ) : (
-                    <div style={{ 
-                      position: 'absolute', 
-                      inset: 0, 
-                      border: '5px solid var(--danger)', 
-                      borderRadius: '50%',
-                    }}></div>
-                  )}
-                  {genStatus !== 'error' ? (
-                    <Sparkles style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--pop-blue)' }} className="animate-bounce-custom" size={26} />
-                  ) : (
-                    <AlertTriangle style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--danger)' }} size={26} />
-                  )}
-                </div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '80%', maxWidth: '320px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep > 1 ? 'var(--success)' : loadingStep === 1 ? 'var(--pop-blue)' : 'none', border: '2px solid ' + ((genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : 'var(--text-muted)'), color: (loadingStep >= 1 || (genStatus === 'error' && errorStep === 1)) ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
-                      {(genStatus === 'error' && errorStep === 1) ? '✗' : loadingStep > 1 ? '✓' : '1'}
-                    </div>
-                    <span>LM Studio でプロンプトを拡張中... 🪄</span>
-                    {(genStatus === 'error' && errorStep === 1) && <span style={{ fontSize: '11px', color: 'var(--danger)', fontWeight: 'normal', marginLeft: 'auto' }}>エラー</span>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep > 2 ? 'var(--success)' : loadingStep === 2 ? 'var(--pop-teal)' : 'none', border: '2px solid ' + ((genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : 'var(--text-muted)'), color: (loadingStep >= 2 || (genStatus === 'error' && errorStep === 2)) ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
-                      {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 ? '✓' : '2'}
-                    </div>
-                    <span>Stable Diffusion で画像を生成中... 🎨</span>
-                    {(genStatus === 'error' && errorStep === 2) && <span style={{ fontSize: '11px', color: 'var(--danger)', fontWeight: 'normal', marginLeft: 'auto' }}>エラー</span>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep >= 3 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep === 3 ? 'var(--pop-orange)' : 'none', border: '2px solid ' + ((genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : 'var(--text-muted)'), color: (loadingStep === 3 || (genStatus === 'error' && errorStep === 3)) ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
-                      {(genStatus === 'error' && errorStep === 3) ? '✗' : '3'}
-                    </div>
-                    <span>画像をストレージに保存中... ☁️</span>
-                    {(genStatus === 'error' && errorStep === 3) && <span style={{ fontSize: '11px', color: 'var(--danger)', fontWeight: 'normal', marginLeft: 'auto' }}>エラー</span>}
                   </div>
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '40px 0' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '30px 0' }}>
                 <div style={{
-                  width: '80px',
-                  height: '80px',
+                  width: '64px',
+                  height: '64px',
                   borderRadius: '50%',
                   background: 'rgba(51, 154, 240, 0.05)',
                   border: '2px dashed rgba(51, 154, 240, 0.3)',
@@ -672,17 +617,148 @@ function App() {
                   justifyContent: 'center',
                   color: 'var(--pop-blue)'
                 }}>
-                  <ImageIcon size={36} />
+                  <ImageIcon size={28} />
                 </div>
                 <div>
-                  <h3 style={{ color: 'var(--text-primary)', fontSize: '18px', marginBottom: '6px', fontWeight: '800' }}>画像の生成準備完了 🖼️</h3>
-                  <p style={{ fontSize: '14px', maxWidth: '340px', margin: '0 auto', lineHeight: '1.5' }}>
-                    プロンプトを入力して「画像を生成する」ボタンを押すと、AIが素敵な画像を生成します。
+                  <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', marginBottom: '4px', fontWeight: '800' }}>生成された画像のプレビュー 🖼️</h3>
+                  <p style={{ fontSize: '13px', maxWidth: '300px', margin: '0 auto', lineHeight: '1.4' }}>
+                    画像を生成すると、ここにプレビューが表示されます。
                   </p>
                 </div>
               </div>
             )}
           </div>
+
+          {/* PROCESS TRACKER STAGE */}
+          {genStatus !== 'idle' && (
+            <div className="glass-panel" style={{ 
+              padding: '20px 24px', 
+              borderRadius: '20px', 
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '24px',
+              border: genStatus === 'error' ? '2.5px solid var(--danger)' : '2px solid #e9ecef',
+              boxShadow: genStatus === 'error' ? '0 8px 20px rgba(255, 107, 107, 0.08)' : 'var(--shadow-soft)',
+              background: genStatus === 'error' ? '#fffafb' : '#ffffff'
+            }}>
+              {/* Spinner/Status Icon */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ position: 'relative', width: '48px', height: '48px', flexShrink: 0 }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    inset: 0, 
+                    border: '3px solid rgba(51, 154, 240, 0.15)', 
+                    borderRadius: '50%' 
+                  }}></div>
+                  {genStatus !== 'error' && genStatus !== 'success' ? (
+                    <div style={{ 
+                      position: 'absolute', 
+                      inset: 0, 
+                      border: '3px solid transparent', 
+                      borderTopColor: 'var(--pop-blue)', 
+                      borderRightColor: 'var(--pop-teal)',
+                      borderRadius: '50%',
+                    }} className="animate-spin-custom"></div>
+                  ) : genStatus === 'error' ? (
+                    <div style={{ 
+                      position: 'absolute', 
+                      inset: 0, 
+                      border: '3px solid var(--danger)', 
+                      borderRadius: '50%',
+                    }}></div>
+                  ) : (
+                    <div style={{ 
+                      position: 'absolute', 
+                      inset: 0, 
+                      border: '3px solid var(--success)', 
+                      borderRadius: '50%',
+                    }}></div>
+                  )}
+                  {genStatus === 'success' ? (
+                    <CheckCircle2 style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--success)' }} size={18} />
+                  ) : genStatus === 'error' ? (
+                    <AlertTriangle style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--danger)' }} size={18} />
+                  ) : (
+                    <Sparkles style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--pop-blue)' }} className="animate-bounce-custom" size={18} />
+                  )}
+                </div>
+                
+                <div style={{ textAlign: 'left' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '800', display: 'block', color: genStatus === 'error' ? 'var(--danger)' : genStatus === 'success' ? 'var(--success)' : 'var(--text-primary)' }}>
+                    {genStatus === 'error' ? '生成処理エラー ❌' : genStatus === 'success' ? '生成完了！ 🎉' : '画像生成パイプライン進行中... ⚡️'}
+                  </span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {genStatus === 'error' ? '処理の途中でエラーが発生しました' : genStatus === 'success' ? 'すべての処理が正常に完了しました' : 'バックエンドでタスクを実行しています'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Steps Horizontally */}
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                  <div style={{ 
+                    width: '18px', 
+                    height: '18px', 
+                    borderRadius: '50%', 
+                    background: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep > 1 || genStatus === 'success' ? 'var(--success)' : loadingStep === 1 ? 'var(--pop-blue)' : 'none', 
+                    border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'), 
+                    color: (loadingStep >= 1 || genStatus === 'success' || (genStatus === 'error' && errorStep === 1)) ? '#fff' : 'var(--text-muted)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontSize: '9px', 
+                    fontWeight: 'bold' 
+                  }}>
+                    {(genStatus === 'error' && errorStep === 1) ? '✗' : loadingStep > 1 || genStatus === 'success' ? '✓' : '1'}
+                  </div>
+                  <span>プロンプト拡張</span>
+                </div>
+
+                <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                  <div style={{ 
+                    width: '18px', 
+                    height: '18px', 
+                    borderRadius: '50%', 
+                    background: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep > 2 || genStatus === 'success' ? 'var(--success)' : loadingStep === 2 ? 'var(--pop-teal)' : 'none', 
+                    border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'), 
+                    color: (loadingStep >= 2 || genStatus === 'success' || (genStatus === 'error' && errorStep === 2)) ? '#fff' : 'var(--text-muted)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontSize: '9px', 
+                    fontWeight: 'bold' 
+                  }}>
+                    {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 || genStatus === 'success' ? '✓' : '2'}
+                  </div>
+                  <span>画像生成</span>
+                </div>
+
+                <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep >= 3 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                  <div style={{ 
+                    width: '18px', 
+                    height: '18px', 
+                    borderRadius: '50%', 
+                    background: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : genStatus === 'success' ? 'var(--success)' : loadingStep === 3 ? 'var(--pop-orange)' : 'none', 
+                    border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep === 3 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'), 
+                    color: (loadingStep === 3 || genStatus === 'success' || (genStatus === 'error' && errorStep === 3)) ? '#fff' : 'var(--text-muted)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontSize: '9px', 
+                    fontWeight: 'bold' 
+                  }}>
+                    {(genStatus === 'error' && errorStep === 3) ? '✗' : genStatus === 'success' ? '✓' : '3'}
+                  </div>
+                  <span>保存完了</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* HISTORY GALLERY */}
           <div>
