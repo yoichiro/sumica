@@ -340,11 +340,10 @@ function App() {
         minHeight: 0
       }}>
         {/* LEFT COLUMN: CONTROL PANEL */}
-        <section className="glass-panel" style={{ 
-          padding: '24px', 
+        <section style={{ 
+          padding: '8px 16px 8px 0', 
           display: 'flex', 
           flexDirection: 'column', 
-          borderRadius: '20px',
           overflow: 'hidden',
           height: '100%'
         }}>
