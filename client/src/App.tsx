@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, 
   Settings, 
@@ -36,6 +36,43 @@ interface SystemStatus {
   lmStudioModel: string;
   storageBucketName: string | null;
   localHistoryCount: number;
+}
+
+interface HealthStatus {
+  lmStudio: { connected: boolean; model: string | null; error: string | null };
+  stableDiffusion: { connected: boolean; error: string | null };
+}
+
+// Top-right connection indicator for a single upstream service.
+// checking → muted pulsing dot, connected → green (with optional model name), else → red.
+function ServiceStatusBadge({ label, checking, connected, detail }: {
+  label: string;
+  checking: boolean;
+  connected: boolean;
+  detail?: string | null;
+}) {
+  const color = checking ? 'var(--text-muted)' : connected ? 'var(--pop-green)' : 'var(--danger)';
+  // Long model names (e.g. "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF") would
+  // blow out the status bar, so cap the shown detail at ~20 chars; full value stays on hover.
+  const shownDetail = detail && detail.length > 20 ? `${detail.slice(0, 20)}...` : detail;
+  const text = checking
+    ? `${label} 確認中…`
+    : connected
+      ? `${label} 接続中${shownDetail ? ` (${shownDetail})` : ''}`
+      : `${label} 未接続`;
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: '6px', color, fontWeight: '700' }}
+      title={connected && detail ? detail : undefined}
+    >
+      <span style={{
+        width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color,
+        boxShadow: connected && !checking ? `0 0 6px ${color}` : 'none',
+        animation: checking ? 'pulse 1.2s ease-in-out infinite' : 'none',
+      }}></span>
+      <span>{text}</span>
+    </div>
+  );
 }
 
 function App() {
@@ -80,6 +117,9 @@ function App() {
   
   // Config & Status states
   const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [healthChecking, setHealthChecking] = useState(false);
+  const healthInFlight = useRef(false);
   const [showSettings, setShowSettings] = useState(false);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
@@ -101,6 +141,10 @@ function App() {
   useEffect(() => {
     fetchHistory();
     fetchStatus();
+    fetchHealth();
+    // Re-check upstream connectivity every 20s so the badges stay fresh.
+    const healthInterval = setInterval(fetchHealth, 20000);
+    return () => clearInterval(healthInterval);
   }, []);
 
   const fetchHistory = async () => {
@@ -129,6 +173,25 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to fetch system status:', error);
+    }
+  };
+
+  // Check LM Studio / Stable Diffusion connectivity. Guarded so overlapping
+  // polls (or a poll racing a manual refresh) never run concurrently.
+  const fetchHealth = async () => {
+    if (healthInFlight.current) return;
+    healthInFlight.current = true;
+    setHealthChecking(true);
+    try {
+      const res = await fetch(`${API_BASE}/health`);
+      if (res.ok) {
+        setHealth(await res.json());
+      }
+    } catch (error) {
+      console.error('Failed to fetch connection health:', error);
+    } finally {
+      healthInFlight.current = false;
+      setHealthChecking(false);
     }
   };
 
@@ -249,6 +312,7 @@ function App() {
       if (res.ok) {
         setSettingsSuccess(true);
         fetchStatus();
+        fetchHealth(); // Re-check connectivity against the newly saved URLs
         addToast('設定を保存しました！⚙️', 'success');
         setTimeout(() => {
           setSettingsSuccess(false);
@@ -320,11 +384,22 @@ function App() {
             
             <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
             
-            {/* Stable Diffusion Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--pop-green)', fontWeight: '700' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--pop-green)', boxShadow: '0 0 6px var(--pop-green)' }}></span>
-              <span>SD 接続中</span>
-            </div>
+            {/* LM Studio Status (live health check) */}
+            <ServiceStatusBadge
+              label="LM Studio"
+              checking={healthChecking && !health}
+              connected={!!health?.lmStudio.connected}
+              detail={health?.lmStudio.model}
+            />
+
+            <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
+
+            {/* Stable Diffusion Status (live health check) */}
+            <ServiceStatusBadge
+              label="SD"
+              checking={healthChecking && !health}
+              connected={!!health?.stableDiffusion.connected}
+            />
           </div>
 
           <button 

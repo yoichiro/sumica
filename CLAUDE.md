@@ -42,7 +42,7 @@ On startup the server tries to init Firebase Admin from `FIREBASE_KEY_PATH`. **I
 
 ### Runtime-mutable config
 
-`lmStudioUrl`, `stableDiffusionUrl`, and `lmStudioModel` are **module-level mutable variables**, seeded from `.env` but rewritable at runtime via `POST /api/settings` (driven by the UI gear panel). They are in-memory only — not persisted, reset on restart. `GET /api/status` exposes current values + mode. `/api/settings` validates that submitted URLs use the `http(s)` scheme via `isValidHttpUrl` (SSRF hardening); loopback/LAN hosts stay allowed on purpose since the legitimate LM Studio / SD targets are local.
+`lmStudioUrl`, `stableDiffusionUrl`, and `lmStudioModel` are **module-level mutable variables**, seeded from `.env` but rewritable at runtime via `POST /api/settings` (driven by the UI gear panel). They are in-memory only — not persisted, reset on restart. `GET /api/status` exposes current values + mode. `/api/settings` validates that submitted URLs use the `http(s)` scheme via `isValidHttpUrl` (SSRF hardening); loopback/LAN hosts stay allowed on purpose since the legitimate LM Studio / SD targets are local. `GET /api/health` pings both upstreams (LM Studio `/v1/models`, SD `/sdapi/v1/sd-models`) and always returns 200 with per-service `connected` flags — the client polls it every 20s to drive the top-right status badges.
 
 ### Client ↔ server wiring
 

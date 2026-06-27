@@ -198,6 +198,30 @@ async function generateImage(
   }
 }
 
+// Helper: lightweight reachability check for LM Studio (OpenAI-compatible /v1/models,
+// no inference). Returns the loaded/configured model name when reachable.
+async function checkLmStudio(): Promise<{ connected: boolean; model: string | null; error: string | null }> {
+  try {
+    const response = await axios.get(`${lmStudioUrl}/v1/models`, { timeout: 4000 });
+    const models = response.data?.data;
+    const model = lmStudioModel || (Array.isArray(models) ? models[0]?.id ?? null : null);
+    return { connected: true, model, error: null };
+  } catch (error) {
+    return { connected: false, model: null, error: (error as Error).message };
+  }
+}
+
+// Helper: reachability check for Stable Diffusion. Hitting an sdapi endpoint confirms
+// the WebUI is up AND launched with --api (a bare page load would not).
+async function checkStableDiffusion(): Promise<{ connected: boolean; error: string | null }> {
+  try {
+    await axios.get(`${stableDiffusionUrl}/sdapi/v1/sd-models`, { timeout: 4000 });
+    return { connected: true, error: null };
+  } catch (error) {
+    return { connected: false, error: (error as Error).message };
+  }
+}
+
 // Serve local outputs statically
 app.use('/api/outputs', express.static(outputsDir));
 
@@ -386,6 +410,16 @@ app.post('/api/settings', (req: Request, res: Response) => {
       lmStudioModel
     }
   });
+});
+
+// 5. Connection health check for upstream services (LM Studio + Stable Diffusion).
+// Always responds 200 with per-service flags so the client can branch on the result.
+app.get('/api/health', async (_req: Request, res: Response) => {
+  const [lmStudio, stableDiffusion] = await Promise.all([
+    checkLmStudio(),
+    checkStableDiffusion(),
+  ]);
+  res.json({ lmStudio, stableDiffusion });
 });
 
 // Start Express Server
