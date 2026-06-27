@@ -130,6 +130,9 @@ function App() {
     e.preventDefault();
     if (!prompt.trim() || loading) return;
 
+    // Backup current generation to restore in case of error
+    const prevGen = currentGeneration;
+
     setLoading(true);
     setCurrentGeneration(null);
     setLoadingStep(1); // Always start with prompt enhancement
@@ -173,6 +176,8 @@ function App() {
       }
     } catch (error: any) {
       console.error(error);
+      // Restore the previous image so the canvas doesn't stay blank on error
+      setCurrentGeneration(prevGen);
       addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
     } finally {
       setLoading(false);
