@@ -74,8 +74,9 @@ let lmStudioUrl = process.env.LM_STUDIO_URL || 'http://localhost:1234';
 let stableDiffusionUrl = process.env.STABLE_DIFFUSION_URL || 'http://localhost:7860';
 let lmStudioModel = process.env.LM_STUDIO_MODEL || ''; // Empty string means using the currently loaded model
 
-// Helper: Translate and enhance prompt via LM Studio
+// Helper: Translate and enhance prompt via LM Studio, returning positive and negative prompts in XML format
 async function enhancePrompt(userPrompt) {
+  const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
   try {
     console.log(`Sending prompt to LM Studio (${lmStudioUrl}/v1/chat/completions)...`);
     const response = await axios.post(`${lmStudioUrl}/v1/chat/completions`, {
@@ -83,25 +84,41 @@ async function enhancePrompt(userPrompt) {
       messages: [
         {
           role: 'system',
-          content: 'You are an expert prompt engineer for Stable Diffusion. Your task is to translate any non-English prompt to English, and expand it into a detailed, high-quality descriptive prompt for text-to-image generation. Focus on details, style, lighting, and composition. Output ONLY the final comma-separated English prompt list. Do not include any introductory or concluding text, notes, markdown formatting, or explanations.'
+          content: `You are an expert prompt engineer for Stable Diffusion. Your task is to translate any non-English concept to English and generate both the detailed positive prompt and the negative prompt to achieve the best quality image.
+
+You MUST encapsulate your prompts using the following XML tags:
+<prompts>
+  <positive>detailed positive prompt words, comma-separated...</positive>
+  <negative>detailed negative prompt words, comma-separated...</negative>
+</prompts>
+
+Do not include any introductory or concluding text, explanations, or notes. Reply ONLY with the XML structure.`
         },
         {
           role: 'user',
-          content: `Translate and expand this concept into a Stable Diffusion prompt: "${userPrompt}"`
+          content: `Translate and expand this concept into positive and negative prompts: "${userPrompt}"`
         }
       ],
       temperature: 0.7
     });
 
     if (response.data && response.data.choices && response.data.choices[0]) {
-      const enhanced = response.data.choices[0].message.content.trim();
-      return enhanced;
+      const content = response.data.choices[0].message.content.trim();
+      console.log(`LM Studio Raw Response:\n${content}`);
+
+      const positiveMatch = content.match(/<positive>([\s\S]*?)<\/positive>/);
+      const negativeMatch = content.match(/<negative>([\s\S]*?)<\/negative>/);
+
+      const positive = positiveMatch ? positiveMatch[1].trim() : userPrompt;
+      const negative = negativeMatch ? negativeMatch[1].trim() : defaultNegative;
+
+      return { positive, negative };
     }
     throw new Error('Unexpected response format from LM Studio');
   } catch (error) {
     console.error('LM Studio prompt enhancement failed:', error.message);
-    // Fall back to original user prompt if LM Studio request fails
-    return userPrompt;
+    // Fall back to original prompt and default negative
+    return { positive: userPrompt, negative: defaultNegative };
   }
 }
 
@@ -136,18 +153,23 @@ app.use('/api/outputs', express.static(outputsDir));
 
 // 1. Generate Image Pipeline
 app.post('/api/generate', async (req, res) => {
-  const { prompt, negativePrompt, width, height, steps, cfgScale, skipEnhance } = req.body;
+  const { prompt, width, height, steps, cfgScale, skipEnhance } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
   }
 
+  const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
+  let finalPrompt = prompt;
+  let finalNegativePrompt = defaultNegative;
+
   try {
     // Step 1: Enhance prompt using LM Studio if selected
-    let finalPrompt = prompt;
     if (!skipEnhance) {
-      finalPrompt = await enhancePrompt(prompt);
-      console.log(`Original: "${prompt}" -> Enhanced: "${finalPrompt}"`);
+      const enhanced = await enhancePrompt(prompt);
+      finalPrompt = enhanced.positive;
+      finalNegativePrompt = enhanced.negative;
+      console.log(`Original: "${prompt}" -> Enhanced Positive: "${finalPrompt}" | Enhanced Negative: "${finalNegativePrompt}"`);
     } else {
       console.log(`Skipping prompt enhancement. Direct Prompt: "${finalPrompt}"`);
     }
@@ -155,7 +177,7 @@ app.post('/api/generate', async (req, res) => {
     // Step 2: Generate image with Stable Diffusion
     const base64Image = await generateImage(
       finalPrompt,
-      negativePrompt,
+      finalNegativePrompt,
       width ? parseInt(width) : 512,
       height ? parseInt(height) : 512,
       steps ? parseInt(steps) : 20,
@@ -184,7 +206,7 @@ app.post('/api/generate', async (req, res) => {
       const metadata = {
         originalPrompt: prompt,
         enhancedPrompt: finalPrompt,
-        negativePrompt: negativePrompt || '',
+        negativePrompt: finalNegativePrompt,
         width: width || 512,
         height: height || 512,
         steps: steps || 20,
@@ -214,7 +236,7 @@ app.post('/api/generate', async (req, res) => {
         id: `local_${timestamp}`,
         originalPrompt: prompt,
         enhancedPrompt: finalPrompt,
-        negativePrompt: negativePrompt || '',
+        negativePrompt: finalNegativePrompt,
         width: width || 512,
         height: height || 512,
         steps: steps || 20,

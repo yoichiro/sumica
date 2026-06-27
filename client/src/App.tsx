@@ -3,13 +3,11 @@ import {
   Sparkles, 
   Settings, 
   History, 
-  Sliders, 
   Image as ImageIcon, 
   RotateCw, 
   Cloud, 
   Folder,
   X,
-  Settings2,
   ArrowLeftRight,
   AlertTriangle
 } from 'lucide-react';
@@ -42,12 +40,10 @@ interface SystemStatus {
 function App() {
   // Form input states
   const [prompt, setPrompt] = useState('');
-  const [negativePrompt, setNegativePrompt] = useState('nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured');
   const [width, setWidth] = useState(512);
   const [height, setHeight] = useState(512);
   const [steps, setSteps] = useState(20);
   const [cfgScale, setCfgScale] = useState(7);
-  const [skipEnhance, setSkipEnhance] = useState(false);
   
   // Error Modal State
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -75,7 +71,6 @@ function App() {
   
   // Detail views
   const [selectedItem, setSelectedItem] = useState<GenerationData | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const API_BASE = 'http://localhost:5000/api';
 
@@ -119,7 +114,7 @@ function App() {
 
     setLoading(true);
     setCurrentGeneration(null);
-    setLoadingStep(skipEnhance ? 2 : 1);
+    setLoadingStep(1); // Always start with prompt enhancement
 
     try {
       const res = await fetch(`${API_BASE}/generate`, {
@@ -129,12 +124,11 @@ function App() {
         },
         body: JSON.stringify({
           prompt,
-          negativePrompt,
           width,
           height,
           steps,
           cfgScale,
-          skipEnhance
+          skipEnhance: false
         })
       });
 
@@ -307,10 +301,6 @@ function App() {
           overflow: 'hidden',
           height: '100%'
         }}>
-          <h2 style={{ fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', fontWeight: '800', flexShrink: 0 }}>
-            <Sliders size={20} className="text-gradient-cyan-purple" style={{ stroke: 'url(#cyan-purple-grad)' }} />
-            <span>画像生成コントロール 🎛️</span>
-          </h2>
 
           <form onSubmit={handleGenerate} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
             {/* Scrollable container for parameters */}
@@ -339,171 +329,107 @@ function App() {
                 />
               </div>
 
-              {/* AI ENHANCEMENT TOGGLE */}
-              <div className="glass-panel" style={{ 
-                padding: '14px 18px', 
-                borderRadius: '14px', 
+              {/* AI ENHANCEMENT IS ALWAYS ACTIVE */}
+
+              {/* ADVANCED PARAMETERS (ALWAYS OPEN) */}
+              <div style={{ 
                 display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                background: '#ffffff',
-                border: '2px solid #e9ecef',
-                flexShrink: 0
+                flexDirection: 'column', 
+                gap: '16px',
+                padding: '18px',
+                background: '#f8f9fa',
+                borderRadius: '14px',
+                border: '2px solid #e9ecef'
               }}>
-                <div style={{ textAlign: 'left' }}>
-                  <span style={{ fontSize: '15px', fontWeight: '800', display: 'block' }}>
-                    AIプロンプト拡張 🪄
-                  </span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                    LM Studio で詳細な英語プロンプトに拡張します
-                  </span>
+                {/* Negative Prompt auto-applied by backend */}
+
+                {/* Size Select with Swap Button */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.2fr', gap: '8px', alignItems: 'end', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>解像度 (幅)</label>
+                    <select 
+                      className="input-field" 
+                      value={width} 
+                      onChange={(e) => setWidth(parseInt(e.target.value))}
+                      disabled={loading}
+                      style={{ borderRadius: '8px' }}
+                    >
+                      <option value="512">512 px</option>
+                      <option value="768">768 px</option>
+                      <option value="1024">1024 px</option>
+                    </select>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={handleSwapDimensions}
+                    disabled={loading}
+                    className="scale-hover"
+                    style={{
+                      background: 'rgba(51, 154, 240, 0.08)',
+                      border: '2px solid rgba(51, 154, 240, 0.2)',
+                      color: 'var(--pop-blue)',
+                      borderRadius: '8px',
+                      height: '42px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      marginBottom: '2px'
+                    }}
+                    title="幅と高さを入れ替える"
+                  >
+                    <ArrowLeftRight size={16} />
+                  </button>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>解像度 (高さ)</label>
+                    <select 
+                      className="input-field" 
+                      value={height} 
+                      onChange={(e) => setHeight(parseInt(e.target.value))}
+                      disabled={loading}
+                      style={{ borderRadius: '8px' }}
+                    >
+                      <option value="512">512 px</option>
+                      <option value="768">768 px</option>
+                      <option value="1024">1024 px</option>
+                    </select>
+                  </div>
                 </div>
-                <label className="switch-label">
+
+                {/* Steps */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                    <span>サンプリングステップ数 (Steps)</span>
+                    <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{steps}</span>
+                  </div>
                   <input 
-                    type="checkbox" 
-                    checked={!skipEnhance} 
-                    onChange={(e) => setSkipEnhance(!e.target.checked)} 
+                    type="range" 
+                    min="10" 
+                    max="50" 
+                    value={steps} 
+                    onChange={(e) => setSteps(parseInt(e.target.value))}
                     disabled={loading}
                   />
-                  <span className="slider"></span>
-                </label>
-              </div>
+                </div>
 
-              {/* ADVANCED SETTINGS COLLAPSIBLE */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--pop-blue)',
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    cursor: 'pointer',
-                    padding: '4px 0'
-                  }}
-                >
-                  <Settings2 size={16} />
-                  <span>{showAdvanced ? '詳細設定を閉じる' : '詳細設定を開く ⚙️'}</span>
-                </button>
-
-                {showAdvanced && (
-                  <div style={{ 
-                    marginTop: '16px', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    gap: '16px',
-                    padding: '18px',
-                    background: '#f8f9fa',
-                    borderRadius: '14px',
-                    border: '2px solid #e9ecef'
-                  }}>
-                    {/* Negative Prompt */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>ネガティブプロンプト (除外タグ)</label>
-                      <input 
-                        type="text" 
-                        className="input-field" 
-                        value={negativePrompt} 
-                        onChange={(e) => setNegativePrompt(e.target.value)} 
-                        disabled={loading}
-                        style={{ borderRadius: '8px' }}
-                      />
-                    </div>
-
-                    {/* Size Select with Swap Button */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.2fr', gap: '8px', alignItems: 'end', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>解像度 (幅)</label>
-                        <select 
-                          className="input-field" 
-                          value={width} 
-                          onChange={(e) => setWidth(parseInt(e.target.value))}
-                          disabled={loading}
-                          style={{ borderRadius: '8px' }}
-                        >
-                          <option value="512">512 px</option>
-                          <option value="768">768 px</option>
-                          <option value="1024">1024 px</option>
-                        </select>
-                      </div>
-                      
-                      <button
-                        type="button"
-                        onClick={handleSwapDimensions}
-                        disabled={loading}
-                        className="scale-hover"
-                        style={{
-                          background: 'rgba(51, 154, 240, 0.08)',
-                          border: '2px solid rgba(51, 154, 240, 0.2)',
-                          color: 'var(--pop-blue)',
-                          borderRadius: '8px',
-                          height: '42px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          marginBottom: '2px'
-                        }}
-                        title="幅と高さを入れ替える"
-                      >
-                        <ArrowLeftRight size={16} />
-                      </button>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>解像度 (高さ)</label>
-                        <select 
-                          className="input-field" 
-                          value={height} 
-                          onChange={(e) => setHeight(parseInt(e.target.value))}
-                          disabled={loading}
-                          style={{ borderRadius: '8px' }}
-                        >
-                          <option value="512">512 px</option>
-                          <option value="768">768 px</option>
-                          <option value="1024">1024 px</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Steps */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                        <span>サンプリングステップ数 (Steps)</span>
-                        <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{steps}</span>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="10" 
-                        max="50" 
-                        value={steps} 
-                        onChange={(e) => setSteps(parseInt(e.target.value))}
-                        disabled={loading}
-                      />
-                    </div>
-
-                    {/* CFG Scale */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                        <span>プロンプト追従性 (CFG Scale)</span>
-                        <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{cfgScale}</span>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="1" 
-                        max="20" 
-                        step="0.5"
-                        value={cfgScale} 
-                        onChange={(e) => setCfgScale(parseFloat(e.target.value))}
-                        disabled={loading}
-                      />
-                    </div>
+                {/* CFG Scale */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                    <span>プロンプト追従性 (CFG Scale)</span>
+                    <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{cfgScale}</span>
                   </div>
-                )}
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="20" 
+                    step="0.5"
+                    value={cfgScale} 
+                    onChange={(e) => setCfgScale(parseFloat(e.target.value))}
+                    disabled={loading}
+                  />
+                </div>
               </div>
             </div>
 
