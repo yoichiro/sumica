@@ -9,7 +9,8 @@ import {
   Folder,
   X,
   ArrowLeftRight,
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -45,8 +46,25 @@ function App() {
   const [steps, setSteps] = useState(20);
   const [cfgScale, setCfgScale] = useState(7);
   
-  // Error Modal State
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Toast notifications state
+  interface Toast {
+    id: string;
+    message: string;
+    type: 'error' | 'success';
+  }
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = (message: string, type: 'error' | 'success' = 'error') => {
+    const id = Date.now().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 6000); // 6 seconds auto-close
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   const handleSwapDimensions = () => {
     const temp = width;
@@ -151,10 +169,11 @@ function App() {
         
         setCurrentGeneration(result.data);
         fetchHistory();
+        addToast('画像を生成しました！🎨⚡️', 'success');
       }
     } catch (error: any) {
       console.error(error);
-      setErrorMessage(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`);
+      addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
     } finally {
       setLoading(false);
       setLoadingStep(0);
@@ -182,6 +201,7 @@ function App() {
       if (res.ok) {
         setSettingsSuccess(true);
         fetchStatus();
+        addToast('設定を保存しました！⚙️', 'success');
         setTimeout(() => {
           setSettingsSuccess(false);
           setShowSettings(false);
@@ -191,7 +211,7 @@ function App() {
       }
     } catch (error: any) {
       console.error('Failed to update settings:', error);
-      setErrorMessage(`設定の保存に失敗しました。\n\n詳細: ${error.message || '接続先URLが正しいか確認してください。'}`);
+      addToast(`設定の保存に失敗しました。\n\n詳細: ${error.message || '接続先URLが正しいか確認してください。'}`, 'error');
     } finally {
       setSettingsLoading(false);
     }
@@ -967,112 +987,30 @@ function App() {
         </div>
       )}
 
-      {/* MODAL: ERROR VIEW */}
-      {errorMessage && (
-        <div style={{ 
-          position: 'fixed', 
-          inset: 0, 
-          backgroundColor: 'rgba(255, 240, 243, 0.85)', 
-          backdropFilter: 'blur(16px)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          zIndex: 120,
-          padding: '20px'
-        }}>
-          <div className="glass-panel" style={{ 
-            width: '100%', 
-            maxWidth: '460px', 
-            borderRadius: '20px', 
-            padding: '32px', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center',
-            gap: '20px',
-            textAlign: 'center',
-            border: '2.5px solid var(--danger)',
-            background: '#ffffff',
-            position: 'relative',
-            boxShadow: '0 20px 40px rgba(255, 107, 107, 0.15)'
-          }}>
-            {/* Close Button */}
-            <button 
-              onClick={() => setErrorMessage(null)}
-              className="scale-hover"
-              style={{ 
-                position: 'absolute', 
-                top: '20px', 
-                right: '20px', 
-                background: '#f8f9fa', 
-                border: 'none', 
-                color: 'var(--text-secondary)', 
-                cursor: 'pointer', 
-                width: '32px', 
-                height: '32px', 
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 'bold'
-              }}
-            >
-              <X size={16} />
-            </button>
-
-            {/* Error Icon */}
+      {/* TOAST CONTAINER */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`toast-item ${toast.type}`}>
             <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              background: 'rgba(255, 107, 107, 0.1)',
+              color: toast.type === 'error' ? 'var(--danger)' : 'var(--success)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--danger)'
+              marginTop: '2px',
+              flexShrink: 0
             }}>
-              <AlertTriangle size={32} />
+              {toast.type === 'error' ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
             </div>
-
-            <div>
-              <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--danger)', marginBottom: '8px' }}>
-                おっと！エラー発生 😭
-              </h3>
-              <p style={{ 
-                fontSize: '14px', 
-                color: 'var(--text-secondary)', 
-                lineHeight: '1.6',
-                whiteSpace: 'pre-wrap',
-                textAlign: 'left',
-                background: '#f8f9fa',
-                padding: '16px',
-                borderRadius: '12px',
-                border: '2px solid #e9ecef',
-                maxHeight: '180px',
-                overflowY: 'auto',
-                marginTop: '12px'
-              }}>
-                {errorMessage}
-              </p>
-            </div>
-
+            <div className="toast-message">{toast.message}</div>
             <button 
-              onClick={() => setErrorMessage(null)}
-              className="btn-neon" 
-              style={{ 
-                padding: '12px 24px', 
-                borderRadius: '10px', 
-                fontSize: '15px', 
-                width: '100%',
-                background: 'var(--danger)',
-                border: '2px solid #fa5252',
-                boxShadow: '0 4px 0px #fa5252'
-              }}
+              onClick={() => removeToast(toast.id)}
+              className="toast-close-btn"
+              title="閉じる"
             >
-              閉じる 🧸
+              <X size={14} />
             </button>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
 
       {/* SVG Gradient helper for icons */}
       <svg style={{ width: 0, height: 0, position: 'absolute' }}>
