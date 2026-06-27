@@ -42,15 +42,15 @@ On startup the server tries to init Firebase Admin from `FIREBASE_KEY_PATH`. **I
 
 ### Runtime-mutable config
 
-`lmStudioUrl`, `stableDiffusionUrl`, and `lmStudioModel` are **module-level mutable variables**, seeded from `.env` but rewritable at runtime via `POST /api/settings` (driven by the UI gear panel). They are in-memory only — not persisted, reset on restart. `GET /api/status` exposes current values + mode.
+`lmStudioUrl`, `stableDiffusionUrl`, and `lmStudioModel` are **module-level mutable variables**, seeded from `.env` but rewritable at runtime via `POST /api/settings` (driven by the UI gear panel). They are in-memory only — not persisted, reset on restart. `GET /api/status` exposes current values + mode. `/api/settings` validates that submitted URLs use the `http(s)` scheme via `isValidHttpUrl` (SSRF hardening); loopback/LAN hosts stay allowed on purpose since the legitimate LM Studio / SD targets are local.
 
 ### Client ↔ server wiring
 
-`client/src/App.tsx` hard-codes `API_BASE = 'http://127.0.0.1:5000/api'` — there is **no Vite proxy**; the client talks to the server directly and relies on the server's `cors()`. IPv4 `127.0.0.1` (not `localhost`) is used deliberately across the codebase for reliable WSL/local networking — preserve this when adding URLs.
+`client/src/App.tsx` hard-codes `API_BASE = 'http://127.0.0.1:5000/api'` — there is **no Vite proxy**; the client talks to the server directly. CORS is **restricted to the frontend origin(s)** (default `http://localhost:5173,http://127.0.0.1:5173`, overridable via the `CORS_ORIGINS` env var) — not wide open — so an arbitrary website can't drive the API. IPv4 `127.0.0.1` (not `localhost`) is used deliberately across the codebase for reliable WSL/local networking — preserve this when adding URLs.
 
 ## Config
 
-Server reads `server/.env`: `PORT`, `LM_STUDIO_URL`, `STABLE_DIFFUSION_URL`, `LM_STUDIO_MODEL` (empty = use LM Studio's currently-loaded model), `FIREBASE_KEY_PATH`, `FIREBASE_STORAGE_BUCKET`.
+Server reads `server/.env`: `PORT`, `LM_STUDIO_URL`, `STABLE_DIFFUSION_URL`, `LM_STUDIO_MODEL` (empty = use LM Studio's currently-loaded model), `FIREBASE_KEY_PATH`, `FIREBASE_STORAGE_BUCKET`, `CORS_ORIGINS` (comma-separated allowed origins; defaults to the Vite dev origins).
 
 ## Conventions
 

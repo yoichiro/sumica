@@ -40,6 +40,10 @@ LM_STUDIO_URL=http://localhost:1234
 STABLE_DIFFUSION_URL=http://localhost:7860
 LM_STUDIO_MODEL= # 指定しない場合は現在ロードされているモデルが使用されます
 
+# CORS で許可するフロントエンドのオリジン (カンマ区切り)
+# 未指定の場合は Vite の開発用オリジン (localhost:5173 / 127.0.0.1:5173) を許可します
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
 # Firebase Config (空の場合はローカル保存モードになります)
 FIREBASE_KEY_PATH=./firebase-key.json
 FIREBASE_STORAGE_BUCKET=your-project-id.firebasestorage.app

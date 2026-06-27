@@ -18,7 +18,16 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// Restrict CORS to the known frontend origin(s). A wide-open policy would let any
+// website the user has open POST to this server (e.g. silently repointing the
+// outbound LM Studio / Stable Diffusion URLs via /api/settings). Override with
+// CORS_ORIGINS (comma-separated) when serving the client from a different origin.
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json({ limit: '50mb' }));
 
 // Ensure outputs directory exists for local fallback
@@ -94,6 +103,17 @@ const saveLocalHistory = (history: GenerationMetadata[]): void => {
 let lmStudioUrl = process.env.LM_STUDIO_URL || 'http://127.0.0.1:1234';
 let stableDiffusionUrl = process.env.STABLE_DIFFUSION_URL || 'http://127.0.0.1:7860';
 let lmStudioModel = process.env.LM_STUDIO_MODEL || ''; // Empty string means using the currently loaded model
+
+// Accept only http(s) URLs for runtime-configurable outbound targets. Loopback/LAN
+// hosts stay allowed on purpose — the legitimate LM Studio / SD services are local.
+const isValidHttpUrl = (value: string): boolean => {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
 
 interface EnhancedPrompt {
   positive: string;
@@ -346,6 +366,13 @@ app.get('/api/status', (_req: Request, res: Response) => {
 // 4. Update API Configuration
 app.post('/api/settings', (req: Request, res: Response) => {
   const { newLmStudioUrl, newStableDiffusionUrl, newLmStudioModel } = req.body;
+
+  if (newLmStudioUrl && !isValidHttpUrl(newLmStudioUrl)) {
+    return res.status(400).json({ error: 'newLmStudioUrl must be a valid http(s) URL' });
+  }
+  if (newStableDiffusionUrl && !isValidHttpUrl(newStableDiffusionUrl)) {
+    return res.status(400).json({ error: 'newStableDiffusionUrl must be a valid http(s) URL' });
+  }
 
   if (newLmStudioUrl) lmStudioUrl = newLmStudioUrl;
   if (newStableDiffusionUrl) stableDiffusionUrl = newStableDiffusionUrl;
