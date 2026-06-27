@@ -440,18 +440,20 @@ function App() {
         }}>
 
           <form onSubmit={handleGenerate} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            {/* Scrollable container for parameters */}
-            <div style={{ 
-              flex: 1, 
-              overflowY: 'auto', 
-              display: 'flex', 
-              flexDirection: 'column', 
+            {/* Container splitting prompt input and advanced settings into equal halves.
+                minmax(0, 1fr) rows force exactly-equal tracks regardless of content height. */}
+            <div style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
+              display: 'grid',
+              gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)',
               gap: '20px',
               paddingRight: '6px',
               marginBottom: '16px'
             }}>
               {/* PROMPT AREA */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', flex: 1, minHeight: 0 }}>
                 <label style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>
                   生成プロンプト (日本語または英語)
                 </label>
@@ -460,7 +462,7 @@ function App() {
                   placeholder="生成したい画像の内容を入力してください... (例: 'サイバーパンクな都市、雨に濡れたネオン、未来的、シネマティック照明')"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  style={{ height: '110px', resize: 'none', lineHeight: '1.4', borderRadius: '12px' }}
+                  style={{ flex: 1, minHeight: 0, resize: 'none', lineHeight: '1.4', borderRadius: '12px' }}
                   required
                   disabled={loading}
                 />
@@ -469,14 +471,17 @@ function App() {
               {/* AI ENHANCEMENT IS ALWAYS ACTIVE */}
 
               {/* ADVANCED PARAMETERS (ALWAYS OPEN) */}
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
                 gap: '16px',
                 padding: '18px',
                 background: '#f8f9fa',
                 borderRadius: '14px',
-                border: '2px solid #e9ecef'
+                border: '2px solid #e9ecef',
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto'
               }}>
                 {/* Negative Prompt auto-applied by backend */}
 
