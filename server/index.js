@@ -70,8 +70,8 @@ const saveLocalHistory = (history) => {
 };
 
 // API settings (mutable at runtime)
-let lmStudioUrl = process.env.LM_STUDIO_URL || 'http://localhost:1234';
-let stableDiffusionUrl = process.env.STABLE_DIFFUSION_URL || 'http://localhost:7860';
+let lmStudioUrl = process.env.LM_STUDIO_URL || 'http://127.0.0.1:1234';
+let stableDiffusionUrl = process.env.STABLE_DIFFUSION_URL || 'http://127.0.0.1:7860';
 let lmStudioModel = process.env.LM_STUDIO_MODEL || ''; // Empty string means using the currently loaded model
 
 // Helper: Translate and enhance prompt via LM Studio, returning positive and negative prompts in XML format

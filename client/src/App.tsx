@@ -96,7 +96,7 @@ function App() {
   const [enhancedPositive, setEnhancedPositive] = useState('');
   const [enhancedNegative, setEnhancedNegative] = useState('');
 
-  const API_BASE = 'http://localhost:5000/api';
+  const API_BASE = 'http://127.0.0.1:5000/api';
 
   useEffect(() => {
     fetchHistory();
