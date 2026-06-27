@@ -117,8 +117,7 @@ Do not include any introductory or concluding text, explanations, or notes. Repl
     throw new Error('Unexpected response format from LM Studio');
   } catch (error) {
     console.error('LM Studio prompt enhancement failed:', error.message);
-    // Fall back to original prompt and default negative
-    return { positive: userPrompt, negative: defaultNegative };
+    throw new Error(`LM Studioへの接続またはパースに失敗しました: ${error.message}`);
   }
 }
 
@@ -151,9 +150,27 @@ app.use('/api/outputs', express.static(outputsDir));
 
 // --- API ROUTES ---
 
-// 1. Generate Image Pipeline
+// 1. New Prompt Enhance Endpoint
+app.post('/api/enhance', async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+  try {
+    const enhanced = await enhancePrompt(prompt);
+    res.json({
+      success: true,
+      positive: enhanced.positive,
+      negative: enhanced.negative
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req, res) => {
-  const { prompt, width, height, steps, cfgScale, skipEnhance } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
@@ -161,17 +178,18 @@ app.post('/api/generate', async (req, res) => {
 
   const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
   let finalPrompt = prompt;
-  let finalNegativePrompt = defaultNegative;
+  let finalNegativePrompt = negativePrompt || defaultNegative;
+  let finalOriginalPrompt = originalPrompt || prompt;
 
   try {
-    // Step 1: Enhance prompt using LM Studio if selected
+    // Step 1: Enhance prompt using LM Studio if not skipped
     if (!skipEnhance) {
       const enhanced = await enhancePrompt(prompt);
       finalPrompt = enhanced.positive;
       finalNegativePrompt = enhanced.negative;
       console.log(`Original: "${prompt}" -> Enhanced Positive: "${finalPrompt}" | Enhanced Negative: "${finalNegativePrompt}"`);
     } else {
-      console.log(`Skipping prompt enhancement. Direct Prompt: "${finalPrompt}"`);
+      console.log(`Using pre-enhanced prompts. Positive: "${finalPrompt}" | Negative: "${finalNegativePrompt}"`);
     }
 
     // Step 2: Generate image with Stable Diffusion
@@ -198,13 +216,12 @@ app.post('/api/generate', async (req, res) => {
         metadata: { contentType: 'image/png' },
       });
 
-      // Firebase Storage Public URL structure (Make sure rules allow read, or use public config)
       imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(`images/${fileName}`)}?alt=media`;
       storagePath = `images/${fileName}`;
 
       console.log('Firebase mode: Saving metadata to Firestore...');
       const metadata = {
-        originalPrompt: prompt,
+        originalPrompt: finalOriginalPrompt,
         enhancedPrompt: finalPrompt,
         negativePrompt: finalNegativePrompt,
         width: width || 512,
@@ -234,7 +251,7 @@ app.post('/api/generate', async (req, res) => {
 
       const metadata = {
         id: `local_${timestamp}`,
-        originalPrompt: prompt,
+        originalPrompt: finalOriginalPrompt,
         enhancedPrompt: finalPrompt,
         negativePrompt: finalNegativePrompt,
         width: width || 512,
