@@ -82,6 +82,7 @@ interface GenerationMetadata {
   createdAt: string;
   backendMode: 'firebase' | 'local';
   seed?: number;
+  sampler?: string;
 }
 
 // Local history metadata helper
@@ -178,7 +179,8 @@ async function generateImage(
   steps = 20,
   cfgScale = 7,
   model = '',
-  seed = -1
+  seed = -1,
+  sampler = 'Euler a'
 ): Promise<{ image: string; seed: number }> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
@@ -189,7 +191,7 @@ async function generateImage(
       cfg_scale: cfgScale,
       width,
       height,
-      sampler_name: 'Euler a',
+      sampler_name: sampler,
       seed,
     };
     // Switch checkpoint for this request; SD keeps it loaded for subsequent generations.
@@ -266,7 +268,7 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler } = req.body;
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
 
   if (!prompt) {
@@ -298,7 +300,8 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       steps ? parseInt(steps) : 20,
       cfgScale ? parseFloat(cfgScale) : 7,
       model || '',
-      seedVal
+      seedVal,
+      sampler || 'Euler a'
     );
 
     const imageBuffer = Buffer.from(base64Image, 'base64');
@@ -329,6 +332,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         cfgScale: cfgScale || 7,
         model: model || null,
         seed: actualSeed,
+        sampler: sampler || 'Euler a',
         imageUrl,
         storagePath,
         timestamp,
@@ -361,6 +365,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         cfgScale: cfgScale || 7,
         model: model || null,
         seed: actualSeed,
+        sampler: sampler || 'Euler a',
         imageUrl,
         localPath: localFilePath,
         timestamp,
@@ -467,7 +472,22 @@ app.get('/api/sd-models', async (_req: Request, res: Response) => {
   }
 });
 
-// 7. Delete selected generations (image files + metadata, or Firestore docs + Storage objects).
+// 7. List Stable Diffusion samplers (for the sampler picker).
+// Always responds 200; on failure returns an empty list so the client can disable the selector.
+app.get('/api/sd-samplers', async (_req: Request, res: Response) => {
+  try {
+    const listRes = await axios.get(`${stableDiffusionUrl}/sdapi/v1/samplers`, { timeout: 5000 });
+    const samplers = Array.isArray(listRes.data)
+      ? listRes.data.map((s: { name?: string }) => s.name).filter((n): n is string => Boolean(n))
+      : [];
+    res.json({ samplers });
+  } catch (error) {
+    console.error('Failed to fetch SD samplers:', (error as Error).message);
+    res.json({ samplers: [] });
+  }
+});
+
+// 8. Delete selected generations (image files + metadata, or Firestore docs + Storage objects).
 app.post('/api/generations/delete', async (req: Request, res: Response) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
