@@ -29,6 +29,7 @@ interface GenerationData {
   createdAt: string;
   backendMode: 'firebase' | 'local';
   seed?: number;
+  sampler?: string;
 }
 
 interface SystemStatus {
@@ -126,6 +127,8 @@ function App() {
   const healthInFlight = useRef(false);
   const [sdModels, setSdModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [sdSamplers, setSdSamplers] = useState<string[]>([]);
+  const [selectedSampler, setSelectedSampler] = useState('');
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -191,6 +194,7 @@ function App() {
     fetchStatus();
     fetchHealth();
     fetchSdModels();
+    fetchSdSamplers();
     // Re-check upstream connectivity every 20s so the badges stay fresh.
     const healthInterval = setInterval(fetchHealth, 20000);
     return () => clearInterval(healthInterval);
@@ -201,6 +205,7 @@ function App() {
   useEffect(() => {
     if (health?.stableDiffusion.connected) {
       fetchSdModels();
+      fetchSdSamplers();
     }
   }, [health?.stableDiffusion.connected]);
 
@@ -268,6 +273,20 @@ function App() {
     }
   };
 
+  const fetchSdSamplers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sd-samplers`);
+      if (res.ok) {
+        const data = await res.json();
+        const samplers: string[] = Array.isArray(data.samplers) ? data.samplers : [];
+        setSdSamplers(samplers);
+        setSelectedSampler((prev) => prev || 'Euler a');
+      }
+    } catch (error) {
+      console.error('Failed to fetch SD samplers:', error);
+    }
+  };
+
   // Populate the left-panel form fields from a history item so the user can
   // tweak and regenerate. If the item carries a seed, lock the seed field to
   // that value so the same image can be reproduced; otherwise unlock it.
@@ -278,6 +297,7 @@ function App() {
     setSteps(item.steps);
     setCfgScale(item.cfgScale);
     setSelectedModel(item.model || '');
+    setSelectedSampler(item.sampler || '');
     if (item.seed !== undefined) {
       setSeedLocked(true);
       setSeedValue(item.seed);
@@ -353,7 +373,8 @@ function App() {
           cfgScale,
           model: selectedModel || undefined, // Override SD checkpoint when one is selected
           skipEnhance: true, // Skip enhancement since we already did it!
-          seed: seedLocked ? seedValue : -1
+          seed: seedLocked ? seedValue : -1,
+          sampler: selectedSampler || undefined
         })
       });
 
@@ -422,6 +443,7 @@ function App() {
         fetchStatus();
         fetchHealth(); // Re-check connectivity against the newly saved URLs
         fetchSdModels(); // Refresh model list against the newly saved SD URL
+        fetchSdSamplers();
         addToast('設定を保存しました！⚙️', 'success');
         setTimeout(() => {
           setSettingsSuccess(false);
@@ -618,6 +640,28 @@ function App() {
                   ) : (
                     <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
                       <option>モデル一覧を取得できません（SD未接続）</option>
+                    </select>
+                  )}
+                </div>
+
+                {/* Sampler */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サンプラー (Sampler)</label>
+                  {sdSamplers.length > 0 ? (
+                    <select
+                      className="input-field"
+                      value={selectedSampler}
+                      onChange={(e) => setSelectedSampler(e.target.value)}
+                      disabled={loading}
+                      style={{ borderRadius: '8px' }}
+                    >
+                      {sdSamplers.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
+                      <option>サンプラー一覧を取得できません（SD未接続）</option>
                     </select>
                   )}
                 </div>
@@ -907,6 +951,12 @@ function App() {
                       <div style={{ gridColumn: '1 / -1' }}>
                         <span>Seed: </span>
                         <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{currentGeneration.seed}</strong>
+                      </div>
+                    )}
+                    {currentGeneration.sampler && (
+                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
+                        <span>サンプラー: </span>
+                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.sampler}</strong>
                       </div>
                     )}
                   </div>
