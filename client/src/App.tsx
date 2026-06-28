@@ -268,6 +268,24 @@ function App() {
     }
   };
 
+  // Populate the left-panel form fields from a history item so the user can
+  // tweak and regenerate. If the item carries a seed, lock the seed field to
+  // that value so the same image can be reproduced; otherwise unlock it.
+  const loadIntoForm = (item: GenerationData) => {
+    setPrompt(item.originalPrompt);
+    setWidth(item.width);
+    setHeight(item.height);
+    setSteps(item.steps);
+    setCfgScale(item.cfgScale);
+    setSelectedModel(item.model || '');
+    if (item.seed !== undefined) {
+      setSeedLocked(true);
+      setSeedValue(item.seed);
+    } else {
+      setSeedLocked(false);
+    }
+  };
+
   // Recall a history image into the Preview tab, treating it as if it was just
   // generated: same success-state transition as handleGenerate's success branch,
   // minus the toast. Ignored while a generation is in progress so the live
@@ -885,7 +903,36 @@ function App() {
                         <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.model}</strong>
                       </div>
                     )}
+                    {currentGeneration.seed !== undefined && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <span>Seed: </span>
+                        <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{currentGeneration.seed}</strong>
+                      </div>
+                    )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => loadIntoForm(currentGeneration)}
+                    className="scale-hover"
+                    style={{
+                      marginTop: '12px',
+                      background: 'rgba(51, 154, 240, 0.08)',
+                      border: '2px solid rgba(51, 154, 240, 0.2)',
+                      color: 'var(--pop-blue)',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      width: '100%',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    ♻️ フォームにロード
+                  </button>
                 </div>
               </div>
             ) : (
