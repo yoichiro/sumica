@@ -46,7 +46,7 @@ On startup the server tries to init Firebase Admin from `FIREBASE_KEY_PATH`. **I
 
 ### Client ↔ server wiring
 
-`client/src/App.tsx` hard-codes `API_BASE = 'http://127.0.0.1:5000/api'` — there is **no Vite proxy**; the client talks to the server directly. CORS is **restricted to the frontend origin(s)** (default `http://localhost:5173,http://127.0.0.1:5173`, overridable via the `CORS_ORIGINS` env var) — not wide open — so an arbitrary website can't drive the API. IPv4 `127.0.0.1` (not `localhost`) is used deliberately across the codebase for reliable WSL/local networking — preserve this when adding URLs.
+`client/src/App.tsx` derives `API_BASE` from the page's own host — ``const API_BASE = `http://${window.location.hostname}:5000/api` `` — there is **no Vite proxy**; the client talks to the server directly. This deliberately tracks `window.location.hostname` instead of a hardcoded `127.0.0.1`: under **WSL2, Windows→WSL forwarding can work for `localhost` but NOT for `127.0.0.1`**, so a hardcoded `127.0.0.1` makes every API call fail from a Windows browser even though the page loaded fine — keep the host dynamic. CORS is **restricted to the frontend origin(s)** (default `http://localhost:5173,http://127.0.0.1:5173`, overridable via the `CORS_ORIGINS` env var) — not wide open — so an arbitrary website can't drive the API; both `localhost` and `127.0.0.1` origins are allowed so the dynamic host resolves either way. Note the asymmetry: **server-side** URLs (server→LM Studio/SD, the local-mode `imageUrl`) use plain `localhost`/`127.0.0.1` for reliable in-WSL networking, but the **browser-side** API host must follow the page host as above.
 
 ## Config
 

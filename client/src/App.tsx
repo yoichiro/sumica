@@ -180,7 +180,11 @@ function App() {
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
   const [errorStep, setErrorStep] = useState<number | null>(null);
 
-  const API_BASE = 'http://127.0.0.1:5000/api';
+  // Talk to the API on the SAME hostname the page was loaded from, not a hardcoded
+  // 127.0.0.1. Under WSL2, Windows->WSL forwarding can work for `localhost` but NOT for
+  // `127.0.0.1`, so a hardcoded 127.0.0.1 makes every API call (health, history, generate)
+  // fail from a Windows browser even though the page itself loaded fine.
+  const API_BASE = `http://${window.location.hostname}:5000/api`;
 
   useEffect(() => {
     fetchHistory();
