@@ -28,6 +28,7 @@ interface GenerationData {
   timestamp: number;
   createdAt: string;
   backendMode: 'firebase' | 'local';
+  seed?: number;
 }
 
 interface SystemStatus {
@@ -83,7 +84,9 @@ function App() {
   const [height, setHeight] = useState(512);
   const [steps, setSteps] = useState(20);
   const [cfgScale, setCfgScale] = useState(7);
-  
+  const [seedLocked, setSeedLocked] = useState(false);
+  const [seedValue, setSeedValue] = useState(0);
+
   // Toast notifications state
   interface Toast {
     id: string;
@@ -331,7 +334,8 @@ function App() {
           steps,
           cfgScale,
           model: selectedModel || undefined, // Override SD checkpoint when one is selected
-          skipEnhance: true // Skip enhancement since we already did it!
+          skipEnhance: true, // Skip enhancement since we already did it!
+          seed: seedLocked ? seedValue : -1
         })
       });
 
@@ -686,6 +690,30 @@ function App() {
                     onChange={(e) => setCfgScale(parseFloat(e.target.value))}
                     disabled={loading}
                   />
+                </div>
+                {/* Seed */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: loading ? 'default' : 'pointer', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                    <input
+                      type="checkbox"
+                      checked={seedLocked}
+                      onChange={(e) => setSeedLocked(e.target.checked)}
+                      disabled={loading}
+                    />
+                    Seedを固定する
+                  </label>
+                  {seedLocked && (
+                    <input
+                      type="number"
+                      className="input-field"
+                      min={0}
+                      step={1}
+                      value={seedValue}
+                      onChange={(e) => setSeedValue(parseInt(e.target.value) || 0)}
+                      disabled={loading}
+                      style={{ borderRadius: '8px' }}
+                    />
+                  )}
                 </div>
               </div>
             </div>
