@@ -81,6 +81,7 @@ interface GenerationMetadata {
   timestamp: number;
   createdAt: string;
   backendMode: 'firebase' | 'local';
+  seed?: number;
 }
 
 // Local history metadata helper
@@ -176,8 +177,9 @@ async function generateImage(
   height = 512,
   steps = 20,
   cfgScale = 7,
-  model = ''
-): Promise<string> {
+  model = '',
+  seed = -1
+): Promise<{ image: string; seed: number }> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
     const payload: Record<string, unknown> = {
@@ -188,6 +190,7 @@ async function generateImage(
       width,
       height,
       sampler_name: 'Euler a',
+      seed,
     };
     // Switch checkpoint for this request; SD keeps it loaded for subsequent generations.
     if (model) {
@@ -196,7 +199,16 @@ async function generateImage(
     const response = await axios.post(`${stableDiffusionUrl}/sdapi/v1/txt2img`, payload, { timeout: 180000 }); // 3 minutes timeout
 
     if (response.data && response.data.images && response.data.images[0]) {
-      return response.data.images[0]; // Returns base64 image string
+      let actualSeed = seed;
+      if (response.data.info) {
+        try {
+          const info = JSON.parse(response.data.info as string);
+          if (typeof info.seed === 'number') actualSeed = info.seed;
+        } catch {
+          // keep requested seed as fallback
+        }
+      }
+      return { image: response.data.images[0], seed: actualSeed };
     }
     throw new Error('No image returned from Stable Diffusion API');
   } catch (error) {
@@ -254,7 +266,8 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed } = req.body;
+  const seedVal = seed !== undefined ? parseInt(seed) : -1;
 
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
@@ -277,14 +290,15 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     }
 
     // Step 2: Generate image with Stable Diffusion
-    const base64Image = await generateImage(
+    const { image: base64Image, seed: actualSeed } = await generateImage(
       finalPrompt,
       finalNegativePrompt,
       width ? parseInt(width) : 512,
       height ? parseInt(height) : 512,
       steps ? parseInt(steps) : 20,
       cfgScale ? parseFloat(cfgScale) : 7,
-      model || ''
+      model || '',
+      seedVal
     );
 
     const imageBuffer = Buffer.from(base64Image, 'base64');
@@ -314,6 +328,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         steps: steps || 20,
         cfgScale: cfgScale || 7,
         model: model || null,
+        seed: actualSeed,
         imageUrl,
         storagePath,
         timestamp,
@@ -345,6 +360,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         steps: steps || 20,
         cfgScale: cfgScale || 7,
         model: model || null,
+        seed: actualSeed,
         imageUrl,
         localPath: localFilePath,
         timestamp,
