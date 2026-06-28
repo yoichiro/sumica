@@ -130,7 +130,7 @@ function App() {
   const itemKey = (it: GenerationData) => it.id ?? String(it.timestamp);
 
   // Single-click toggles selection. (A double-click fires onClick twice — toggling
-  // back to the original state — then onDoubleClick opens the popup.)
+  // back to the original state — then onDoubleClick recalls the image into preview.)
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -172,9 +172,6 @@ function App() {
   const [newLmStudioModel, setNewLmStudioModel] = useState('');
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
-  
-  // Detail views
-  const [selectedItem, setSelectedItem] = useState<GenerationData | null>(null);
   
   type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
@@ -266,6 +263,24 @@ function App() {
     } catch (error) {
       console.error('Failed to fetch SD models:', error);
     }
+  };
+
+  // Recall a history image into the Preview tab, treating it as if it was just
+  // generated: same success-state transition as handleGenerate's success branch,
+  // minus the toast. Ignored while a generation is in progress so the live
+  // preview/progress isn't clobbered.
+  const openInPreview = (item: GenerationData) => {
+    if (genStatus === 'enhancing' || genStatus === 'generating' || genStatus === 'saving') return;
+    confetti({
+      particleCount: 150,
+      spread: 85,
+      origin: { y: 0.6 },
+      colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66']
+    });
+    setCurrentGeneration(item);
+    setGenStatus('success');
+    setLoadingStep(3);
+    setRightTab('preview');
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -1053,7 +1068,7 @@ function App() {
                     key={itemKey(item)}
                     className="glass-panel scale-hover"
                     onClick={() => toggleSelected(itemKey(item))}
-                    onDoubleClick={() => setSelectedItem(item)}
+                    onDoubleClick={() => openInPreview(item)}
                     style={{
                       borderRadius: '12px',
                       overflow: 'hidden',
@@ -1139,163 +1154,6 @@ function App() {
           </div>
         </section>
       </main>
-
-      {/* MODAL: IMAGE DETAIL VIEW */}
-      {selectedItem && (
-        <div style={{ 
-          position: 'fixed', 
-          inset: 0, 
-          backgroundColor: 'rgba(0, 0, 0, 0.4)', 
-          backdropFilter: 'blur(8px)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          zIndex: 100,
-          padding: '20px'
-        }}>
-          <div className="glass-panel active" style={{ 
-            width: '100%', 
-            maxWidth: '820px', 
-            borderRadius: '20px', 
-            position: 'relative',
-            overflow: 'hidden',
-            display: 'grid',
-            gridTemplateColumns: '1.1fr 1fr',
-            maxHeight: '90vh',
-            border: '2px solid var(--pop-blue)'
-          }}>
-            {/* Left side: Image */}
-            <div style={{ position: 'relative', background: '#f1f3f5', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '2px solid #e9ecef' }}>
-              <img 
-                src={selectedItem.imageUrl} 
-                alt="Enlarged" 
-                style={{ width: '100%', height: 'auto', maxHeight: '90vh', objectFit: 'contain', display: 'block' }} 
-              />
-            </div>
-            
-            {/* Right side: Parameter Info */}
-            <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', textAlign: 'left', background: '#fff' }}>
-              <button 
-                onClick={() => setSelectedItem(null)}
-                className="scale-hover"
-                style={{ 
-                  position: 'absolute', 
-                  top: '20px', 
-                  right: '20px', 
-                  background: '#f1f3f5', 
-                  border: 'none', 
-                  color: 'var(--text-secondary)', 
-                  cursor: 'pointer', 
-                  width: '34px', 
-                  height: '34px', 
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}
-              >
-                <X size={18} />
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {selectedItem.backendMode === 'firebase' ? (
-                  <span style={{ fontSize: '12px', color: 'var(--pop-blue)', background: 'rgba(51,154,240,0.1)', padding: '4px 12px', borderRadius: '14px', border: '2px solid rgba(51,154,240,0.2)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                    <Cloud size={12} /> クラウド保存 ☁️
-                  </span>
-                ) : (
-                  <span style={{ fontSize: '12px', color: 'var(--pop-orange)', background: 'rgba(255,146,43,0.1)', padding: '4px 12px', borderRadius: '14px', border: '2px solid rgba(255,146,43,0.2)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                    <Folder size={12} /> ローカル保存 📁
-                  </span>
-                )}
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {new Date(selectedItem.timestamp).toLocaleString()}
-                </span>
-              </div>
-
-              <div>
-                <h4 style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', fontWeight: '700' }}>元プロンプト</h4>
-                <p style={{ fontSize: '17px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: '1.4' }}>{selectedItem.originalPrompt}</p>
-              </div>
-
-              {selectedItem.enhancedPrompt !== selectedItem.originalPrompt && (
-                <div>
-                  <h4 style={{ fontSize: '12px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                    <Sparkles size={12} /> 拡張プロンプト (ポジティブ)
-                  </h4>
-                  <div style={{ 
-                    background: '#f8f9fa', 
-                    border: '2px solid #e9ecef', 
-                    borderRadius: '10px', 
-                    padding: '14px', 
-                    fontSize: '13px', 
-                    color: 'var(--text-secondary)',
-                    lineHeight: '1.5',
-                    fontStyle: 'italic',
-                    wordBreak: 'break-all'
-                  }}>
-                    {selectedItem.enhancedPrompt}
-                  </div>
-                </div>
-              )}
-
-              {selectedItem.negativePrompt && (
-                <div>
-                  <h4 style={{ fontSize: '12px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                    ❌ ネガティブプロンプト
-                  </h4>
-                  <div style={{ 
-                    background: '#fff5f5', 
-                    border: '2px solid #ffe3e3', 
-                    borderRadius: '10px', 
-                    padding: '14px', 
-                    fontSize: '12px', 
-                    color: 'var(--text-secondary)',
-                    lineHeight: '1.5',
-                    wordBreak: 'break-all'
-                  }}>
-                    {selectedItem.negativePrompt}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ 
-                borderTop: '2px solid #e9ecef', 
-                paddingTop: '20px', 
-                marginTop: 'auto',
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(2, 1fr)', 
-                gap: '16px',
-                fontSize: '13px',
-                fontWeight: '600'
-              }}>
-                <div>
-                  <span style={{ color: 'var(--text-secondary)' }}>解像度: </span>
-                  <strong style={{ color: 'var(--text-primary)' }}>{selectedItem.width} × {selectedItem.height} px</strong>
-                </div>
-                <div>
-                  <span style={{ color: 'var(--text-secondary)' }}>サンプリングステップ: </span>
-                  <strong style={{ color: 'var(--text-primary)' }}>{selectedItem.steps} 回</strong>
-                </div>
-                <div>
-                  <span style={{ color: 'var(--text-secondary)' }}>CFGスケール: </span>
-                  <strong style={{ color: 'var(--text-primary)' }}>{selectedItem.cfgScale}</strong>
-                </div>
-                <div>
-                  <span style={{ color: 'var(--text-secondary)' }}>サンプラー: </span>
-                  <strong style={{ color: 'var(--text-primary)' }}>Euler a</strong>
-                </div>
-                {selectedItem.model && (
-                  <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>モデル: </span>
-                    <strong style={{ color: 'var(--text-primary)' }}>{selectedItem.model}</strong>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* MODAL: DELETE CONFIRMATION */}
       {showDeleteConfirm && (
