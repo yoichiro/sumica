@@ -811,48 +811,6 @@ function App() {
                   )}
                 </div>
 
-                {/* LoRA (multiple, each with a weight) */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>LoRA (複数適用可)</label>
-                  {sdLoras.length > 0 ? (
-                    <select
-                      className="input-field"
-                      value=""
-                      onChange={(e) => addLora(e.target.value)}
-                      disabled={loading}
-                      style={{ borderRadius: '8px' }}
-                    >
-                      <option value="">＋ LoRAを追加…</option>
-                      {sdLoras.filter((n) => !selectedLoras.some((l) => l.name === n)).map((n) => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                      <option>LoRA一覧を取得できません（SD未接続）</option>
-                    </select>
-                  )}
-                  {selectedLoras.map((l) => (
-                    <div key={l.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', border: '2px solid #e9ecef', borderRadius: '8px', padding: '6px 8px' }}>
-                      <span style={{ flex: 1, fontSize: '11px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.name}>{l.name}</span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1.5"
-                        step="0.05"
-                        value={l.weight}
-                        onChange={(e) => setLoraWeight(l.name, parseFloat(e.target.value))}
-                        disabled={loading}
-                        style={{ width: '90px' }}
-                      />
-                      <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--pop-blue)', width: '30px', textAlign: 'right' }}>{l.weight.toFixed(2)}</span>
-                      <button type="button" onClick={() => removeLora(l.name)} disabled={loading} title="このLoRAを外す" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
                 {/* Size Select with Swap Button */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.2fr', gap: '8px', alignItems: 'end', textAlign: 'left' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -940,6 +898,48 @@ function App() {
                     disabled={loading}
                   />
                 </div>
+                {/* LoRA (multiple, each with a weight) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>LoRA (複数適用可)</label>
+                  {sdLoras.length > 0 ? (
+                    <select
+                      className="input-field"
+                      value=""
+                      onChange={(e) => addLora(e.target.value)}
+                      disabled={loading}
+                      style={{ borderRadius: '8px' }}
+                    >
+                      <option value="">＋ LoRAを追加…</option>
+                      {sdLoras.filter((n) => !selectedLoras.some((l) => l.name === n)).map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
+                      <option>LoRA一覧を取得できません（SD未接続）</option>
+                    </select>
+                  )}
+                  {selectedLoras.map((l) => (
+                    <div key={l.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', border: '2px solid #e9ecef', borderRadius: '8px', padding: '6px 8px' }}>
+                      <span style={{ flex: 1, fontSize: '11px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.name}>{l.name}</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1.5"
+                        step="0.05"
+                        value={l.weight}
+                        onChange={(e) => setLoraWeight(l.name, parseFloat(e.target.value))}
+                        disabled={loading}
+                        style={{ width: '90px' }}
+                      />
+                      <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--pop-blue)', width: '30px', textAlign: 'right' }}>{l.weight.toFixed(2)}</span>
+                      <button type="button" onClick={() => removeLora(l.name)} disabled={loading} title="このLoRAを外す" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
                 {/* Seed */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: loading ? 'default' : 'pointer', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
