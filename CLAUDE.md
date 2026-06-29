@@ -37,6 +37,10 @@ The enhance and generate steps are **split into two client requests on purpose**
 2. Client `POST /api/generate` with the returned positive/negative, **`skipEnhance: true`**, and **`clientPersist: true`** (when the user is signed in). `generateImage()` then calls Stable Diffusion `/sdapi/v1/txt2img` (180s timeout) and gets a base64 PNG. An optional `model` in the request is passed as `override_settings.sd_model_checkpoint` (SD switches checkpoint and keeps it loaded). When `clientPersist: true`, the server returns `{ success: true, image: <base64>, params: {...} }` without saving anything; when `clientPersist` is absent/false, it local-saves and returns `{ success: true, data: metadata }`.
 3. Client receives the response. If signed in (`clientPersist` path): client uploads the base64 image to Firebase Storage (`users/{uid}/images/…`) and writes metadata to Firestore (`users/{uid}/generations/{id}`), then fires confetti. If signed out (local path): server has already saved; client refreshes history via `/api/history`.
 
+### Batch generation (client-side sequential loop)
+
+"まとめて生成" opens a modal to pick a count (2–10), then `handleBatchGenerate(count)` (in `client/src/App.tsx`) enhances the prompt **once** and calls `/api/generate` **N times sequentially — one image at a time**. SD's own Batch Count parameter is deliberately **not** used, so the UI can show per-image progress ("画像 i/N"), persist each finished image incrementally (Firebase when signed in, server-local when signed out), and continue past a failed image (summarized in a final toast). Seed follows the existing seed-lock setting, identical to single generation. The server is unchanged — batch is purely a client-side loop over the existing single-image endpoint. The shared helpers `enhanceOnce` / `generateImage` / `persistResult` / `generateAndPersist` back both the single and batch flows.
+
 ### Storage: client Firebase ↔ server local fallback
 
 The server is **Firebase-free** — `firebase-admin` has been removed from `server/package.json`; no service-account key is required. Storage is split by auth state:

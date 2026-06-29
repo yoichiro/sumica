@@ -16,7 +16,8 @@ import {
   Minimize,
   ChevronLeft,
   ChevronRight,
-  LogIn
+  LogIn,
+  Layers
 } from 'lucide-react';
 import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { flushSync } from 'react-dom';
@@ -320,6 +321,11 @@ function App() {
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
   const [errorStep, setErrorStep] = useState<number | null>(null);
 
+  // Batch generation state
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchCount, setBatchCount] = useState(4);
+
   // Talk to the API on the SAME hostname the page was loaded from, not a hardcoded
   // 127.0.0.1. Under WSL2, Windows->WSL forwarding can work for `localhost` but NOT for
   // `127.0.0.1`, so a hardcoded 127.0.0.1 makes every API call (health, history, generate)
@@ -611,9 +617,6 @@ function App() {
     if (!result.success) throw new Error('Image generation returned an unsuccessful result');
     return await persistResult(result);
   };
-  // Keep generateAndPersist in scope for Tasks 2 & 3 to access
-  void generateAndPersist;
-
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || loading) return;
@@ -692,6 +695,76 @@ function App() {
       addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Batch: enhance once, then generate `count` images one at a time (sequential
+  // SD calls — NOT SD's Batch Count). A failed image is counted and skipped;
+  // the loop continues. The last completed image stays in the preview.
+  const handleBatchGenerate = async (count: number) => {
+    if (!prompt.trim() || loading) return;
+
+    setLoading(true);
+    setErrorStep(null);
+    setRightTab('preview');
+    setGenStatus('enhancing');
+    setCurrentGeneration(null);
+    setLoadingStep(1);
+
+    let currentStep = 1;
+
+    try {
+      // --- Step 1: enhance ONCE, reuse for every image ---
+      const { positive, negative } = await enhanceOnce(prompt);
+
+      // --- Step 2: generate sequentially, one image at a time ---
+      currentStep = 2;
+      setLoadingStep(2);
+      setGenStatus('generating');
+
+      let succeeded = 0;
+      let failed = 0;
+
+      for (let i = 1; i <= count; i++) {
+        setBatchProgress({ current: i, total: count });
+        const seed = seedLocked ? seedValue : -1;
+        try {
+          const saved = await generateAndPersist(positive, negative, prompt, seed);
+          succeeded++;
+          setCurrentGeneration(saved); // live preview update
+        } catch (genErr) {
+          failed++;
+          console.error(genErr);
+        }
+      }
+
+      if (succeeded > 0) {
+        confetti({
+          particleCount: 150,
+          spread: 85,
+          origin: { y: 0.6 },
+          colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66'],
+        });
+      }
+
+      if (succeeded === 0) setErrorStep(2);
+      setGenStatus(succeeded > 0 ? 'success' : 'error');
+      if (!user) fetchHistory(); // signed-in history updates via onSnapshot
+
+      if (failed === 0) {
+        addToast(`${count}枚の画像を生成しました！🎨⚡️`, 'success');
+      } else {
+        addToast(`${count}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+      }
+    } catch (error: any) {
+      // enhanceOnce failed before the loop → abort like single generation.
+      console.error(error);
+      setErrorStep(currentStep);
+      setGenStatus('error');
+      addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+    } finally {
+      setLoading(false);
+      setBatchProgress(null);
     }
   };
 
@@ -1111,35 +1184,62 @@ function App() {
               </div>
             </div>
 
-            {/* GENERATE BUTTON - Always visible and pinned at bottom */}
-            <button
-              type="submit"
-              className="btn-neon"
-              disabled={loading || !prompt.trim()}
-              style={{
-                width: '100%',
-                padding: '16px',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px',
-                fontSize: '17px',
-                flexShrink: 0
-              }}
-            >
-              {loading ? (
-                <>
-                  <RotateCw size={20} className="animate-spin-custom" />
-                  <span>生成リクエストを実行中... ⚡️</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={20} />
-                  <span>画像を生成する 🎨⚡️</span>
-                </>
-              )}
-            </button>
+            {/* GENERATE BUTTONS - Always visible and pinned at bottom */}
+            <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+              <button
+                type="submit"
+                className="btn-neon"
+                disabled={loading || !prompt.trim()}
+                style={{
+                  flex: 1,
+                  padding: '16px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  fontSize: '17px'
+                }}
+              >
+                {loading ? (
+                  <>
+                    <RotateCw size={20} className="animate-spin-custom" />
+                    <span>生成リクエストを実行中... ⚡️</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={20} />
+                    <span>画像を生成する 🎨⚡️</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBatchModal(true)}
+                disabled={loading || !prompt.trim()}
+                className="scale-hover"
+                title="複数枚をまとめて生成"
+                style={{
+                  padding: '16px 20px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  fontSize: '15px',
+                  fontWeight: 700,
+                  background: '#fff',
+                  color: 'var(--pop-blue)',
+                  border: '2px solid var(--pop-blue)',
+                  cursor: (loading || !prompt.trim()) ? 'not-allowed' : 'pointer',
+                  opacity: (loading || !prompt.trim()) ? 0.5 : 1,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <Layers size={18} />
+                <span>まとめて生成</span>
+              </button>
+            </div>
           </form>
         </section>
 
@@ -1452,7 +1552,7 @@ function App() {
                     }}>
                       {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 || genStatus === 'success' ? '✓' : '2'}
                     </div>
-                    <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>画像生成</span>
+                    <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>画像生成{batchProgress ? ` (${batchProgress.current}/${batchProgress.total})` : ''}</span>
                   </div>
 
                   <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
@@ -1944,6 +2044,93 @@ function App() {
               {settingsLoading ? '保存中...' : settingsSuccess ? '設定を保存しました！ ✓' : '変更を適用する'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* MODAL: BATCH GENERATION COUNT */}
+      {showBatchModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 110,
+          padding: '20px'
+        }}>
+          <div
+            className="glass-panel"
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              borderRadius: '20px',
+              padding: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              textAlign: 'left',
+              border: '2px solid var(--pop-blue)',
+              background: '#ffffff'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <Layers color="var(--pop-blue)" size={20} />
+                <span>まとめて生成 🖼️</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowBatchModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+              同じプロンプトで複数枚を1枚ずつ順番に生成します。生成する枚数を選んでください。
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
+                {batchCount}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>枚</span>
+              </span>
+              <input
+                type="range"
+                min={2}
+                max={10}
+                step={1}
+                value={batchCount}
+                onChange={(e) => setBatchCount(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
+                <span>2枚</span>
+                <span>10枚</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setShowBatchModal(false)}
+                className="scale-hover"
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e9ecef', background: '#fff', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowBatchModal(false); handleBatchGenerate(batchCount); }}
+                className="btn-neon"
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
+              >
+                {batchCount}枚生成する
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
