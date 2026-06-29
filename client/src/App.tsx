@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Sparkles, 
+import {
+  Sparkles,
   Settings,
   Image as ImageIcon,
-  RotateCw, 
-  Cloud, 
+  RotateCw,
+  Cloud,
   Folder,
   X,
   ArrowLeftRight,
@@ -15,8 +15,10 @@ import {
   Maximize,
   Minimize,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LogIn
 } from 'lucide-react';
+import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, deleteGenerations, type AuthUser, type GenerationRecord } from './firebase';
 import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
 
@@ -39,18 +41,10 @@ interface GenerationData {
   timestamp: number;
   createdAt: string;
   backendMode: 'firebase' | 'local';
+  storagePath?: string;
   seed?: number;
   sampler?: string;
   loras?: { name: string; weight: number }[];
-}
-
-interface SystemStatus {
-  firebaseEnabled: boolean;
-  lmStudioUrl: string;
-  stableDiffusionUrl: string;
-  lmStudioModel: string;
-  storageBucketName: string | null;
-  localHistoryCount: number;
 }
 
 interface HealthStatus {
@@ -156,6 +150,9 @@ function App() {
     setHeight(temp);
   };
   
+  // Auth state
+  const [user, setUser] = useState<AuthUser | null>(null);
+
   // App system states
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<number>(0); // 0: Idle, 1: LM Studio Enhancing, 2: SD Generating, 3: Saving/Finishing
@@ -163,7 +160,6 @@ function App() {
   const [currentGeneration, setCurrentGeneration] = useState<GenerationData | null>(null);
   
   // Config & Status states
-  const [status, setStatus] = useState<SystemStatus | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthChecking, setHealthChecking] = useState(false);
   const healthInFlight = useRef(false);
@@ -193,6 +189,9 @@ function App() {
   // History narrowed by the date filter (whole-day match); the gallery renders this.
   const filteredHistory = filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
 
+  // Cloud storage is active only when Firebase is configured AND the user is signed in.
+  const cloudActive = isFirebaseConfigured && !!user;
+
   // Single-click toggles selection. (A double-click fires onClick twice — toggling
   // back to the original state — then onDoubleClick recalls the image into preview.)
   const toggleSelected = (id: string) => {
@@ -215,17 +214,23 @@ function App() {
     if (deleteTargetIds.length === 0) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/generations/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: deleteTargetIds })
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to delete');
-      }
-      const data = await res.json();
       const deletedSet = new Set(deleteTargetIds);
+      if (user) {
+        // Signed in: delete from Firestore + Storage; onSnapshot refreshes the gallery.
+        const records = history.filter((h) => deleteTargetIds.includes(itemKey(h)));
+        await deleteGenerations(user.uid, records as unknown as GenerationRecord[]);
+      } else {
+        const res = await fetch(`${API_BASE}/generations/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: deleteTargetIds }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to delete');
+        }
+        await fetchHistory();
+      }
       setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedSet.has(id))));
       // Clear the preview if the image it shows was just deleted.
       if (currentGeneration && deletedSet.has(itemKey(currentGeneration))) {
@@ -233,8 +238,7 @@ function App() {
       }
       setShowDeleteConfirm(false);
       setDeleteTargetIds([]);
-      await fetchHistory();
-      addToast(`${data.deleted}件の画像を削除しました 🗑️`, 'success');
+      addToast(`${deleteTargetIds.length}件の画像を削除しました 🗑️`, 'success');
     } catch (error: any) {
       addToast(`削除に失敗しました。\n\n詳細: ${error.message}`, 'error');
     } finally {
@@ -323,7 +327,6 @@ function App() {
   const API_BASE = `http://${window.location.hostname}:5000/api`;
 
   useEffect(() => {
-    fetchHistory();
     fetchStatus();
     fetchHealth();
     fetchSdModels();
@@ -332,6 +335,11 @@ function App() {
     // Re-check upstream connectivity every 20s so the badges stay fresh.
     const healthInterval = setInterval(fetchHealth, 20000);
     return () => clearInterval(healthInterval);
+  }, []);
+
+  // Subscribe to Firebase auth state (no-op when Firebase is unconfigured).
+  useEffect(() => {
+    return onAuth(setUser);
   }, []);
 
   // (Re)load the SD model list whenever Stable Diffusion becomes reachable,
@@ -384,12 +392,27 @@ function App() {
     }
   };
 
+  // History source follows auth: live Firestore subscription when signed in,
+  // local REST fetch when signed out.
+  useEffect(() => {
+    if (user) {
+      setHistory([]); // clear local items before the cloud snapshot arrives
+      const unsub = subscribeGenerations(
+        user.uid,
+        (records) => setHistory(records as unknown as GenerationData[]),
+        (err) => addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${err.message}`, 'error'),
+      );
+      return unsub;
+    }
+    fetchHistory();
+    return undefined;
+  }, [user]);
+
   const fetchStatus = async () => {
     try {
       const res = await fetch(`${API_BASE}/status`);
       if (res.ok) {
         const data = await res.json();
-        setStatus(data);
         setNewLmStudioUrl(data.lmStudioUrl);
         setNewStableDiffusionUrl(data.stableDiffusionUrl);
         setNewLmStudioModel(data.lmStudioModel || '');
@@ -559,7 +582,8 @@ function App() {
           skipEnhance: true, // Skip enhancement since we already did it!
           seed: seedLocked ? seedValue : -1,
           sampler: selectedSampler || undefined,
-          loras: selectedLoras
+          loras: selectedLoras,
+          clientPersist: !!user
         })
       });
 
@@ -574,19 +598,45 @@ function App() {
       setGenStatus('saving');
 
       const result = await genRes.json();
-      
-      if (result.success && result.data) {
-        // Success celebration with unisex Google/Slack-like toy colors!
+
+      if (result.success) {
+        let saved: GenerationData;
+        if (user && result.image) {
+          // Signed in: the server returned raw bytes — persist to Firebase from the client.
+          setGenStatus('saving');
+          try {
+            saved = await saveGeneration(user.uid, result.image, result.params) as unknown as GenerationData;
+          } catch (saveErr: any) {
+            // Cloud save failed, but the image is already generated and in hand —
+            // keep it displayed (per the design spec's error handling) rather than discarding it.
+            const ts = Date.now();
+            setCurrentGeneration({
+              ...result.params,
+              id: `unsaved_${ts}`,
+              imageUrl: `data:image/png;base64,${result.image}`,
+              backendMode: 'local',
+              timestamp: ts,
+              createdAt: new Date(ts).toISOString(),
+            });
+            setGenStatus('success');
+            addToast(`クラウド保存に失敗しました（画像は表示中）。\n\n詳細: ${saveErr.message}`, 'error');
+            return;
+          }
+        } else {
+          // Signed out: the server already saved locally and returned metadata.
+          saved = result.data;
+        }
+
         confetti({
           particleCount: 150,
           spread: 85,
           origin: { y: 0.6 },
-          colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66']
+          colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66'],
         });
-        
-        setCurrentGeneration(result.data);
+
+        setCurrentGeneration(saved);
         setGenStatus('success');
-        fetchHistory();
+        if (!user) fetchHistory(); // signed-in history updates via onSnapshot (Task 5)
         addToast('画像を生成しました！🎨⚡️', 'success');
       }
     } catch (error: any) {
@@ -684,21 +734,34 @@ function App() {
         {/* STATUS BAR & SETTINGS BUTTON */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', background: '#f8f9fa', padding: '8px 16px', borderRadius: '30px', border: '2px solid #e9ecef', boxShadow: '0 2px 8px rgba(0,0,0,0.01)' }}>
-            {/* Firebase Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: status?.firebaseEnabled ? 'var(--pop-green)' : 'var(--text-secondary)', fontWeight: '700' }}>
-              {status?.firebaseEnabled ? (
-                <>
-                  <Cloud size={14} />
-                  <span>クラウド保存 ☁️</span>
-                </>
-              ) : (
-                <>
-                  <Folder size={14} />
-                  <span>ローカル保存 📁</span>
-                </>
-              )}
+            {/* Storage mode + account */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: cloudActive ? 'var(--pop-green)' : 'var(--text-secondary)', fontWeight: '700' }}>
+              {cloudActive ? (<><Cloud size={14} /><span>クラウド保存 ☁️</span></>) : (<><Folder size={14} /><span>ローカル保存 📁</span></>)}
             </div>
-            
+
+            {isFirebaseConfigured && (
+              <>
+                <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
+                {user ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {user.photoURL && (
+                      <img src={user.photoURL} alt="" referrerPolicy="no-referrer" style={{ width: 22, height: 22, borderRadius: '50%' }} />
+                    )}
+                    <span style={{ fontWeight: 700, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.displayName ?? 'ユーザー'}</span>
+                    <button onClick={() => { signOutUser(); }} className="scale-hover" style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>ログアウト</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { signInWithGoogle().catch((e) => addToast(`サインインに失敗しました: ${e.message}`, 'error')); }}
+                    className="scale-hover"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '2px solid #e9ecef', background: '#fff', borderRadius: '20px', padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}
+                  >
+                    <LogIn size={14} /> Googleでログイン
+                  </button>
+                )}
+              </>
+            )}
+
             <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
             
             {/* LM Studio Status (live health check) */}

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Sumica AI Studio chains a local LLM (LM Studio) and Stable Diffusion (AUTOMATIC1111/Forge) to turn natural-language (e.g. Japanese) prompts into images, persisting results to Firebase or a local fallback. See `README.md` for the full LM Studio / Stable Diffusion setup prerequisites.
+Sumica AI Studio chains a local LLM (LM Studio) and Stable Diffusion (AUTOMATIC1111/Forge) to turn natural-language (e.g. Japanese) prompts into images. When the user is signed in via Google (Firebase Auth), the client persists images to Firebase Storage and metadata to Firestore; when signed out, the server saves locally. See `README.md` for the full LM Studio / Stable Diffusion setup prerequisites.
 
 ## Commands
 
@@ -24,25 +24,31 @@ npm run dev:client # client only — http://localhost:5173
 
 ## Architecture
 
-Two packages, each collapsed into a single source file:
-- **`server/index.ts`** — Express 5 (TypeScript, ESM) API, all routes + the LLM/SD pipeline. Run on the fly with tsx.
-- **`client/src/App.tsx`** — the entire React 19 UI (~1200 lines, one component tree).
+Two packages, each collapsed into a small number of source files:
+- **`server/index.ts`** — Express 5 (TypeScript, ESM) API, all routes + the LLM/SD pipeline. Firebase-free; run on the fly with tsx.
+- **`client/src/App.tsx`** — the entire React 19 UI (~1950 lines, one component tree).
+- **`client/src/firebase.ts`** — Firebase SDK initialization (Auth, Firestore, Storage) and helper types (`AuthUser`, `GenerationRecord`, `GenerationParams`).
 
 ### The generation pipeline (the key flow)
 
 The enhance and generate steps are **split into two client requests on purpose** so the UI can render a live step indicator (`loadingStep` 1→2→3). Editing one side without the other will break this:
 
 1. Client `POST /api/enhance` → server `enhancePrompt()` asks LM Studio (`/v1/chat/completions`, OpenAI-compatible) to translate+expand the prompt. The LLM is instructed to reply with `<prompts><positive>…</positive><negative>…</negative></prompts>`, which the server **parses by regex**. If the model omits the tags, it falls back to the raw prompt / a default negative.
-2. Client `POST /api/generate` with the returned positive/negative and **`skipEnhance: true`**. That flag tells the server to skip a second enhancement — `/api/generate` *can* enhance on its own, but the client never lets it (it already enhanced in step 1). `generateImage()` then calls Stable Diffusion `/sdapi/v1/txt2img` (180s timeout) and gets a base64 PNG. An optional `model` in the request is passed as `override_settings.sd_model_checkpoint` (SD switches checkpoint and keeps it loaded), and the chosen model is persisted in the generation metadata.
-3. Server persists and returns metadata; client fires confetti and refreshes history.
+2. Client `POST /api/generate` with the returned positive/negative, **`skipEnhance: true`**, and **`clientPersist: true`** (when the user is signed in). `generateImage()` then calls Stable Diffusion `/sdapi/v1/txt2img` (180s timeout) and gets a base64 PNG. An optional `model` in the request is passed as `override_settings.sd_model_checkpoint` (SD switches checkpoint and keeps it loaded). When `clientPersist: true`, the server returns `{ success: true, image: <base64>, params: {...} }` without saving anything; when `clientPersist` is absent/false, it local-saves and returns `{ success: true, data: metadata }`.
+3. Client receives the response. If signed in (`clientPersist` path): client uploads the base64 image to Firebase Storage (`users/{uid}/images/…`) and writes metadata to Firestore (`users/{uid}/generations/{id}`), then fires confetti. If signed out (local path): server has already saved; client refreshes history via `/api/history`.
 
-### Storage: Firebase ↔ local fallback
+### Storage: client Firebase ↔ server local fallback
 
-On startup the server tries to init Firebase Admin from `FIREBASE_KEY_PATH`. **If the key file is missing or init fails, `firebaseEnabled` stays false and everything silently uses local mode** — images to `server/outputs/`, history to `server/outputs/metadata.json`, served back via `GET /api/outputs/*` static route. Every storage-touching route (`/api/generate`, `/api/history`) branches on `firebaseEnabled`; keep both branches in sync when changing the metadata shape.
+The server is **Firebase-free** — `firebase-admin` has been removed from `server/package.json`; no service-account key is required. Storage is split by auth state:
+
+- **Signed in** (Firebase Auth via Google): the client (`client/src/firebase.ts`) uploads the base64 image to Firebase Storage at `users/{uid}/images/<timestamp>.png` and writes metadata to Firestore at `users/{uid}/generations/{id}`. History is driven by a live Firestore `onSnapshot` subscription. Deletion removes the Firestore doc and the Storage object.
+- **Signed out**: the client sends `POST /api/generate` without `clientPersist`; the server saves to `server/outputs/` and records metadata in `server/outputs/metadata.json`, served back via `GET /api/outputs/*`. `/api/history` reads that JSON. `/api/generations/delete` removes the image files and JSON entries.
+
+The `clientPersist` flag in the `/api/generate` request body is the switch: present-and-true → server returns raw base64 and skips saving; absent/false → server saves locally and returns metadata.
 
 ### Runtime-mutable config
 
-`lmStudioUrl`, `stableDiffusionUrl`, and `lmStudioModel` are **module-level mutable variables**, seeded from `.env` but rewritable at runtime via `POST /api/settings` (driven by the UI gear panel). They are in-memory only — not persisted, reset on restart. `GET /api/status` exposes current values + mode. `/api/settings` validates that submitted URLs use the `http(s)` scheme via `isValidHttpUrl` (SSRF hardening); loopback/LAN hosts stay allowed on purpose since the legitimate LM Studio / SD targets are local. `GET /api/health` pings both upstreams (LM Studio `/v1/models`, SD `/sdapi/v1/sd-models`) and always returns 200 with per-service `connected` flags — the client polls it every 20s to drive the top-right status badges. `GET /api/sd-models` proxies SD's `/sdapi/v1/sd-models` + `/sdapi/v1/options` to return `{ models, current }` for the checkpoint picker in the advanced-settings UI. `GET /api/sd-samplers` and `GET /api/sd-loras` likewise proxy SD's sampler and LoRA lists for the advanced-settings pickers; selected LoRAs are applied by appending comma-separated `<lora:name:weight>` tags to the positive prompt at generation, and the `model`/`sampler`/`seed`/`loras` choices are persisted in the generation metadata. `POST /api/generations/delete` (body `{ ids }`) removes selected generations — Firestore docs + Storage objects in Firebase mode, or the image files + `metadata.json` entries in local mode; the gallery supports single-click select / double-click open, and deletion is gated behind a confirm modal.
+`lmStudioUrl`, `stableDiffusionUrl`, and `lmStudioModel` are **module-level mutable variables**, seeded from `.env` but rewritable at runtime via `POST /api/settings` (driven by the UI gear panel). They are in-memory only — not persisted, reset on restart. `GET /api/status` exposes current values (LM Studio URL, SD URL, model, `localHistoryCount`). `/api/settings` validates that submitted URLs use the `http(s)` scheme via `isValidHttpUrl` (SSRF hardening); loopback/LAN hosts stay allowed on purpose since the legitimate LM Studio / SD targets are local. `GET /api/health` pings both upstreams (LM Studio `/v1/models`, SD `/sdapi/v1/sd-models`) and always returns 200 with per-service `connected` flags — the client polls it every 20s to drive the top-right status badges. `GET /api/sd-models` proxies SD's `/sdapi/v1/sd-models` + `/sdapi/v1/options` to return `{ models, current }` for the checkpoint picker in the advanced-settings UI. `GET /api/sd-samplers` and `GET /api/sd-loras` likewise proxy SD's sampler and LoRA lists for the advanced-settings pickers; selected LoRAs are applied by appending comma-separated `<lora:name:weight>` tags to the positive prompt at generation, and the `model`/`sampler`/`seed`/`loras` choices are persisted in the generation metadata. `POST /api/generations/delete` (body `{ ids }`) is **local-only**: removes the image files and `metadata.json` entries from `server/outputs/`; the gallery supports single-click select / double-click open, and deletion is gated behind a confirm modal. (When signed in, deletion is handled client-side via Firebase SDK calls, not this endpoint.)
 
 ### Client ↔ server wiring
 
@@ -50,10 +56,11 @@ On startup the server tries to init Firebase Admin from `FIREBASE_KEY_PATH`. **I
 
 ## Config
 
-Server reads `server/.env`: `PORT`, `LM_STUDIO_URL`, `STABLE_DIFFUSION_URL`, `LM_STUDIO_MODEL` (empty = use LM Studio's currently-loaded model), `FIREBASE_KEY_PATH`, `FIREBASE_STORAGE_BUCKET`, `CORS_ORIGINS` (comma-separated allowed origins; defaults to the Vite dev origins).
+Server reads `server/.env`: `PORT`, `LM_STUDIO_URL`, `STABLE_DIFFUSION_URL`, `LM_STUDIO_MODEL` (empty = use LM Studio's currently-loaded model), `CORS_ORIGINS` (comma-separated allowed origins; defaults to the Vite dev origins).
+
+Client reads `client/.env` (see `client/.env.example`): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`. These are the Firebase web config values from the Firebase Console. If `VITE_FIREBASE_API_KEY` is empty, Firebase is disabled entirely — no auth UI is shown and the app operates in local-only mode.
 
 ## Conventions
 
 - Both packages are ESM (`"type": "module"`); use `import`, and the `__dirname` shim already present in `server/index.ts`.
-- The server uses **firebase-admin's modular API** (`firebase-admin/app`, `/firestore`, `/storage`), not the legacy default `admin.*` namespace — required for clean types under `nodenext`.
-- Client stack is intentionally lean: React 19 + Vite 8 + TypeScript, `lucide-react` for icons, `canvas-confetti` for the success effect. No router, no state library, no CSS framework — styling lives in `App.css`/`index.css`.
+- Client stack is intentionally lean: React 19 + Vite 8 + TypeScript, `lucide-react` for icons, `canvas-confetti` for the success effect. Firebase is added via the `firebase` npm package (client-side SDK only — no `firebase-admin`). No router, no state library, no CSS framework — styling lives in `App.css`/`index.css`.

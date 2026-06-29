@@ -5,9 +5,6 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { getStorage } from 'firebase-admin/storage';
 
 // Load environment variables
 dotenv.config();
@@ -36,33 +33,6 @@ if (!fs.existsSync(outputsDir)) {
   fs.mkdirSync(outputsDir, { recursive: true });
 }
 
-// Initialize Firebase Admin
-type Bucket = ReturnType<ReturnType<typeof getStorage>['bucket']>;
-let db: Firestore | null = null;
-let bucket: Bucket | null = null;
-let firebaseEnabled = false;
-
-const firebaseKeyPath = process.env.FIREBASE_KEY_PATH;
-const storageBucketName = process.env.FIREBASE_STORAGE_BUCKET;
-
-if (firebaseKeyPath && fs.existsSync(firebaseKeyPath)) {
-  try {
-    const serviceAccount = JSON.parse(fs.readFileSync(firebaseKeyPath, 'utf8'));
-    initializeApp({
-      credential: cert(serviceAccount),
-      storageBucket: storageBucketName || `${serviceAccount.project_id}.firebasestorage.app`
-    });
-    db = getFirestore();
-    bucket = getStorage().bucket();
-    firebaseEnabled = true;
-    console.log('Firebase Admin SDK initialized successfully! 🎉');
-  } catch (error) {
-    console.error('Failed to initialize Firebase Admin SDK:', (error as Error).message);
-    console.log('Falling back to Local Storage mode.');
-  }
-} else {
-  console.log('FIREBASE_KEY_PATH not set or service account file not found. Running in Local Storage mode. 📁');
-}
 
 // Shape of a single generation record persisted to Firestore or local metadata.json
 interface GenerationMetadata {
@@ -76,7 +46,6 @@ interface GenerationMetadata {
   cfgScale: number | string;
   model: string | null;
   imageUrl: string;
-  storagePath?: string;
   localPath?: string;
   timestamp: number;
   createdAt: string;
@@ -269,7 +238,7 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, loras } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, loras, clientPersist } = req.body;
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
   const loraList: { name: string; weight: number }[] = (Array.isArray(loras) ? loras : [])
@@ -316,57 +285,36 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       sampler || 'Euler a'
     );
 
-    const imageBuffer = Buffer.from(base64Image, 'base64');
-    const timestamp = Date.now();
-    const fileName = `generated_${timestamp}.png`;
-    let imageUrl = '';
-    let storagePath = '';
-
-    // Step 3: Save image (Firebase Cloud Storage vs. Local filesystem)
-    if (firebaseEnabled && bucket && db) {
-      console.log('Firebase mode: Uploading image to Storage...');
-      const file = bucket.file(`images/${fileName}`);
-      await file.save(imageBuffer, {
-        metadata: { contentType: 'image/png' },
-      });
-
-      imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(`images/${fileName}`)}?alt=media`;
-      storagePath = `images/${fileName}`;
-
-      console.log('Firebase mode: Saving metadata to Firestore...');
-      const metadata: GenerationMetadata = {
-        originalPrompt: finalOriginalPrompt,
-        enhancedPrompt: finalPrompt,
-        negativePrompt: finalNegativePrompt,
-        width: width || 512,
-        height: height || 512,
-        steps: steps || 20,
-        cfgScale: cfgScale || 7,
-        model: model || null,
-        seed: actualSeed,
-        sampler: sampler || 'Euler a',
-        loras: loraList,
-        imageUrl,
-        storagePath,
-        timestamp,
-        createdAt: new Date(timestamp).toISOString(),
-        backendMode: 'firebase'
-      };
-
-      const docRef = await db.collection('generations').add(metadata);
-
+    // Step 3: Persist. When the client owns persistence (signed in), return the
+    // raw image + params and save nothing. Otherwise fall back to local save.
+    if (clientPersist) {
       res.json({
         success: true,
-        data: { id: docRef.id, ...metadata }
+        image: base64Image,
+        params: {
+          originalPrompt: finalOriginalPrompt,
+          enhancedPrompt: finalPrompt,
+          negativePrompt: finalNegativePrompt,
+          width: width || 512,
+          height: height || 512,
+          steps: steps || 20,
+          cfgScale: cfgScale || 7,
+          model: model || null,
+          seed: actualSeed,
+          sampler: sampler || 'Euler a',
+          loras: loraList,
+        },
       });
     } else {
       // Local Fallback Mode
       console.log('Local mode: Saving image to outputs/ directory...');
+      const timestamp = Date.now();
+      const fileName = `generated_${timestamp}.png`;
+      const imageBuffer = Buffer.from(base64Image, 'base64');
       const localFilePath = path.join(outputsDir, fileName);
       fs.writeFileSync(localFilePath, imageBuffer);
 
-      imageUrl = `http://localhost:${PORT}/api/outputs/${fileName}`;
-
+      const imageUrl = `http://localhost:${PORT}/api/outputs/${fileName}`;
       const metadata: GenerationMetadata = {
         id: `local_${timestamp}`,
         originalPrompt: finalOriginalPrompt,
@@ -384,7 +332,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         localPath: localFilePath,
         timestamp,
         createdAt: new Date(timestamp).toISOString(),
-        backendMode: 'local'
+        backendMode: 'local',
       };
 
       const history = getLocalHistory();
@@ -402,18 +350,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
 // 2. Retrieve History
 app.get('/api/history', async (_req: Request, res: Response) => {
   try {
-    if (firebaseEnabled && db) {
-      console.log('Fetching history from Firestore...');
-      const snapshot = await db.collection('generations').orderBy('timestamp', 'desc').limit(50).get();
-      const history: GenerationMetadata[] = [];
-      snapshot.forEach(doc => {
-        history.push({ id: doc.id, ...doc.data() } as GenerationMetadata);
-      });
-      res.json(history);
-    } else {
-      console.log('Fetching history from Local JSON...');
-      res.json(getLocalHistory());
-    }
+    res.json(getLocalHistory());
   } catch (error) {
     console.error('Failed to fetch history:', error);
     res.status(500).json({ error: 'Failed to fetch generation history.' });
@@ -423,12 +360,10 @@ app.get('/api/history', async (_req: Request, res: Response) => {
 // 3. System status endpoints
 app.get('/api/status', (_req: Request, res: Response) => {
   res.json({
-    firebaseEnabled,
     lmStudioUrl,
     stableDiffusionUrl,
     lmStudioModel,
-    storageBucketName: bucket ? bucket.name : null,
-    localHistoryCount: getLocalHistory().length
+    localHistoryCount: getLocalHistory().length,
   });
 });
 
@@ -515,7 +450,7 @@ app.get('/api/sd-loras', async (_req: Request, res: Response) => {
   }
 });
 
-// 8. Delete selected generations (image files + metadata, or Firestore docs + Storage objects).
+// 8. Delete selected generations (image files + metadata).
 app.post('/api/generations/delete', async (req: Request, res: Response) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -524,41 +459,23 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
 
   let deleted = 0;
   try {
-    if (firebaseEnabled && db && bucket) {
-      for (const id of ids) {
-        try {
-          const docRef = db.collection('generations').doc(String(id));
-          const snap = await docRef.get();
-          if (!snap.exists) continue;
-          const storagePath = snap.data()?.storagePath;
-          if (storagePath) {
-            await bucket.file(storagePath).delete({ ignoreNotFound: true });
+    const idSet = new Set(ids.map(String));
+    const remaining: GenerationMetadata[] = [];
+    for (const item of getLocalHistory()) {
+      if (item.id && idSet.has(item.id)) {
+        if (item.localPath && fs.existsSync(item.localPath)) {
+          try {
+            fs.unlinkSync(item.localPath);
+          } catch (e) {
+            console.error(`Failed to remove file ${item.localPath}:`, (e as Error).message);
           }
-          await docRef.delete();
-          deleted++;
-        } catch (e) {
-          console.error(`Failed to delete generation ${id}:`, (e as Error).message);
         }
+        deleted++;
+      } else {
+        remaining.push(item);
       }
-    } else {
-      const idSet = new Set(ids.map(String));
-      const remaining: GenerationMetadata[] = [];
-      for (const item of getLocalHistory()) {
-        if (item.id && idSet.has(item.id)) {
-          if (item.localPath && fs.existsSync(item.localPath)) {
-            try {
-              fs.unlinkSync(item.localPath);
-            } catch (e) {
-              console.error(`Failed to remove file ${item.localPath}:`, (e as Error).message);
-            }
-          }
-          deleted++;
-        } else {
-          remaining.push(item);
-        }
-      }
-      saveLocalHistory(remaining);
     }
+    saveLocalHistory(remaining);
     res.json({ success: true, deleted });
   } catch (error) {
     console.error('Delete failed:', error);
