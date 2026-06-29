@@ -1172,7 +1172,7 @@ function App() {
                     }}>
                       {(genStatus === 'error' && errorStep === 1) ? '✗' : loadingStep > 1 || genStatus === 'success' ? '✓' : '1'}
                     </div>
-                    <span>プロンプト拡張</span>
+                    <span className={genStatus === 'enhancing' ? 'processing-shimmer' : undefined}>プロンプト拡張</span>
                   </div>
 
                   <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
@@ -1193,7 +1193,7 @@ function App() {
                     }}>
                       {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 || genStatus === 'success' ? '✓' : '2'}
                     </div>
-                    <span>画像生成</span>
+                    <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>画像生成</span>
                   </div>
 
                   <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>

@@ -366,3 +366,34 @@ input:checked + .slider:before {
     animation: none !important;
   }
 }
+
+/* Shimmer for the currently-processing step label in the progress tracker. */
+@keyframes text-shimmer {
+  0% { background-position: 150% center; }
+  100% { background-position: -150% center; }
+}
+
+.processing-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--text-primary) 0%,
+    var(--text-primary) 40%,
+    var(--pop-blue) 50%,
+    var(--text-primary) 60%,
+    var(--text-primary) 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: text-shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .processing-shimmer {
+    animation: none;
+    -webkit-text-fill-color: var(--text-primary);
+    color: var(--text-primary);
+  }
+}
