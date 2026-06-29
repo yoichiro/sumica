@@ -115,6 +115,12 @@ function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => 
   );
 }
 
+// Candidate sizes offered as toggle chips in the batch dialog's size mode
+// (covers common SD1.5 / SDXL resolutions). Same set for width and height.
+const SIZE_OPTIONS = [512, 768, 1024];
+// Defensive cap on the width×height cross product (3×3 = 9 today, room to grow).
+const MAX_SIZE_COMBINATIONS = 16;
+
 function App() {
   // Form input states
   const [prompt, setPrompt] = useState('');
@@ -325,6 +331,9 @@ function App() {
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchCount, setBatchCount] = useState(4);
+  const [batchMode, setBatchMode] = useState<'count' | 'size'>('count');
+  const [selectedWidths, setSelectedWidths] = useState<number[]>([512]);
+  const [selectedHeights, setSelectedHeights] = useState<number[]>([512]);
 
   // Talk to the API on the SAME hostname the page was loaded from, not a hardcoded
   // 127.0.0.1. Under WSL2, Windows->WSL forwarding can work for `localhost` but NOT for
@@ -547,6 +556,10 @@ function App() {
     data?: GenerationData;
   };
 
+  // One image's size in a batch run. Both batch modes (count, size cross-product)
+  // build a SizeJob[] and feed it to the single sequential loop in handleBatchGenerate.
+  type SizeJob = { width: number; height: number };
+
   // Step 1: enhance a prompt via LM Studio. Throws on HTTP failure.
   const enhanceOnce = async (promptText: string): Promise<{ positive: string; negative: string }> => {
     const enhanceRes = await fetch(`${API_BASE}/enhance`, {
@@ -562,12 +575,14 @@ function App() {
     return { positive: enhanceResult.positive, negative: enhanceResult.negative };
   };
 
-  // Step 2: request ONE image from Stable Diffusion. Throws on HTTP failure.
+  // Step 2: request ONE image from Stable Diffusion at the given size. Throws on HTTP failure.
   const generateImage = async (
     positive: string,
     negative: string,
     originalPrompt: string,
-    seed: number
+    seed: number,
+    width: number,
+    height: number
   ): Promise<GenResult> => {
     const genRes = await fetch(`${API_BASE}/generate`, {
       method: 'POST',
@@ -605,15 +620,16 @@ function App() {
     return result.data as GenerationData;
   };
 
-  // Convenience for batch: generate one image and persist it. Throws on any failure.
-  // Used by Task 2 (batch generation); unused in Task 1 but needed for type coherence.
+  // Convenience for batch: generate one image at the given size and persist it. Throws on any failure.
   const generateAndPersist = async (
     positive: string,
     negative: string,
     originalPrompt: string,
-    seed: number
+    seed: number,
+    width: number,
+    height: number
   ): Promise<GenerationData> => {
-    const result = await generateImage(positive, negative, originalPrompt, seed);
+    const result = await generateImage(positive, negative, originalPrompt, seed, width, height);
     if (!result.success) throw new Error('Image generation returned an unsuccessful result');
     return await persistResult(result);
   };
@@ -642,7 +658,7 @@ function App() {
       setLoadingStep(2);
       setGenStatus('generating');
 
-      const result = await generateImage(positive, negative, prompt, seedLocked ? seedValue : -1);
+      const result = await generateImage(positive, negative, prompt, seedLocked ? seedValue : -1, width, height);
 
       if (result.success) {
         // --- Transition to Step 3: Saving ---
@@ -698,11 +714,13 @@ function App() {
     }
   };
 
-  // Batch: enhance once, then generate `count` images one at a time (sequential
-  // SD calls — NOT SD's Batch Count). A failed image is counted and skipped;
-  // the loop continues. The last completed image stays in the preview.
-  const handleBatchGenerate = async (count: number) => {
-    if (!prompt.trim() || loading) return;
+  // Batch: enhance once, then generate one image per job, sequentially (one SD
+  // call each — NOT SD's Batch Count). Each job carries its own width/height, so
+  // both count mode (N copies at the form size) and size mode (width×height cross
+  // product) share this loop. A failed image is counted and skipped; the loop
+  // continues. The last completed image stays in the preview.
+  const handleBatchGenerate = async (jobs: SizeJob[]) => {
+    if (!prompt.trim() || loading || jobs.length === 0) return;
 
     setLoading(true);
     setErrorStep(null);
@@ -725,11 +743,12 @@ function App() {
       let succeeded = 0;
       let failed = 0;
 
-      for (let i = 1; i <= count; i++) {
-        setBatchProgress({ current: i, total: count });
+      for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
+        setBatchProgress({ current: i + 1, total: jobs.length });
         const seed = seedLocked ? seedValue : -1;
         try {
-          const saved = await generateAndPersist(positive, negative, prompt, seed);
+          const saved = await generateAndPersist(positive, negative, prompt, seed, job.width, job.height);
           succeeded++;
           setCurrentGeneration(saved); // live preview update
         } catch (genErr) {
@@ -754,7 +773,7 @@ function App() {
       if (failed === 0) {
         addToast(`${succeeded}枚の画像を生成しました！🎨⚡️`, 'success');
       } else {
-        addToast(`${count}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+        addToast(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
       }
     } catch (error: any) {
       // enhanceOnce failed before the loop → abort like single generation.
@@ -807,6 +826,13 @@ function App() {
     } finally {
       setSettingsLoading(false);
     }
+  };
+
+  const toggleSize = (
+    setter: React.Dispatch<React.SetStateAction<number[]>>,
+    value: number
+  ) => {
+    setter(prev => (prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]));
   };
 
   return (
@@ -2088,28 +2114,96 @@ function App() {
               </button>
             </div>
 
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-              同じプロンプトで複数枚を1枚ずつ順番に生成します。生成する枚数を選んでください。
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
-                {batchCount}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>枚</span>
-              </span>
-              <input
-                type="range"
-                min={2}
-                max={10}
-                step={1}
-                value={batchCount}
-                onChange={(e) => setBatchCount(Number(e.target.value))}
-                style={{ width: '100%' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
-                <span>2枚</span>
-                <span>10枚</span>
-              </div>
+            {/* Segmented mode tabs */}
+            <div style={{ display: 'flex', gap: '8px', background: '#f1f3f5', borderRadius: '12px', padding: '4px' }}>
+              {([['count', '枚数'], ['size', 'サイズの組合せ']] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setBatchMode(mode)}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    borderRadius: '9px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    background: batchMode === mode ? 'var(--pop-blue)' : 'transparent',
+                    color: batchMode === mode ? '#fff' : 'var(--text-secondary)',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
+
+            {batchMode === 'count' ? (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                  同じプロンプトで複数枚を1枚ずつ順番に生成します。生成する枚数を選んでください。
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
+                    {batchCount}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>枚</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={2}
+                    max={10}
+                    step={1}
+                    value={batchCount}
+                    onChange={(e) => setBatchCount(Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    <span>2枚</span>
+                    <span>10枚</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                  選んだ横幅と縦幅の組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {([['横幅', selectedWidths, setSelectedWidths], ['縦幅', selectedHeights, setSelectedHeights]] as const).map(([label, selected, setter]) => (
+                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}:</span>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {SIZE_OPTIONS.map(size => {
+                          const active = selected.includes(size);
+                          return (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => toggleSize(setter, size)}
+                              className="scale-hover"
+                              style={{
+                                flex: 1,
+                                padding: '10px',
+                                borderRadius: '10px',
+                                border: active ? '2px solid var(--pop-blue)' : '2px solid #e9ecef',
+                                background: active ? 'var(--pop-blue)' : '#fff',
+                                color: active ? '#fff' : 'var(--text-secondary)',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {size}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
+                    横{selectedWidths.length} × 縦{selectedHeights.length} = {selectedWidths.length * selectedHeights.length}通りを生成
+                  </div>
+                </div>
+              </>
+            )}
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -2122,11 +2216,20 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowBatchModal(false); handleBatchGenerate(batchCount); }}
+                disabled={batchMode === 'size' && (selectedWidths.length === 0 || selectedHeights.length === 0 || selectedWidths.length * selectedHeights.length > MAX_SIZE_COMBINATIONS)}
+                onClick={() => {
+                  setShowBatchModal(false);
+                  const jobs: SizeJob[] = batchMode === 'count'
+                    ? Array(batchCount).fill({ width, height })
+                    : selectedWidths.flatMap(w => selectedHeights.map(h => ({ width: w, height: h })));
+                  handleBatchGenerate(jobs);
+                }}
                 className="btn-neon"
                 style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
               >
-                {batchCount}枚生成する
+                {batchMode === 'count'
+                  ? `${batchCount}枚生成する`
+                  : `${selectedWidths.length * selectedHeights.length}通り生成する`}
               </button>
             </div>
           </div>
