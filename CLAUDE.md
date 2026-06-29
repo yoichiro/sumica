@@ -35,7 +35,7 @@ The enhance and generate steps are **split into two client requests on purpose**
 
 1. Client `POST /api/enhance` → server `enhancePrompt()` asks LM Studio (`/v1/chat/completions`, OpenAI-compatible) to translate+expand the prompt. The LLM is instructed to reply with `<prompts><positive>…</positive><negative>…</negative></prompts>`, which the server **parses by regex**. If the model omits the tags, it falls back to the raw prompt / a default negative.
 2. Client `POST /api/generate` with the returned positive/negative, **`skipEnhance: true`**, and **`clientPersist: true`** (when the user is signed in). `generateImage()` then calls Stable Diffusion `/sdapi/v1/txt2img` (180s timeout) and gets a base64 PNG. An optional `model` in the request is passed as `override_settings.sd_model_checkpoint` (SD switches checkpoint and keeps it loaded). When `clientPersist: true`, the server returns `{ success: true, image: <base64>, params: {...} }` without saving anything; when `clientPersist` is absent/false, it local-saves and returns `{ success: true, data: metadata }`.
-3. Client receives the response. If signed in (`clientPersist` path): client uploads the base64 image to Firebase Storage (`users/{uid}/images/…`) and writes metadata to Firestore (`users/{uid}/generations/{id}`), then fires confetti. If signed out (local path): server has already saved; client refreshes history via `/api/history`.
+3. Client receives the response. If signed in (`clientPersist` path): client uploads the base64 image to Firebase Storage (`users/{uid}/images/…`) and writes metadata to Firestore (`users/{uid}/generations/{id}`). If signed out (local path): server has already saved; client refreshes history via `/api/history`.
 
 ### Batch generation (client-side sequential loop)
 
@@ -67,4 +67,4 @@ Client reads `client/.env` (see `client/.env.example`): `VITE_FIREBASE_API_KEY`,
 ## Conventions
 
 - Both packages are ESM (`"type": "module"`); use `import`, and the `__dirname` shim already present in `server/index.ts`.
-- Client stack is intentionally lean: React 19 + Vite 8 + TypeScript, `lucide-react` for icons, `canvas-confetti` for the success effect. Firebase is added via the `firebase` npm package (client-side SDK only — no `firebase-admin`). No router, no state library, no CSS framework — styling lives in `App.css`/`index.css`.
+- Client stack is intentionally lean: React 19 + Vite 8 + TypeScript, `lucide-react` for icons. Firebase is added via the `firebase` npm package (client-side SDK only — no `firebase-admin`). No router, no state library, no CSS framework — styling lives in `App.css`/`index.css`.
