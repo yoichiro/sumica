@@ -18,7 +18,7 @@ import {
   ChevronRight,
   LogIn
 } from 'lucide-react';
-import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, type AuthUser } from './firebase';
+import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, type AuthUser } from './firebase';
 import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
 
@@ -41,6 +41,7 @@ interface GenerationData {
   timestamp: number;
   createdAt: string;
   backendMode: 'firebase' | 'local';
+  storagePath?: string;
   seed?: number;
   sampler?: string;
   loras?: { name: string; weight: number }[];
@@ -561,7 +562,8 @@ function App() {
           skipEnhance: true, // Skip enhancement since we already did it!
           seed: seedLocked ? seedValue : -1,
           sampler: selectedSampler || undefined,
-          loras: selectedLoras
+          loras: selectedLoras,
+          clientPersist: !!user
         })
       });
 
@@ -576,19 +578,28 @@ function App() {
       setGenStatus('saving');
 
       const result = await genRes.json();
-      
-      if (result.success && result.data) {
-        // Success celebration with unisex Google/Slack-like toy colors!
+
+      if (result.success) {
+        let saved: GenerationData;
+        if (user && result.image) {
+          // Signed in: the server returned raw bytes — persist to Firebase from the client.
+          setGenStatus('saving');
+          saved = await saveGeneration(user.uid, result.image, result.params) as unknown as GenerationData;
+        } else {
+          // Signed out: the server already saved locally and returned metadata.
+          saved = result.data;
+        }
+
         confetti({
           particleCount: 150,
           spread: 85,
           origin: { y: 0.6 },
-          colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66']
+          colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66'],
         });
-        
-        setCurrentGeneration(result.data);
+
+        setCurrentGeneration(saved);
         setGenStatus('success');
-        fetchHistory();
+        if (!user) fetchHistory(); // signed-in history updates via onSnapshot (Task 5)
         addToast('画像を生成しました！🎨⚡️', 'success');
       }
     } catch (error: any) {
