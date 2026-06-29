@@ -1198,7 +1198,9 @@ function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '10px',
-                  fontSize: '17px'
+                  fontSize: '17px',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0
                 }}
               >
                 {loading ? (
@@ -1219,25 +1221,22 @@ function App() {
                 disabled={loading || !prompt.trim()}
                 className="scale-hover"
                 title="複数枚をまとめて生成"
+                aria-label="複数枚をまとめて生成"
                 style={{
-                  padding: '16px 20px',
+                  flexShrink: 0,
+                  padding: '16px',
                   borderRadius: '12px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  fontSize: '15px',
-                  fontWeight: 700,
                   background: '#fff',
                   color: 'var(--pop-blue)',
                   border: '2px solid var(--pop-blue)',
                   cursor: (loading || !prompt.trim()) ? 'not-allowed' : 'pointer',
-                  opacity: (loading || !prompt.trim()) ? 0.5 : 1,
-                  whiteSpace: 'nowrap'
+                  opacity: (loading || !prompt.trim()) ? 0.5 : 1
                 }}
               >
-                <Layers size={18} />
-                <span>まとめて生成</span>
+                <Layers size={22} />
               </button>
             </div>
           </form>
