@@ -173,10 +173,23 @@ function App() {
   const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Date filter is always set; defaults to today (local YYYY-MM-DD).
+  const [filterDate, setFilterDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
 
   // Stable id for a history item (Firestore id or local timestamp).
   const itemKey = (it: GenerationData) => it.id ?? String(it.timestamp);
+
+  // Local YYYY-MM-DD of a generation's timestamp, for matching the date filter input.
+  const localYMD = (ts: number) => {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  // History narrowed by the date filter (whole-day match); the gallery renders this.
+  const filteredHistory = filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
 
   // Single-click toggles selection. (A double-click fires onClick twice — toggling
   // back to the original state — then onDoubleClick recalls the image into preview.)
@@ -1340,6 +1353,7 @@ function App() {
           {/* HISTORY GALLERY */}
           {rightTab === 'gallery' && (
           <div style={{ flexShrink: 0 }}>
+            {/* Toolbar: date filter + result count (left) / selection + delete (right) */}
             <div style={{
               marginBottom: '16px',
               padding: '8px 16px',
@@ -1350,12 +1364,28 @@ function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              flexDirection: 'row-reverse',
               gap: '12px',
+              flexWrap: 'wrap',
               minHeight: '40px'
             }}>
-              <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
-                {selectedIds.size}件選択
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  📅
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={filterDate}
+                    onChange={(e) => { if (e.target.value) setFilterDate(e.target.value); }}
+                    style={{ borderRadius: '8px', padding: '5px 8px', fontSize: '13px', width: 'auto' }}
+                  />
+                </label>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{filteredHistory.length}件</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
+                  {selectedIds.size}件選択
+                </span>
               <button
                 type="button"
                 onClick={() => requestDelete([...selectedIds])}
@@ -1374,14 +1404,15 @@ function App() {
               >
                 削除
               </button>
+              </div>
             </div>
-            {history.length > 0 ? (
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', 
-                gap: '18px' 
+            {filteredHistory.length > 0 ? (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                gap: '18px'
               }}>
-                {history.map((item) => (
+                {filteredHistory.map((item) => (
                   <div
                     key={itemKey(item)}
                     className="glass-panel scale-hover"
@@ -1467,7 +1498,9 @@ function App() {
               </div>
             ) : (
               <div className="glass-panel" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', borderRadius: '16px', background: '#fff' }}>
-                生成履歴はありません。最初の画像を生成してみましょう！🎨⚡️
+                {history.length === 0
+                  ? '生成履歴はありません。最初の画像を生成してみましょう！🎨⚡️'
+                  : '指定した日付の画像はありません 📅'}
               </div>
             )}
           </div>
