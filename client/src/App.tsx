@@ -13,7 +13,13 @@ import {
   Trash2,
   Maximize2
 } from 'lucide-react';
+import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
+
+// View Transitions API (Baseline 2025-10); typed locally so it works regardless of lib.dom version.
+type DocumentWithViewTransition = Document & {
+  startViewTransition?: (callback: () => void) => { finished: Promise<void>; ready: Promise<void> };
+};
 
 interface GenerationData {
   id?: string;
@@ -201,10 +207,41 @@ function App() {
       setDeleting(false);
     }
   };
+
+  // Open the lightbox, morphing from the clicked source image via a View Transition.
+  // The source image and the lightbox image share `view-transition-name: lightbox-morph`;
+  // morphSourceKey ensures exactly one element carries the name per snapshot.
+  const openLightbox = (url: string, sourceKey: string) => {
+    const start = (document as DocumentWithViewTransition).startViewTransition;
+    if (!start) {
+      setLightboxUrl(url);
+      return;
+    }
+    flushSync(() => setMorphSourceKey(sourceKey)); // old snapshot: source carries the name
+    start.call(document, () => {
+      flushSync(() => setLightboxUrl(url)); // new snapshot: lightbox image carries the name
+    });
+  };
+
+  const closeLightbox = () => {
+    const start = (document as DocumentWithViewTransition).startViewTransition;
+    if (!start) {
+      setLightboxUrl(null);
+      setMorphSourceKey(null);
+      return;
+    }
+    const transition = start.call(document, () => {
+      flushSync(() => setLightboxUrl(null)); // new snapshot: source regains the name
+    });
+    transition.ready.catch(() => {}); // a skipped transition (e.g. rapid toggle) is harmless
+    transition.finished.finally(() => setMorphSourceKey(null)); // cleanup temporary name
+  };
+
   const [showSettings, setShowSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [morphSourceKey, setMorphSourceKey] = useState<string | null>(null);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
   const [newLmStudioModel, setNewLmStudioModel] = useState('');
@@ -244,7 +281,7 @@ function App() {
   // Close the image lightbox on Escape.
   useEffect(() => {
     if (!lightboxUrl) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxUrl(null); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLightbox(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxUrl]);
@@ -907,9 +944,9 @@ function App() {
                   <img
                     src={currentGeneration.imageUrl}
                     alt="Generated output"
-                    style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }}
+                    style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', viewTransitionName: (morphSourceKey === '__preview__' && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                   />
-                  <ZoomButton size={34} onClick={(e) => { e.stopPropagation(); setLightboxUrl(currentGeneration.imageUrl); }} />
+                  <ZoomButton size={34} onClick={(e) => { e.stopPropagation(); openLightbox(currentGeneration.imageUrl, '__preview__'); }} />
                   <div style={{ 
                     position: 'absolute', 
                     top: '12px', 
@@ -1248,10 +1285,10 @@ function App() {
                       <img
                         src={item.imageUrl}
                         alt={item.originalPrompt}
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa' }}
+                        style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                         loading="lazy"
                       />
-                      <ZoomButton size={26} onClick={(e) => { e.stopPropagation(); setLightboxUrl(item.imageUrl); }} />
+                      <ZoomButton size={26} onClick={(e) => { e.stopPropagation(); openLightbox(item.imageUrl, itemKey(item)); }} />
                     </div>
 
                     {/* Selected check (top-left) */}
@@ -1327,7 +1364,7 @@ function App() {
       {/* LIGHTBOX: enlarged image */}
       {lightboxUrl && (
         <div
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => closeLightbox()}
           style={{
             position: 'fixed',
             inset: 0,
@@ -1344,11 +1381,11 @@ function App() {
             src={lightboxUrl}
             alt="拡大表示"
             onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
           />
           <button
             type="button"
-            onClick={() => setLightboxUrl(null)}
+            onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
             title="閉じる (Esc)"
             className="scale-hover"
             style={{

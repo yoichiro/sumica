@@ -350,3 +350,19 @@ input:checked + .slider:before {
   background: rgba(0, 0, 0, 0.05);
   color: var(--text-primary);
 }
+
+/* View Transition: lightbox image morph (thumbnail/preview <-> fullscreen) */
+::view-transition-old(lightbox-morph),
+::view-transition-new(lightbox-morph) {
+  /* Keep the image aspect ratio stable while morphing between sizes. */
+  object-fit: contain;
+}
+
+/* Respect reduced-motion: skip view-transition animations entirely. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
