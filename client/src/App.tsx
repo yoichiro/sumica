@@ -18,7 +18,7 @@ import {
   ChevronRight,
   LogIn
 } from 'lucide-react';
-import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, deleteGenerations, type AuthUser, type GenerationRecord } from './firebase';
+import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
 
@@ -531,6 +531,89 @@ function App() {
     setRightTab('preview');
   };
 
+  // Raw result of POST /api/generate, before client-side persistence.
+  // Signed in → server returns { success, image(base64), params }.
+  // Signed out → server already saved locally and returns { success, data }.
+  type GenResult = {
+    success: boolean;
+    image?: string;
+    params?: GenerationParams;
+    data?: GenerationData;
+  };
+
+  // Step 1: enhance a prompt via LM Studio. Throws on HTTP failure.
+  const enhanceOnce = async (promptText: string): Promise<{ positive: string; negative: string }> => {
+    const enhanceRes = await fetch(`${API_BASE}/enhance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: promptText })
+    });
+    if (!enhanceRes.ok) {
+      const errData = await enhanceRes.json();
+      throw new Error(errData.error || 'Failed to enhance prompt');
+    }
+    const enhanceResult = await enhanceRes.json();
+    return { positive: enhanceResult.positive, negative: enhanceResult.negative };
+  };
+
+  // Step 2: request ONE image from Stable Diffusion. Throws on HTTP failure.
+  const generateImage = async (
+    positive: string,
+    negative: string,
+    originalPrompt: string,
+    seed: number
+  ): Promise<GenResult> => {
+    const genRes = await fetch(`${API_BASE}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: positive,
+        negativePrompt: negative,
+        originalPrompt,
+        width,
+        height,
+        steps,
+        cfgScale,
+        model: selectedModel || undefined, // Override SD checkpoint when one is selected
+        skipEnhance: true, // Skip enhancement since we already did it!
+        seed,
+        sampler: selectedSampler || undefined,
+        loras: selectedLoras,
+        clientPersist: !!user
+      })
+    });
+    if (!genRes.ok) {
+      const errData = await genRes.json();
+      throw new Error(errData.error || 'Failed to generate image');
+    }
+    return await genRes.json();
+  };
+
+  // Step 3: persist a generated image. Signed in → upload to Firebase; signed
+  // out → the server already saved it, so just return its metadata.
+  // Throws on cloud-save failure (caller decides recovery).
+  const persistResult = async (result: GenResult): Promise<GenerationData> => {
+    if (user && result.image && result.params) {
+      return await saveGeneration(user.uid, result.image, result.params) as unknown as GenerationData;
+    }
+    return result.data as GenerationData;
+  };
+
+  // Convenience for batch: generate one image and persist it. Throws on any failure.
+  // Used by Task 2 (batch generation); unused in Task 1 but needed for type coherence.
+  const generateAndPersist = async (
+    positive: string,
+    negative: string,
+    originalPrompt: string,
+    seed: number
+  ): Promise<GenerationData> => {
+    const result = await generateImage(positive, negative, originalPrompt, seed);
+    if (!result.success) throw new Error('Image generation returned an unsuccessful result');
+    return await persistResult(result);
+  };
+  // Keep generateAndPersist in scope for Tasks 2 & 3 to access
+  void generateAndPersist;
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || loading) return;
@@ -549,82 +632,39 @@ function App() {
 
     try {
       // --- Step 1: Enhance prompt via LM Studio ---
-      const enhanceRes = await fetch(`${API_BASE}/enhance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
-      });
-
-      if (!enhanceRes.ok) {
-        const errData = await enhanceRes.json();
-        throw new Error(errData.error || 'Failed to enhance prompt');
-      }
-
-      const enhanceResult = await enhanceRes.json();
+      const { positive, negative } = await enhanceOnce(prompt);
 
       // --- Transition to Step 2: Image Generation ---
       currentStep = 2;
       setLoadingStep(2);
       setGenStatus('generating');
 
-      const genRes = await fetch(`${API_BASE}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: enhanceResult.positive,
-          negativePrompt: enhanceResult.negative,
-          originalPrompt: prompt,
-          width,
-          height,
-          steps,
-          cfgScale,
-          model: selectedModel || undefined, // Override SD checkpoint when one is selected
-          skipEnhance: true, // Skip enhancement since we already did it!
-          seed: seedLocked ? seedValue : -1,
-          sampler: selectedSampler || undefined,
-          loras: selectedLoras,
-          clientPersist: !!user
-        })
-      });
-
-      if (!genRes.ok) {
-        const errData = await genRes.json();
-        throw new Error(errData.error || 'Failed to generate image');
-      }
-
-      // --- Transition to Step 3: Saving ---
-      currentStep = 3;
-      setLoadingStep(3);
-      setGenStatus('saving');
-
-      const result = await genRes.json();
+      const result = await generateImage(positive, negative, prompt, seedLocked ? seedValue : -1);
 
       if (result.success) {
+        // --- Transition to Step 3: Saving ---
+        currentStep = 3;
+        setLoadingStep(3);
+        setGenStatus('saving');
+
         let saved: GenerationData;
-        if (user && result.image) {
-          // Signed in: the server returned raw bytes — persist to Firebase from the client.
-          setGenStatus('saving');
-          try {
-            saved = await saveGeneration(user.uid, result.image, result.params) as unknown as GenerationData;
-          } catch (saveErr: any) {
-            // Cloud save failed, but the image is already generated and in hand —
-            // keep it displayed (per the design spec's error handling) rather than discarding it.
-            const ts = Date.now();
-            setCurrentGeneration({
-              ...result.params,
-              id: `unsaved_${ts}`,
-              imageUrl: `data:image/png;base64,${result.image}`,
-              backendMode: 'local',
-              timestamp: ts,
-              createdAt: new Date(ts).toISOString(),
-            });
-            setGenStatus('success');
-            addToast(`クラウド保存に失敗しました（画像は表示中）。\n\n詳細: ${saveErr.message}`, 'error');
-            return;
-          }
-        } else {
-          // Signed out: the server already saved locally and returned metadata.
-          saved = result.data;
+        try {
+          saved = await persistResult(result);
+        } catch (saveErr: any) {
+          // Cloud save failed, but the image is already generated and in hand —
+          // keep it displayed (per the design spec's error handling) rather than discarding it.
+          const ts = Date.now();
+          setCurrentGeneration({
+            ...result.params,
+            id: `unsaved_${ts}`,
+            imageUrl: `data:image/png;base64,${result.image}`,
+            backendMode: 'local',
+            timestamp: ts,
+            createdAt: new Date(ts).toISOString(),
+          } as GenerationData);
+          setGenStatus('success');
+          addToast(`クラウド保存に失敗しました（画像は表示中）。\n\n詳細: ${saveErr.message}`, 'error');
+          return;
         }
 
         confetti({
@@ -641,14 +681,14 @@ function App() {
       }
     } catch (error: any) {
       console.error(error);
-      
+
       // Restore previous generation to keep it visible on error
       setCurrentGeneration(prevGen);
-      
+
       // Use currentStep to freeze on the correct failed step
       setErrorStep(currentStep);
       setGenStatus('error');
-      
+
       addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
     } finally {
       setLoading(false);
