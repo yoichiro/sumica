@@ -275,7 +275,7 @@ input:checked + .slider:before {
 /* Toast Toaster Notification System */
 .toast-container {
   position: fixed;
-  top: 24px;
+  bottom: 24px;
   right: 24px;
   display: flex;
   flex-direction: column;
