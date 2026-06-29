@@ -562,12 +562,14 @@ function App() {
     return { positive: enhanceResult.positive, negative: enhanceResult.negative };
   };
 
-  // Step 2: request ONE image from Stable Diffusion. Throws on HTTP failure.
+  // Step 2: request ONE image from Stable Diffusion at the given size. Throws on HTTP failure.
   const generateImage = async (
     positive: string,
     negative: string,
     originalPrompt: string,
-    seed: number
+    seed: number,
+    width: number,
+    height: number
   ): Promise<GenResult> => {
     const genRes = await fetch(`${API_BASE}/generate`, {
       method: 'POST',
@@ -605,15 +607,16 @@ function App() {
     return result.data as GenerationData;
   };
 
-  // Convenience for batch: generate one image and persist it. Throws on any failure.
-  // Used by Task 2 (batch generation); unused in Task 1 but needed for type coherence.
+  // Convenience for batch: generate one image at the given size and persist it. Throws on any failure.
   const generateAndPersist = async (
     positive: string,
     negative: string,
     originalPrompt: string,
-    seed: number
+    seed: number,
+    width: number,
+    height: number
   ): Promise<GenerationData> => {
-    const result = await generateImage(positive, negative, originalPrompt, seed);
+    const result = await generateImage(positive, negative, originalPrompt, seed, width, height);
     if (!result.success) throw new Error('Image generation returned an unsuccessful result');
     return await persistResult(result);
   };
@@ -642,7 +645,7 @@ function App() {
       setLoadingStep(2);
       setGenStatus('generating');
 
-      const result = await generateImage(positive, negative, prompt, seedLocked ? seedValue : -1);
+      const result = await generateImage(positive, negative, prompt, seedLocked ? seedValue : -1, width, height);
 
       if (result.success) {
         // --- Transition to Step 3: Saving ---
@@ -729,7 +732,7 @@ function App() {
         setBatchProgress({ current: i, total: count });
         const seed = seedLocked ? seedValue : -1;
         try {
-          const saved = await generateAndPersist(positive, negative, prompt, seed);
+          const saved = await generateAndPersist(positive, negative, prompt, seed, width, height);
           succeeded++;
           setCurrentGeneration(saved); // live preview update
         } catch (genErr) {
