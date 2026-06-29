@@ -18,7 +18,7 @@ import {
   ChevronRight,
   LogIn
 } from 'lucide-react';
-import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, type AuthUser } from './firebase';
+import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, type AuthUser } from './firebase';
 import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
 
@@ -322,7 +322,6 @@ function App() {
   const API_BASE = `http://${window.location.hostname}:5000/api`;
 
   useEffect(() => {
-    fetchHistory();
     fetchStatus();
     fetchHealth();
     fetchSdModels();
@@ -387,6 +386,20 @@ function App() {
       console.error('Failed to fetch history:', error);
     }
   };
+
+  // History source follows auth: live Firestore subscription when signed in,
+  // local REST fetch when signed out.
+  useEffect(() => {
+    if (user) {
+      setHistory([]); // clear local items before the cloud snapshot arrives
+      const unsub = subscribeGenerations(user.uid, (records) => {
+        setHistory(records as unknown as GenerationData[]);
+      });
+      return unsub;
+    }
+    fetchHistory();
+    return undefined;
+  }, [user]);
 
   const fetchStatus = async () => {
     try {
