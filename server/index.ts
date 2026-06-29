@@ -83,6 +83,7 @@ interface GenerationMetadata {
   backendMode: 'firebase' | 'local';
   seed?: number;
   sampler?: string;
+  loras?: { name: string; weight: number }[];
 }
 
 // Local history metadata helper
@@ -268,8 +269,12 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, loras } = req.body;
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
+  // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
+  const loraList: { name: string; weight: number }[] = (Array.isArray(loras) ? loras : [])
+    .filter((l: { name?: string }) => l && l.name)
+    .map((l: { name: string; weight?: number }) => ({ name: l.name, weight: typeof l.weight === 'number' ? l.weight : 0.8 }));
 
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
@@ -289,6 +294,13 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       console.log(`Original: "${prompt}" -> Enhanced Positive: "${finalPrompt}" | Enhanced Negative: "${finalNegativePrompt}"`);
     } else {
       console.log(`Using pre-enhanced prompts. Positive: "${finalPrompt}" | Negative: "${finalNegativePrompt}"`);
+    }
+
+    // Apply selected LoRAs by appending <lora:name:weight> to the positive prompt.
+    if (loraList.length > 0) {
+      const loraSuffix = loraList.map((l) => `<lora:${l.name}:${l.weight}>`).join(', ');
+      finalPrompt = `${finalPrompt}, ${loraSuffix}`;
+      console.log(`Applied LoRAs: ${loraSuffix}`);
     }
 
     // Step 2: Generate image with Stable Diffusion
@@ -333,6 +345,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         model: model || null,
         seed: actualSeed,
         sampler: sampler || 'Euler a',
+        loras: loraList,
         imageUrl,
         storagePath,
         timestamp,
@@ -366,6 +379,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         model: model || null,
         seed: actualSeed,
         sampler: sampler || 'Euler a',
+        loras: loraList,
         imageUrl,
         localPath: localFilePath,
         timestamp,
@@ -484,6 +498,20 @@ app.get('/api/sd-samplers', async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Failed to fetch SD samplers:', (error as Error).message);
     res.json({ samplers: [] });
+  }
+});
+
+// 7b. List Stable Diffusion LoRAs (for the LoRA picker). Applied via <lora:name:weight> in the prompt.
+app.get('/api/sd-loras', async (_req: Request, res: Response) => {
+  try {
+    const listRes = await axios.get(`${stableDiffusionUrl}/sdapi/v1/loras`, { timeout: 5000 });
+    const loras = Array.isArray(listRes.data)
+      ? listRes.data.map((l: { name?: string }) => l.name).filter((n): n is string => Boolean(n))
+      : [];
+    res.json({ loras });
+  } catch (error) {
+    console.error('Failed to fetch SD LoRAs:', (error as Error).message);
+    res.json({ loras: [] });
   }
 });
 

@@ -39,6 +39,7 @@ interface GenerationData {
   backendMode: 'firebase' | 'local';
   seed?: number;
   sampler?: string;
+  loras?: { name: string; weight: number }[];
 }
 
 interface SystemStatus {
@@ -168,6 +169,8 @@ function App() {
   const [selectedModel, setSelectedModel] = useState('');
   const [sdSamplers, setSdSamplers] = useState<string[]>([]);
   const [selectedSampler, setSelectedSampler] = useState('');
+  const [sdLoras, setSdLoras] = useState<string[]>([]);
+  const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
@@ -292,6 +295,7 @@ function App() {
     fetchHealth();
     fetchSdModels();
     fetchSdSamplers();
+    fetchSdLoras();
     // Re-check upstream connectivity every 20s so the badges stay fresh.
     const healthInterval = setInterval(fetchHealth, 20000);
     return () => clearInterval(healthInterval);
@@ -303,6 +307,7 @@ function App() {
     if (health?.stableDiffusion.connected) {
       fetchSdModels();
       fetchSdSamplers();
+      fetchSdLoras();
     }
   }, [health?.stableDiffusion.connected]);
 
@@ -402,6 +407,27 @@ function App() {
     }
   };
 
+  const fetchSdLoras = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sd-loras`);
+      if (res.ok) {
+        const data = await res.json();
+        setSdLoras(Array.isArray(data.loras) ? data.loras : []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch SD LoRAs:', error);
+    }
+  };
+
+  // LoRA stack helpers (default weight 0.8; applied as <lora:name:weight> at generation).
+  const addLora = (name: string) => {
+    if (!name) return;
+    setSelectedLoras((prev) => (prev.some((l) => l.name === name) ? prev : [...prev, { name, weight: 0.8 }]));
+  };
+  const removeLora = (name: string) => setSelectedLoras((prev) => prev.filter((l) => l.name !== name));
+  const setLoraWeight = (name: string, weight: number) =>
+    setSelectedLoras((prev) => prev.map((l) => (l.name === name ? { ...l, weight } : l)));
+
   // Populate the left-panel form fields from a history item so the user can
   // tweak and regenerate. If the item carries a seed, lock the seed field to
   // that value so the same image can be reproduced; otherwise unlock it.
@@ -413,6 +439,7 @@ function App() {
     setCfgScale(item.cfgScale);
     setSelectedModel(item.model || '');
     setSelectedSampler(item.sampler || '');
+    setSelectedLoras(item.loras || []);
     if (item.seed !== undefined) {
       setSeedLocked(true);
       setSeedValue(item.seed);
@@ -490,7 +517,8 @@ function App() {
           model: selectedModel || undefined, // Override SD checkpoint when one is selected
           skipEnhance: true, // Skip enhancement since we already did it!
           seed: seedLocked ? seedValue : -1,
-          sampler: selectedSampler || undefined
+          sampler: selectedSampler || undefined,
+          loras: selectedLoras
         })
       });
 
@@ -560,6 +588,7 @@ function App() {
         fetchHealth(); // Re-check connectivity against the newly saved URLs
         fetchSdModels(); // Refresh model list against the newly saved SD URL
         fetchSdSamplers();
+        fetchSdLoras();
         addToast('設定を保存しました！⚙️', 'success');
         setTimeout(() => {
           setSettingsSuccess(false);
@@ -780,6 +809,48 @@ function App() {
                       <option>サンプラー一覧を取得できません（SD未接続）</option>
                     </select>
                   )}
+                </div>
+
+                {/* LoRA (multiple, each with a weight) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>LoRA (複数適用可)</label>
+                  {sdLoras.length > 0 ? (
+                    <select
+                      className="input-field"
+                      value=""
+                      onChange={(e) => addLora(e.target.value)}
+                      disabled={loading}
+                      style={{ borderRadius: '8px' }}
+                    >
+                      <option value="">＋ LoRAを追加…</option>
+                      {sdLoras.filter((n) => !selectedLoras.some((l) => l.name === n)).map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
+                      <option>LoRA一覧を取得できません（SD未接続）</option>
+                    </select>
+                  )}
+                  {selectedLoras.map((l) => (
+                    <div key={l.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', border: '2px solid #e9ecef', borderRadius: '8px', padding: '6px 8px' }}>
+                      <span style={{ flex: 1, fontSize: '11px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.name}>{l.name}</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1.5"
+                        step="0.05"
+                        value={l.weight}
+                        onChange={(e) => setLoraWeight(l.name, parseFloat(e.target.value))}
+                        disabled={loading}
+                        style={{ width: '90px' }}
+                      />
+                      <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--pop-blue)', width: '30px', textAlign: 'right' }}>{l.weight.toFixed(2)}</span>
+                      <button type="button" onClick={() => removeLora(l.name)} disabled={loading} title="このLoRAを外す" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Size Select with Swap Button */}
@@ -1095,6 +1166,12 @@ function App() {
                       <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
                         <span>サンプラー: </span>
                         <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.sampler}</strong>
+                      </div>
+                    )}
+                    {currentGeneration.loras && currentGeneration.loras.length > 0 && (
+                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
+                        <span>LoRA: </span>
+                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.loras.map((l) => `${l.name} (${l.weight})`).join(', ')}</strong>
                       </div>
                     )}
                   </div>
