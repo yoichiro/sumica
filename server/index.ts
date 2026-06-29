@@ -410,10 +410,19 @@ app.get('/api/sd-models', async (_req: Request, res: Response) => {
       axios.get(`${stableDiffusionUrl}/sdapi/v1/sd-models`, { timeout: 5000 }),
       axios.get(`${stableDiffusionUrl}/sdapi/v1/options`, { timeout: 5000 }),
     ]);
+    // Exclude Stable Diffusion XL checkpoints: judged purely by the name containing "xl".
     const models = Array.isArray(listRes.data)
-      ? listRes.data.map((m: { title?: string }) => m.title).filter((t): t is string => Boolean(t))
+      ? listRes.data
+          .map((m: { title?: string }) => m.title)
+          .filter((t): t is string => Boolean(t))
+          .filter((t) => !t.toLowerCase().includes('xl'))
       : [];
-    const current = optionsRes.data?.sd_model_checkpoint ?? null;
+    const activeCheckpoint = optionsRes.data?.sd_model_checkpoint ?? null;
+    // If the active checkpoint was filtered out (e.g. an XL model), fall back to the
+    // first valid model so the picker never points at a hidden entry.
+    const current = activeCheckpoint && models.includes(activeCheckpoint)
+      ? activeCheckpoint
+      : models[0] ?? null;
     res.json({ models, current });
   } catch (error) {
     console.error('Failed to fetch SD models:', (error as Error).message);
