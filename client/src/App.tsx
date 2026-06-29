@@ -11,7 +11,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   Trash2,
-  Maximize2
+  Maximize2,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
@@ -224,6 +226,7 @@ function App() {
   };
 
   const closeLightbox = () => {
+    if (document.fullscreenElement) { document.exitFullscreen(); } // leave OS fullscreen before closing
     const start = (document as DocumentWithViewTransition).startViewTransition;
     if (!start) {
       setLightboxUrl(null);
@@ -237,11 +240,22 @@ function App() {
     transition.finished.finally(() => setMorphSourceKey(null)); // cleanup temporary name
   };
 
+  // Toggle OS fullscreen on the lightbox overlay (keeps the close/fullscreen controls visible).
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      lightboxRef.current?.requestFullscreen?.();
+    }
+  };
+
   const [showSettings, setShowSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [morphSourceKey, setMorphSourceKey] = useState<string | null>(null);
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
   const [newLmStudioModel, setNewLmStudioModel] = useState('');
@@ -278,13 +292,23 @@ function App() {
     }
   }, [health?.stableDiffusion.connected]);
 
-  // Close the image lightbox on Escape.
+  // Close the image lightbox on Escape — but in OS fullscreen, let the browser
+  // handle Escape (it exits fullscreen); only close the lightbox when not fullscreen.
   useEffect(() => {
     if (!lightboxUrl) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLightbox(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.fullscreenElement) closeLightbox();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxUrl]);
+
+  // Track OS fullscreen state to swap the toggle icon.
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   const fetchHistory = async () => {
     try {
@@ -1364,6 +1388,7 @@ function App() {
       {/* LIGHTBOX: enlarged image */}
       {lightboxUrl && (
         <div
+          ref={lightboxRef}
           onClick={() => closeLightbox()}
           style={{
             position: 'fixed',
@@ -1383,6 +1408,29 @@ function App() {
             onClick={(e) => e.stopPropagation()}
             style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
           />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+            title={isFullscreen ? '全画面を解除' : '全画面表示'}
+            className="scale-hover"
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '72px',
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(255, 255, 255, 0.15)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+          </button>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
