@@ -146,7 +146,11 @@ export function subscribeGenerations(
   }
   const generationsRef = collection(dbInstance, 'users', uid, 'generations');
   let q;
-  if (dateYMD) {
+  // Defensive guard: during Vite HMR, an in-flight closure from a previous build can
+  // call this with the OLD signature (where arg #2 was the callback). Reject anything
+  // that isn't a YYYY-MM-DD string so we don't crash on `.split` — the next HMR pass
+  // or a hard reload will sync the call site to the new signature.
+  if (typeof dateYMD === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateYMD)) {
     // Local-day boundaries matching App.tsx's localYMD() bucketing.
     const [y, m, d] = dateYMD.split('-').map(Number);
     const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
