@@ -331,7 +331,7 @@ function App() {
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchCount, setBatchCount] = useState(4);
-  const [batchMode, setBatchMode] = useState<'count' | 'size'>('count');
+  const [batchMode, setBatchMode] = useState<'count' | 'size' | 'model'>('count');
   const [selectedWidths, setSelectedWidths] = useState<number[]>([512]);
   const [selectedHeights, setSelectedHeights] = useState<number[]>([512]);
 
@@ -556,9 +556,11 @@ function App() {
     data?: GenerationData;
   };
 
-  // One image's size in a batch run. Both batch modes (count, size cross-product)
-  // build a SizeJob[] and feed it to the single sequential loop in handleBatchGenerate.
-  type SizeJob = { width: number; height: number };
+  // One image's parameters in a batch run. All batch modes (count, size cross-product,
+  // model-cycling) build a BatchJob[] and feed it to the single sequential loop in
+  // handleBatchGenerate. `model` overrides the form's selectedModel for that one job
+  // (used by model-cycling mode); when absent, the job uses selectedModel as usual.
+  type BatchJob = { width: number; height: number; model?: string };
 
   // Step 1: enhance a prompt via LM Studio. Throws on HTTP failure.
   const enhanceOnce = async (promptText: string): Promise<{ positive: string; negative: string }> => {
@@ -582,7 +584,8 @@ function App() {
     originalPrompt: string,
     seed: number,
     width: number,
-    height: number
+    height: number,
+    modelOverride?: string
   ): Promise<GenResult> => {
     const genRes = await fetch(`${API_BASE}/generate`, {
       method: 'POST',
@@ -595,7 +598,8 @@ function App() {
         height,
         steps,
         cfgScale,
-        model: selectedModel || undefined, // Override SD checkpoint when one is selected
+        // Per-job model (model-cycling batch) wins over the form's selectedModel.
+        model: (modelOverride ?? selectedModel) || undefined, // Override SD checkpoint when one is selected
         skipEnhance: true, // Skip enhancement since we already did it!
         seed,
         sampler: selectedSampler || undefined,
@@ -627,9 +631,10 @@ function App() {
     originalPrompt: string,
     seed: number,
     width: number,
-    height: number
+    height: number,
+    modelOverride?: string
   ): Promise<GenerationData> => {
-    const result = await generateImage(positive, negative, originalPrompt, seed, width, height);
+    const result = await generateImage(positive, negative, originalPrompt, seed, width, height, modelOverride);
     if (!result.success) throw new Error('Image generation returned an unsuccessful result');
     return await persistResult(result);
   };
@@ -715,11 +720,12 @@ function App() {
   };
 
   // Batch: enhance once, then generate one image per job, sequentially (one SD
-  // call each — NOT SD's Batch Count). Each job carries its own width/height, so
-  // both count mode (N copies at the form size) and size mode (width×height cross
-  // product) share this loop. A failed image is counted and skipped; the loop
-  // continues. The last completed image stays in the preview.
-  const handleBatchGenerate = async (jobs: SizeJob[]) => {
+  // call each — NOT SD's Batch Count). Each job carries its own width/height (and an
+  // optional model), so count mode (N copies at the form size), size mode (width×height
+  // cross product), and model mode (one image per available checkpoint) all share this
+  // loop. A failed image is counted and skipped; the loop continues. The last completed
+  // image stays in the preview.
+  const handleBatchGenerate = async (jobs: BatchJob[]) => {
     if (!prompt.trim() || loading || jobs.length === 0) return;
 
     setLoading(true);
@@ -748,7 +754,7 @@ function App() {
         setBatchProgress({ current: i + 1, total: jobs.length });
         const seed = seedLocked ? seedValue : -1;
         try {
-          const saved = await generateAndPersist(positive, negative, prompt, seed, job.width, job.height);
+          const saved = await generateAndPersist(positive, negative, prompt, seed, job.width, job.height, job.model);
           succeeded++;
           setCurrentGeneration(saved); // live preview update
         } catch (genErr) {
@@ -2116,7 +2122,7 @@ function App() {
 
             {/* Segmented mode tabs */}
             <div style={{ display: 'flex', gap: '8px', background: '#f1f3f5', borderRadius: '12px', padding: '4px' }}>
-              {([['count', '枚数'], ['size', 'サイズの組合せ']] as const).map(([mode, label]) => (
+              {([['count', '枚数'], ['size', 'サイズの組合せ'], ['model', 'モデル切替']] as const).map(([mode, label]) => (
                 <button
                   key={mode}
                   type="button"
@@ -2162,7 +2168,7 @@ function App() {
                   </div>
                 </div>
               </>
-            ) : (
+            ) : batchMode === 'size' ? (
               <>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
                   選んだ横幅と縦幅の組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。
@@ -2203,6 +2209,33 @@ function App() {
                   </div>
                 </div>
               </>
+            ) : (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                  利用可能なモデルを順番に切り替えながら、1モデルにつき1枚ずつ生成します。サイズは現在のフォーム設定（{width}×{height}）を使用します。
+                </p>
+                {sdModels.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
+                        {sdModels.length}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>モデル</span>
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '160px', overflowY: 'auto', background: '#f8f9fa', borderRadius: '10px', padding: '10px' }}>
+                      {sdModels.map((m, i) => (
+                        <div key={m} style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '6px' }}>
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 700, minWidth: '20px' }}>{i + 1}.</span>
+                          <span style={{ wordBreak: 'break-all' }}>{m}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-orange)', background: '#fff4e6', borderRadius: '10px', padding: '14px' }}>
+                    モデルが取得できていません。Stable Diffusion が起動しているか確認してください。
+                  </div>
+                )}
+              </>
             )}
 
             <div style={{ display: 'flex', gap: '12px' }}>
@@ -2216,12 +2249,17 @@ function App() {
               </button>
               <button
                 type="button"
-                disabled={batchMode === 'size' && (selectedWidths.length === 0 || selectedHeights.length === 0 || selectedWidths.length * selectedHeights.length > MAX_SIZE_COMBINATIONS)}
+                disabled={
+                  (batchMode === 'size' && (selectedWidths.length === 0 || selectedHeights.length === 0 || selectedWidths.length * selectedHeights.length > MAX_SIZE_COMBINATIONS)) ||
+                  (batchMode === 'model' && sdModels.length === 0)
+                }
                 onClick={() => {
                   setShowBatchModal(false);
-                  const jobs: SizeJob[] = batchMode === 'count'
+                  const jobs: BatchJob[] = batchMode === 'count'
                     ? Array(batchCount).fill({ width, height })
-                    : selectedWidths.flatMap(w => selectedHeights.map(h => ({ width: w, height: h })));
+                    : batchMode === 'size'
+                      ? selectedWidths.flatMap(w => selectedHeights.map(h => ({ width: w, height: h })))
+                      : sdModels.map(m => ({ width, height, model: m }));
                   handleBatchGenerate(jobs);
                 }}
                 className="btn-neon"
@@ -2229,7 +2267,9 @@ function App() {
               >
                 {batchMode === 'count'
                   ? `${batchCount}枚生成する`
-                  : `${selectedWidths.length * selectedHeights.length}通り生成する`}
+                  : batchMode === 'size'
+                    ? `${selectedWidths.length * selectedHeights.length}通り生成する`
+                    : `${sdModels.length}モデルで生成する`}
               </button>
             </div>
           </div>
