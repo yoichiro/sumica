@@ -407,12 +407,16 @@ function App() {
   };
 
   // History source follows auth: live Firestore subscription when signed in,
-  // local REST fetch when signed out.
+  // local REST fetch when signed out. The Firestore subscription is also keyed by
+  // `filterDate` — the query is narrowed to that single local day server-side, so
+  // every image from that day comes back (no count cap). Changing the date tears
+  // down the old subscription and opens a new one scoped to the new day.
   useEffect(() => {
     if (user) {
       setHistory([]); // clear local items before the cloud snapshot arrives
       const unsub = subscribeGenerations(
         user.uid,
+        filterDate || null,
         (records) => setHistory(records as unknown as GenerationData[]),
         (err) => addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${err.message}`, 'error'),
       );
@@ -420,7 +424,7 @@ function App() {
     }
     fetchHistory();
     return undefined;
-  }, [user]);
+  }, [user, filterDate]);
 
   const fetchStatus = async () => {
     try {

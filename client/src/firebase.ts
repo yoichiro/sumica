@@ -16,7 +16,7 @@ import {
   onSnapshot,
   query,
   orderBy,
-  limit,
+  where,
   type Firestore,
 } from 'firebase/firestore';
 import {
@@ -128,8 +128,15 @@ export async function saveGeneration(
   return { id: docRef.id, ...record };
 }
 
+// Subscribe to a user's generations. When `dateYMD` (local YYYY-MM-DD) is provided,
+// the query is narrowed server-side to that single local day's timestamp range, so
+// EVERY generation from that day is returned (no count cap) — matching the gallery's
+// date-filter UI. When `dateYMD` is null, falls back to the full collection (no limit).
+// Same field (`timestamp`) for where + orderBy → Firestore handles this with the
+// automatic single-field index, no composite index needed.
 export function subscribeGenerations(
   uid: string,
+  dateYMD: string | null,
   cb: (records: GenerationRecord[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
@@ -137,11 +144,22 @@ export function subscribeGenerations(
     cb([]);
     return () => {};
   }
-  const q = query(
-    collection(dbInstance, 'users', uid, 'generations'),
-    orderBy('timestamp', 'desc'),
-    limit(50),
-  );
+  const generationsRef = collection(dbInstance, 'users', uid, 'generations');
+  let q;
+  if (dateYMD) {
+    // Local-day boundaries matching App.tsx's localYMD() bucketing.
+    const [y, m, d] = dateYMD.split('-').map(Number);
+    const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+    const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+    q = query(
+      generationsRef,
+      where('timestamp', '>=', dayStart),
+      where('timestamp', '<=', dayEnd),
+      orderBy('timestamp', 'desc'),
+    );
+  } else {
+    q = query(generationsRef, orderBy('timestamp', 'desc'));
+  }
   return onSnapshot(
     q,
     (snap) => {
