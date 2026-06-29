@@ -73,6 +73,7 @@ export type GenerationParams = {
   loras?: { name: string; weight: number }[];
 };
 
+// Keep this shape in sync with GenerationData in App.tsx.
 // A fully-persisted generation (params + storage/firestore bookkeeping).
 export type GenerationRecord = GenerationParams & {
   id: string;
@@ -130,6 +131,7 @@ export async function saveGeneration(
 export function subscribeGenerations(
   uid: string,
   cb: (records: GenerationRecord[]) => void,
+  onError?: (err: Error) => void,
 ): () => void {
   if (!dbInstance) {
     cb([]);
@@ -140,11 +142,19 @@ export function subscribeGenerations(
     orderBy('timestamp', 'desc'),
     limit(50),
   );
-  return onSnapshot(q, (snap) => {
-    const records: GenerationRecord[] = [];
-    snap.forEach((d) => records.push({ id: d.id, ...(d.data() as Omit<GenerationRecord, 'id'>) }));
-    cb(records);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const records: GenerationRecord[] = [];
+      snap.forEach((d) => records.push({ id: d.id, ...(d.data() as Omit<GenerationRecord, 'id'>) }));
+      cb(records);
+    },
+    (err) => {
+      console.error('Firestore subscription failed:', err);
+      cb([]);
+      onError?.(err);
+    },
+  );
 }
 
 export async function deleteGenerations(uid: string, records: GenerationRecord[]): Promise<void> {

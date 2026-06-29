@@ -397,9 +397,11 @@ function App() {
   useEffect(() => {
     if (user) {
       setHistory([]); // clear local items before the cloud snapshot arrives
-      const unsub = subscribeGenerations(user.uid, (records) => {
-        setHistory(records as unknown as GenerationData[]);
-      });
+      const unsub = subscribeGenerations(
+        user.uid,
+        (records) => setHistory(records as unknown as GenerationData[]),
+        (err) => addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${err.message}`, 'error'),
+      );
       return unsub;
     }
     fetchHistory();
@@ -602,7 +604,24 @@ function App() {
         if (user && result.image) {
           // Signed in: the server returned raw bytes — persist to Firebase from the client.
           setGenStatus('saving');
-          saved = await saveGeneration(user.uid, result.image, result.params) as unknown as GenerationData;
+          try {
+            saved = await saveGeneration(user.uid, result.image, result.params) as unknown as GenerationData;
+          } catch (saveErr: any) {
+            // Cloud save failed, but the image is already generated and in hand —
+            // keep it displayed (per the design spec's error handling) rather than discarding it.
+            const ts = Date.now();
+            setCurrentGeneration({
+              ...result.params,
+              id: `unsaved_${ts}`,
+              imageUrl: `data:image/png;base64,${result.image}`,
+              backendMode: 'local',
+              timestamp: ts,
+              createdAt: new Date(ts).toISOString(),
+            });
+            setGenStatus('success');
+            addToast(`クラウド保存に失敗しました（画像は表示中）。\n\n詳細: ${saveErr.message}`, 'error');
+            return;
+          }
         } else {
           // Signed out: the server already saved locally and returned metadata.
           saved = result.data;
