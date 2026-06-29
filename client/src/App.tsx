@@ -10,7 +10,8 @@ import {
   ArrowLeftRight,
   AlertTriangle,
   CheckCircle2,
-  Trash2
+  Trash2,
+  Maximize2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -75,6 +76,36 @@ function ServiceStatusBadge({ label, checking, connected, detail }: {
       }}></span>
       <span>{text}</span>
     </div>
+  );
+}
+
+// Bottom-right "enlarge" button overlaid on an image; opens the lightbox.
+function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => void; size?: number }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="拡大して表示"
+      className="scale-hover"
+      style={{
+        position: 'absolute',
+        bottom: '8px',
+        right: '8px',
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '50%',
+        border: 'none',
+        background: 'rgba(0, 0, 0, 0.55)',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
+      }}
+    >
+      <Maximize2 size={Math.round(size * 0.5)} />
+    </button>
   );
 }
 
@@ -173,6 +204,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
   const [newLmStudioModel, setNewLmStudioModel] = useState('');
@@ -208,6 +240,14 @@ function App() {
       fetchSdSamplers();
     }
   }, [health?.stableDiffusion.connected]);
+
+  // Close the image lightbox on Escape.
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxUrl(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxUrl]);
 
   const fetchHistory = async () => {
     try {
@@ -869,6 +909,7 @@ function App() {
                     alt="Generated output"
                     style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }}
                   />
+                  <ZoomButton size={34} onClick={(e) => { e.stopPropagation(); setLightboxUrl(currentGeneration.imageUrl); }} />
                   <div style={{ 
                     position: 'absolute', 
                     top: '12px', 
@@ -1203,12 +1244,15 @@ function App() {
                       position: 'relative'
                     }}
                   >
-                    <img
-                      src={item.imageUrl}
-                      alt={item.originalPrompt}
-                      style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa' }}
-                      loading="lazy"
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <img
+                        src={item.imageUrl}
+                        alt={item.originalPrompt}
+                        style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa' }}
+                        loading="lazy"
+                      />
+                      <ZoomButton size={26} onClick={(e) => { e.stopPropagation(); setLightboxUrl(item.imageUrl); }} />
+                    </div>
 
                     {/* Selected check (top-left) */}
                     {selectedIds.has(itemKey(item)) && (
@@ -1279,6 +1323,54 @@ function App() {
           </div>
         </section>
       </main>
+
+      {/* LIGHTBOX: enlarged image */}
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 200,
+            padding: '24px'
+          }}
+        >
+          <img
+            src={lightboxUrl}
+            alt="拡大表示"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            title="閉じる (Esc)"
+            className="scale-hover"
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(255, 255, 255, 0.15)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            <X size={22} />
+          </button>
+        </div>
+      )}
 
       {/* MODAL: DELETE CONFIRMATION */}
       {showDeleteConfirm && (
