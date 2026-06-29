@@ -115,6 +115,12 @@ function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => 
   );
 }
 
+// Candidate sizes offered as toggle chips in the batch dialog's size mode
+// (covers common SD1.5 / SDXL resolutions). Same set for width and height.
+const SIZE_OPTIONS = [512, 768, 1024];
+// Defensive cap on the width×height cross product (3×3 = 9 today, room to grow).
+const MAX_SIZE_COMBINATIONS = 16;
+
 function App() {
   // Form input states
   const [prompt, setPrompt] = useState('');
@@ -325,6 +331,9 @@ function App() {
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchCount, setBatchCount] = useState(4);
+  const [batchMode, setBatchMode] = useState<'count' | 'size'>('count');
+  const [selectedWidths, setSelectedWidths] = useState<number[]>([512]);
+  const [selectedHeights, setSelectedHeights] = useState<number[]>([512]);
 
   // Talk to the API on the SAME hostname the page was loaded from, not a hardcoded
   // 127.0.0.1. Under WSL2, Windows->WSL forwarding can work for `localhost` but NOT for
@@ -817,6 +826,13 @@ function App() {
     } finally {
       setSettingsLoading(false);
     }
+  };
+
+  const toggleSize = (
+    setter: React.Dispatch<React.SetStateAction<number[]>>,
+    value: number
+  ) => {
+    setter(prev => (prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]));
   };
 
   return (
@@ -2098,28 +2114,96 @@ function App() {
               </button>
             </div>
 
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-              同じプロンプトで複数枚を1枚ずつ順番に生成します。生成する枚数を選んでください。
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
-                {batchCount}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>枚</span>
-              </span>
-              <input
-                type="range"
-                min={2}
-                max={10}
-                step={1}
-                value={batchCount}
-                onChange={(e) => setBatchCount(Number(e.target.value))}
-                style={{ width: '100%' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
-                <span>2枚</span>
-                <span>10枚</span>
-              </div>
+            {/* Segmented mode tabs */}
+            <div style={{ display: 'flex', gap: '8px', background: '#f1f3f5', borderRadius: '12px', padding: '4px' }}>
+              {([['count', '枚数'], ['size', 'サイズの組合せ']] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setBatchMode(mode)}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    borderRadius: '9px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    background: batchMode === mode ? 'var(--pop-blue)' : 'transparent',
+                    color: batchMode === mode ? '#fff' : 'var(--text-secondary)',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
+
+            {batchMode === 'count' ? (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                  同じプロンプトで複数枚を1枚ずつ順番に生成します。生成する枚数を選んでください。
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
+                    {batchCount}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>枚</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={2}
+                    max={10}
+                    step={1}
+                    value={batchCount}
+                    onChange={(e) => setBatchCount(Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    <span>2枚</span>
+                    <span>10枚</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                  選んだ横幅と縦幅の組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {([['横幅', selectedWidths, setSelectedWidths], ['縦幅', selectedHeights, setSelectedHeights]] as const).map(([label, selected, setter]) => (
+                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}:</span>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {SIZE_OPTIONS.map(size => {
+                          const active = selected.includes(size);
+                          return (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => toggleSize(setter, size)}
+                              className="scale-hover"
+                              style={{
+                                flex: 1,
+                                padding: '10px',
+                                borderRadius: '10px',
+                                border: active ? '2px solid var(--pop-blue)' : '2px solid #e9ecef',
+                                background: active ? 'var(--pop-blue)' : '#fff',
+                                color: active ? '#fff' : 'var(--text-secondary)',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {size}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
+                    横{selectedWidths.length} × 縦{selectedHeights.length} = {selectedWidths.length * selectedHeights.length}通りを生成
+                  </div>
+                </div>
+              </>
+            )}
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -2132,11 +2216,20 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowBatchModal(false); handleBatchGenerate(Array(batchCount).fill({ width, height })); }}
+                disabled={batchMode === 'size' && (selectedWidths.length === 0 || selectedHeights.length === 0 || selectedWidths.length * selectedHeights.length > MAX_SIZE_COMBINATIONS)}
+                onClick={() => {
+                  setShowBatchModal(false);
+                  const jobs: SizeJob[] = batchMode === 'count'
+                    ? Array(batchCount).fill({ width, height })
+                    : selectedWidths.flatMap(w => selectedHeights.map(h => ({ width: w, height: h })));
+                  handleBatchGenerate(jobs);
+                }}
                 className="btn-neon"
                 style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
               >
-                {batchCount}枚生成する
+                {batchMode === 'count'
+                  ? `${batchCount}枚生成する`
+                  : `${selectedWidths.length * selectedHeights.length}通り生成する`}
               </button>
             </div>
           </div>
