@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { flushSync } from 'react-dom';
-import confetti from 'canvas-confetti';
 
 // View Transitions API (Baseline 2025-10); typed locally so it works regardless of lib.dom version.
 type DocumentWithViewTransition = Document & {
@@ -534,12 +533,6 @@ function App() {
   // preview/progress isn't clobbered.
   const openInPreview = (item: GenerationData) => {
     if (genStatus === 'enhancing' || genStatus === 'generating' || genStatus === 'saving') return;
-    confetti({
-      particleCount: 150,
-      spread: 85,
-      origin: { y: 0.6 },
-      colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66']
-    });
     setCurrentGeneration(item);
     setGenStatus('success');
     setLoadingStep(3);
@@ -686,13 +679,6 @@ function App() {
           return;
         }
 
-        confetti({
-          particleCount: 150,
-          spread: 85,
-          origin: { y: 0.6 },
-          colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66'],
-        });
-
         setCurrentGeneration(saved);
         setGenStatus('success');
         if (!user) fetchHistory(); // signed-in history updates via onSnapshot (Task 5)
@@ -755,15 +741,6 @@ function App() {
           failed++;
           console.error(genErr);
         }
-      }
-
-      if (succeeded > 0) {
-        confetti({
-          particleCount: 150,
-          spread: 85,
-          origin: { y: 0.6 },
-          colors: ['#339af0', '#fcc419', '#ff922b', '#51cf66'],
-        });
       }
 
       if (succeeded === 0) setErrorStep(2);
