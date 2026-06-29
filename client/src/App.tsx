@@ -13,7 +13,9 @@ import {
   Trash2,
   Maximize2,
   Maximize,
-  Minimize
+  Minimize,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
@@ -279,6 +281,18 @@ function App() {
     }
   };
 
+  // Step the lightbox to the prev/next image in the gallery's displayed order
+  // (filteredHistory). Clamps at the ends; no-op if the current image isn't listed.
+  const navigateLightbox = (delta: number) => {
+    const idx = filteredHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl);
+    if (idx === -1) return;
+    const next = idx + delta;
+    if (next < 0 || next >= filteredHistory.length) return;
+    const target = filteredHistory[next];
+    setMorphSourceKey(itemKey(target));
+    setLightboxUrl(target.imageUrl);
+  };
+
   const [showSettings, setShowSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -286,6 +300,12 @@ function App() {
   const [morphSourceKey, setMorphSourceKey] = useState<string | null>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Index of the lightbox image within the displayed gallery order (-1 if not listed),
+  // used to disable the prev/next buttons at the ends.
+  const lightboxIndex = lightboxUrl
+    ? filteredHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl)
+    : -1;
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
   const [newLmStudioModel, setNewLmStudioModel] = useState('');
@@ -324,16 +344,24 @@ function App() {
     }
   }, [health?.stableDiffusion.connected]);
 
-  // Close the image lightbox on Escape — but in OS fullscreen, let the browser
-  // handle Escape (it exits fullscreen); only close the lightbox when not fullscreen.
+  // Lightbox keyboard control: Escape closes (unless in OS fullscreen — let the
+  // browser exit fullscreen first); ArrowLeft/Right step through the gallery order.
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !document.fullscreenElement) closeLightbox();
+      if (e.key === 'Escape') {
+        if (!document.fullscreenElement) closeLightbox();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateLightbox(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateLightbox(1);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxUrl]);
+  }, [lightboxUrl, morphSourceKey, filteredHistory]);
 
   // Track OS fullscreen state to swap the toggle icon.
   useEffect(() => {
@@ -1550,6 +1578,56 @@ function App() {
             onClick={(e) => e.stopPropagation()}
             style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
           />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigateLightbox(-1); }}
+            disabled={lightboxIndex <= 0}
+            title="前の画像 (←)"
+            className={lightboxIndex <= 0 ? '' : 'scale-hover'}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '176px',
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(255, 255, 255, 0.15)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: lightboxIndex <= 0 ? 'not-allowed' : 'pointer',
+              opacity: lightboxIndex <= 0 ? 0.35 : 1
+            }}
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigateLightbox(1); }}
+            disabled={lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1}
+            title="次の画像 (→)"
+            className={(lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? '' : 'scale-hover'}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '124px',
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(255, 255, 255, 0.15)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: (lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? 'not-allowed' : 'pointer',
+              opacity: (lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? 0.35 : 1
+            }}
+          >
+            <ChevronRight size={22} />
+          </button>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
