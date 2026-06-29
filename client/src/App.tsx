@@ -170,6 +170,7 @@ function App() {
   const [selectedSampler, setSelectedSampler] = useState('');
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
 
   // Stable id for a history item (Firestore id or local timestamp).
   const itemKey = (it: GenerationData) => it.id ?? String(it.timestamp);
@@ -184,23 +185,36 @@ function App() {
     });
   };
 
-  // Delete the selected generations (only invoked after the confirm modal).
+  // Open the confirm modal for the given ids (gallery selection or a single preview image).
+  const requestDelete = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setDeleteTargetIds(ids);
+    setShowDeleteConfirm(true);
+  };
+
+  // Delete deleteTargetIds (only invoked after the confirm modal).
   const handleDeleteSelected = async () => {
-    if (selectedIds.size === 0) return;
+    if (deleteTargetIds.length === 0) return;
     setDeleting(true);
     try {
       const res = await fetch(`${API_BASE}/generations/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [...selectedIds] })
+        body: JSON.stringify({ ids: deleteTargetIds })
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to delete');
       }
       const data = await res.json();
-      setSelectedIds(new Set());
+      const deletedSet = new Set(deleteTargetIds);
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedSet.has(id))));
+      // Clear the preview if the image it shows was just deleted.
+      if (currentGeneration && deletedSet.has(itemKey(currentGeneration))) {
+        setCurrentGeneration(null);
+      }
       setShowDeleteConfirm(false);
+      setDeleteTargetIds([]);
       await fetchHistory();
       addToast(`${data.deleted}件の画像を削除しました 🗑️`, 'success');
     } catch (error: any) {
@@ -405,6 +419,7 @@ function App() {
     } else {
       setSeedLocked(false);
     }
+    addToast('設定をフォームに読み込みました 📥', 'success');
   };
 
   // Recall a history image into the Preview tab, treating it as if it was just
@@ -1001,8 +1016,29 @@ function App() {
                   </div>
                 </div>
 
-                {/* Prompt Info — scrolls vertically when taller than the image area */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', maxHeight: '48vh', overflowY: 'auto', minHeight: 0, paddingRight: '4px' }}>
+                {/* Prompt Info column: fixed toolbar on top, scrollable detail below */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left', maxHeight: '48vh', minHeight: 0 }}>
+                  {/* Toolbar — always visible */}
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => loadIntoForm(currentGeneration)}
+                      className="scale-hover"
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                      ♻️ フォームにロード
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => requestDelete([itemKey(currentGeneration)])}
+                      className="scale-hover"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                      <Trash2 size={15} /> 削除
+                    </button>
+                  </div>
+                  {/* Scrollable detail */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', minHeight: 0, paddingRight: '4px' }}>
                   <div>
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>元プロンプト</span>
                     <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{currentGeneration.originalPrompt}</p>
@@ -1062,29 +1098,7 @@ function App() {
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => loadIntoForm(currentGeneration)}
-                    className="scale-hover"
-                    style={{
-                      marginTop: '12px',
-                      background: 'rgba(51, 154, 240, 0.08)',
-                      border: '2px solid rgba(51, 154, 240, 0.2)',
-                      color: 'var(--pop-blue)',
-                      borderRadius: '8px',
-                      padding: '8px 16px',
-                      fontSize: '13px',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      width: '100%',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    ♻️ フォームにロード
-                  </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1267,7 +1281,7 @@ function App() {
               </span>
               <button
                 type="button"
-                onClick={() => setShowDeleteConfirm(true)}
+                onClick={() => requestDelete([...selectedIds])}
                 disabled={selectedIds.size === 0}
                 className={selectedIds.size === 0 ? '' : 'scale-hover'}
                 style={{
@@ -1487,7 +1501,7 @@ function App() {
                 <Trash2 size={26} color="var(--danger)" />
               </div>
               <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
-                {selectedIds.size}件の画像を削除しますか？
+                {deleteTargetIds.length}件の画像を削除しますか？
               </h3>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
                 選択した画像とその生成情報が完全に削除されます。<br />この操作は取り消せません。
