@@ -1388,6 +1388,24 @@ function App() {
                 </span>
               <button
                 type="button"
+                onClick={() => setSelectedIds(new Set())}
+                disabled={selectedIds.size === 0}
+                className={selectedIds.size === 0 ? '' : 'scale-hover'}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  padding: '4px 8px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: selectedIds.size === 0 ? 'not-allowed' : 'pointer',
+                  opacity: selectedIds.size === 0 ? 0.6 : 1
+                }}
+              >
+                全解除
+              </button>
+              <button
+                type="button"
                 onClick={() => requestDelete([...selectedIds])}
                 disabled={selectedIds.size === 0}
                 className={selectedIds.size === 0 ? '' : 'scale-hover'}
