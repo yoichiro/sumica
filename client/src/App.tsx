@@ -418,7 +418,13 @@ function App() {
         user.uid,
         filterDate || null,
         (records) => setHistory(records as unknown as GenerationData[]),
-        (err) => addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${err.message}`, 'error'),
+        (err) => {
+          // FirestoreError exposes `code` (e.g. "permission-denied", "failed-precondition")
+          // even when `message` is empty — surface both so the user can act on it.
+          const e = err as unknown as { code?: string; message?: string };
+          const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
+          addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${detail}`, 'error');
+        },
       );
       return unsub;
     }
