@@ -752,7 +752,7 @@ function App() {
       if (!user) fetchHistory(); // signed-in history updates via onSnapshot
 
       if (failed === 0) {
-        addToast(`${count}枚の画像を生成しました！🎨⚡️`, 'success');
+        addToast(`${succeeded}枚の画像を生成しました！🎨⚡️`, 'success');
       } else {
         addToast(`${count}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
       }
