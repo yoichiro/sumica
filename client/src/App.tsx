@@ -547,6 +547,10 @@ function App() {
     data?: GenerationData;
   };
 
+  // One image's size in a batch run. Both batch modes (count, size cross-product)
+  // build a SizeJob[] and feed it to the single sequential loop in handleBatchGenerate.
+  type SizeJob = { width: number; height: number };
+
   // Step 1: enhance a prompt via LM Studio. Throws on HTTP failure.
   const enhanceOnce = async (promptText: string): Promise<{ positive: string; negative: string }> => {
     const enhanceRes = await fetch(`${API_BASE}/enhance`, {
@@ -701,11 +705,13 @@ function App() {
     }
   };
 
-  // Batch: enhance once, then generate `count` images one at a time (sequential
-  // SD calls — NOT SD's Batch Count). A failed image is counted and skipped;
-  // the loop continues. The last completed image stays in the preview.
-  const handleBatchGenerate = async (count: number) => {
-    if (!prompt.trim() || loading) return;
+  // Batch: enhance once, then generate one image per job, sequentially (one SD
+  // call each — NOT SD's Batch Count). Each job carries its own width/height, so
+  // both count mode (N copies at the form size) and size mode (width×height cross
+  // product) share this loop. A failed image is counted and skipped; the loop
+  // continues. The last completed image stays in the preview.
+  const handleBatchGenerate = async (jobs: SizeJob[]) => {
+    if (!prompt.trim() || loading || jobs.length === 0) return;
 
     setLoading(true);
     setErrorStep(null);
@@ -728,11 +734,12 @@ function App() {
       let succeeded = 0;
       let failed = 0;
 
-      for (let i = 1; i <= count; i++) {
-        setBatchProgress({ current: i, total: count });
+      for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
+        setBatchProgress({ current: i + 1, total: jobs.length });
         const seed = seedLocked ? seedValue : -1;
         try {
-          const saved = await generateAndPersist(positive, negative, prompt, seed, width, height);
+          const saved = await generateAndPersist(positive, negative, prompt, seed, job.width, job.height);
           succeeded++;
           setCurrentGeneration(saved); // live preview update
         } catch (genErr) {
@@ -757,7 +764,7 @@ function App() {
       if (failed === 0) {
         addToast(`${succeeded}枚の画像を生成しました！🎨⚡️`, 'success');
       } else {
-        addToast(`${count}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+        addToast(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
       }
     } catch (error: any) {
       // enhanceOnce failed before the loop → abort like single generation.
@@ -2125,7 +2132,7 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowBatchModal(false); handleBatchGenerate(batchCount); }}
+                onClick={() => { setShowBatchModal(false); handleBatchGenerate(Array(batchCount).fill({ width, height })); }}
                 className="btn-neon"
                 style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
               >
