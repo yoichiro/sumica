@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Sparkles, 
+import {
+  Sparkles,
   Settings,
   Image as ImageIcon,
-  RotateCw, 
-  Cloud, 
+  RotateCw,
+  Cloud,
   Folder,
   X,
   ArrowLeftRight,
@@ -15,8 +15,10 @@ import {
   Maximize,
   Minimize,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LogIn
 } from 'lucide-react';
+import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, type AuthUser } from './firebase';
 import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
 
@@ -42,15 +44,6 @@ interface GenerationData {
   seed?: number;
   sampler?: string;
   loras?: { name: string; weight: number }[];
-}
-
-interface SystemStatus {
-  firebaseEnabled: boolean;
-  lmStudioUrl: string;
-  stableDiffusionUrl: string;
-  lmStudioModel: string;
-  storageBucketName: string | null;
-  localHistoryCount: number;
 }
 
 interface HealthStatus {
@@ -156,6 +149,9 @@ function App() {
     setHeight(temp);
   };
   
+  // Auth state
+  const [user, setUser] = useState<AuthUser | null>(null);
+
   // App system states
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<number>(0); // 0: Idle, 1: LM Studio Enhancing, 2: SD Generating, 3: Saving/Finishing
@@ -163,7 +159,6 @@ function App() {
   const [currentGeneration, setCurrentGeneration] = useState<GenerationData | null>(null);
   
   // Config & Status states
-  const [status, setStatus] = useState<SystemStatus | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthChecking, setHealthChecking] = useState(false);
   const healthInFlight = useRef(false);
@@ -192,6 +187,9 @@ function App() {
   };
   // History narrowed by the date filter (whole-day match); the gallery renders this.
   const filteredHistory = filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
+
+  // Cloud storage is active only when Firebase is configured AND the user is signed in.
+  const cloudActive = isFirebaseConfigured && !!user;
 
   // Single-click toggles selection. (A double-click fires onClick twice — toggling
   // back to the original state — then onDoubleClick recalls the image into preview.)
@@ -334,6 +332,11 @@ function App() {
     return () => clearInterval(healthInterval);
   }, []);
 
+  // Subscribe to Firebase auth state (no-op when Firebase is unconfigured).
+  useEffect(() => {
+    return onAuth(setUser);
+  }, []);
+
   // (Re)load the SD model list whenever Stable Diffusion becomes reachable,
   // so the picker populates even if SD started after the page loaded.
   useEffect(() => {
@@ -389,7 +392,6 @@ function App() {
       const res = await fetch(`${API_BASE}/status`);
       if (res.ok) {
         const data = await res.json();
-        setStatus(data);
         setNewLmStudioUrl(data.lmStudioUrl);
         setNewStableDiffusionUrl(data.stableDiffusionUrl);
         setNewLmStudioModel(data.lmStudioModel || '');
@@ -684,21 +686,34 @@ function App() {
         {/* STATUS BAR & SETTINGS BUTTON */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', background: '#f8f9fa', padding: '8px 16px', borderRadius: '30px', border: '2px solid #e9ecef', boxShadow: '0 2px 8px rgba(0,0,0,0.01)' }}>
-            {/* Firebase Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: status?.firebaseEnabled ? 'var(--pop-green)' : 'var(--text-secondary)', fontWeight: '700' }}>
-              {status?.firebaseEnabled ? (
-                <>
-                  <Cloud size={14} />
-                  <span>クラウド保存 ☁️</span>
-                </>
-              ) : (
-                <>
-                  <Folder size={14} />
-                  <span>ローカル保存 📁</span>
-                </>
-              )}
+            {/* Storage mode + account */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: cloudActive ? 'var(--pop-green)' : 'var(--text-secondary)', fontWeight: '700' }}>
+              {cloudActive ? (<><Cloud size={14} /><span>クラウド保存 ☁️</span></>) : (<><Folder size={14} /><span>ローカル保存 📁</span></>)}
             </div>
-            
+
+            {isFirebaseConfigured && (
+              <>
+                <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
+                {user ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {user.photoURL && (
+                      <img src={user.photoURL} alt="" referrerPolicy="no-referrer" style={{ width: 22, height: 22, borderRadius: '50%' }} />
+                    )}
+                    <span style={{ fontWeight: 700, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.displayName ?? 'ユーザー'}</span>
+                    <button onClick={() => { signOutUser(); }} className="scale-hover" style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>ログアウト</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { signInWithGoogle().catch((e) => addToast(`サインインに失敗しました: ${e.message}`, 'error')); }}
+                    className="scale-hover"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '2px solid #e9ecef', background: '#fff', borderRadius: '20px', padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}
+                  >
+                    <LogIn size={14} /> Googleでログイン
+                  </button>
+                )}
+              </>
+            )}
+
             <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
             
             {/* LM Studio Status (live health check) */}
