@@ -18,7 +18,7 @@ import {
   ChevronRight,
   LogIn
 } from 'lucide-react';
-import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, type AuthUser } from './firebase';
+import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, deleteGenerations, type AuthUser, type GenerationRecord } from './firebase';
 import { flushSync } from 'react-dom';
 import confetti from 'canvas-confetti';
 
@@ -214,17 +214,23 @@ function App() {
     if (deleteTargetIds.length === 0) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/generations/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: deleteTargetIds })
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to delete');
-      }
-      const data = await res.json();
       const deletedSet = new Set(deleteTargetIds);
+      if (user) {
+        // Signed in: delete from Firestore + Storage; onSnapshot refreshes the gallery.
+        const records = history.filter((h) => deleteTargetIds.includes(itemKey(h)));
+        await deleteGenerations(user.uid, records as unknown as GenerationRecord[]);
+      } else {
+        const res = await fetch(`${API_BASE}/generations/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: deleteTargetIds }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to delete');
+        }
+        await fetchHistory();
+      }
       setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedSet.has(id))));
       // Clear the preview if the image it shows was just deleted.
       if (currentGeneration && deletedSet.has(itemKey(currentGeneration))) {
@@ -232,8 +238,7 @@ function App() {
       }
       setShowDeleteConfirm(false);
       setDeleteTargetIds([]);
-      await fetchHistory();
-      addToast(`${data.deleted}件の画像を削除しました 🗑️`, 'success');
+      addToast(`${deleteTargetIds.length}件の画像を削除しました 🗑️`, 'success');
     } catch (error: any) {
       addToast(`削除に失敗しました。\n\n詳細: ${error.message}`, 'error');
     } finally {
