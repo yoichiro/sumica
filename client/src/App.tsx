@@ -330,7 +330,7 @@ function App() {
   // Batch generation state
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [showBatchModal, setShowBatchModal] = useState(false);
-  const [batchCount, setBatchCount] = useState(4);
+  const [batchCount, setBatchCount] = useState(5);
   const [batchMode, setBatchMode] = useState<'count' | 'size' | 'model'>('count');
   const [selectedWidths, setSelectedWidths] = useState<number[]>([...SIZE_OPTIONS]);
   const [selectedHeights, setSelectedHeights] = useState<number[]>([...SIZE_OPTIONS]);
