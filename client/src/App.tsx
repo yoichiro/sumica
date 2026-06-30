@@ -20,7 +20,7 @@ import {
   LogIn,
   Layers
 } from 'lucide-react';
-import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
+import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { flushSync } from 'react-dom';
 
 // View Transitions API (Baseline 2025-10); typed locally so it works regardless of lib.dom version.
@@ -181,6 +181,10 @@ function App() {
   const [sdLoras, setSdLoras] = useState<string[]>([]);
   const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  // setFavoritesOnly has no caller yet (wired up in a later task); reference it
+  // so `noUnusedLocals` doesn't fail the build while it's scaffolded.
+  void setFavoritesOnly;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Date filter is always set; defaults to today (local YYYY-MM-DD).
   const [filterDate, setFilterDate] = useState(() => {
@@ -212,6 +216,41 @@ function App() {
       return next;
     });
   };
+
+  // Flip isFavorite on the given item. Signed-in mode writes to Firestore and
+  // lets onSnapshot reflect the change. Local mode does an optimistic update
+  // and rolls back on HTTP failure. Items without a persisted id (transient
+  // preview state before save completes) are a no-op.
+  const toggleFavorite = async (item: GenerationData) => {
+    const id = item.id;
+    if (!id) return;
+    const next = !item.isFavorite;
+    try {
+      if (user) {
+        await updateFavorite(user.uid, id, next);
+      } else {
+        setHistory((prev) =>
+          prev.map((h) => (h.id === id ? { ...h, isFavorite: next } : h)),
+        );
+        const res = await fetch(`${API_BASE}/generations/favorite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, isFavorite: next }),
+        });
+        if (!res.ok) {
+          setHistory((prev) =>
+            prev.map((h) => (h.id === id ? { ...h, isFavorite: !next } : h)),
+          );
+          throw new Error(`Server returned ${res.status}`);
+        }
+      }
+    } catch (e: any) {
+      addToast(`お気に入りの更新に失敗しました: ${e.message}`, 'error');
+    }
+  };
+  // toggleFavorite has no caller yet (wired up in a later task); reference it
+  // so `noUnusedLocals` doesn't fail the build while it's scaffolded.
+  void toggleFavorite;
 
   // Open the confirm modal for the given ids (gallery selection or a single preview image).
   const requestDelete = (ids: string[]) => {
@@ -443,24 +482,35 @@ function App() {
   // down the old subscription and opens a new one scoped to the new day.
   useEffect(() => {
     if (user) {
-      setHistory([]); // clear local items before the cloud snapshot arrives
-      const unsub = subscribeGenerations(
-        user.uid,
-        filterDate || null,
-        (records) => setHistory(records as unknown as GenerationData[]),
-        (err) => {
-          // FirestoreError exposes `code` (e.g. "permission-denied", "failed-precondition")
-          // even when `message` is empty — surface both so the user can act on it.
-          const e = err as unknown as { code?: string; message?: string };
-          const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
-          addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${detail}`, 'error');
-        },
-      );
+      setHistory([]);
+      const unsub = favoritesOnly
+        ? subscribeFavorites(
+            user.uid,
+            (records) => setHistory(records as unknown as GenerationData[]),
+            (err) => {
+              const e = err as unknown as { code?: string; message?: string };
+              const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
+              addToast(
+                `お気に入りの取得に失敗しました（Firestore のインデックス (isFavorite + timestamp) がデプロイされているか確認してください）: ${detail}`,
+                'error',
+              );
+            },
+          )
+        : subscribeGenerations(
+            user.uid,
+            filterDate || null,
+            (records) => setHistory(records as unknown as GenerationData[]),
+            (err) => {
+              const e = err as unknown as { code?: string; message?: string };
+              const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
+              addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${detail}`, 'error');
+            },
+          );
       return unsub;
     }
     fetchHistory();
     return undefined;
-  }, [user, filterDate]);
+  }, [user, filterDate, favoritesOnly]);
 
   const fetchStatus = async () => {
     try {
