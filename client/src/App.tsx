@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles,
   Settings,
@@ -201,8 +201,16 @@ function App() {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
-  // History narrowed by the date filter (whole-day match); the gallery renders this.
-  const filteredHistory = filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
+  // History narrowed by the active view mode: the favorites-only toggle wins
+  // over the date filter. Signed in + favoritesOnly: subscribeFavorites already
+  // scoped the data, so just pass it through. Signed out + favoritesOnly: the
+  // full history is loaded, filter client-side.
+  const displayedHistory = useMemo(() => {
+    if (favoritesOnly) {
+      return user ? history : history.filter((h) => !!h.isFavorite);
+    }
+    return filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
+  }, [history, favoritesOnly, filterDate, user]);
 
   // Cloud storage is active only when Firebase is configured AND the user is signed in.
   const cloudActive = isFirebaseConfigured && !!user;
@@ -336,13 +344,13 @@ function App() {
   };
 
   // Step the lightbox to the prev/next image in the gallery's displayed order
-  // (filteredHistory). Clamps at the ends; no-op if the current image isn't listed.
+  // (displayedHistory). Clamps at the ends; no-op if the current image isn't listed.
   const navigateLightbox = (delta: number) => {
-    const idx = filteredHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl);
+    const idx = displayedHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl);
     if (idx === -1) return;
     const next = idx + delta;
-    if (next < 0 || next >= filteredHistory.length) return;
-    const target = filteredHistory[next];
+    if (next < 0 || next >= displayedHistory.length) return;
+    const target = displayedHistory[next];
     setMorphSourceKey(itemKey(target));
     setLightboxUrl(target.imageUrl);
   };
@@ -358,7 +366,7 @@ function App() {
   // Index of the lightbox image within the displayed gallery order (-1 if not listed),
   // used to disable the prev/next buttons at the ends.
   const lightboxIndex = lightboxUrl
-    ? filteredHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl)
+    ? displayedHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl)
     : -1;
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
@@ -446,13 +454,13 @@ function App() {
         // Space would otherwise scroll the page underneath the lightbox; suppress it.
         if (lightboxIndex >= 0) {
           e.preventDefault();
-          toggleSelected(itemKey(filteredHistory[lightboxIndex]));
+          toggleSelected(itemKey(displayedHistory[lightboxIndex]));
         }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxUrl, morphSourceKey, filteredHistory, lightboxIndex]);
+  }, [lightboxUrl, morphSourceKey, displayedHistory, lightboxIndex]);
 
   // Track OS fullscreen state to swap the toggle icon.
   useEffect(() => {
@@ -1765,7 +1773,7 @@ function App() {
                     style={{ borderRadius: '8px', padding: '5px 8px', fontSize: '13px', width: 'auto' }}
                   />
                 </label>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{filteredHistory.length}件</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{displayedHistory.length}件</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
@@ -1809,13 +1817,13 @@ function App() {
               </button>
               </div>
             </div>
-            {filteredHistory.length > 0 ? (
+            {displayedHistory.length > 0 ? (
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
                 gap: '18px'
               }}>
-                {filteredHistory.map((item) => (
+                {displayedHistory.map((item) => (
                   <div
                     key={itemKey(item)}
                     className="glass-panel scale-hover"
@@ -1937,11 +1945,11 @@ function App() {
           />
           {/* Selection toggle: only available when the lightbox shows a gallery item
               (not the preview tab's current generation, whose key is '__preview__' and
-              not present in filteredHistory). Mirrors the click-to-select behavior on
+              not present in displayedHistory). Mirrors the click-to-select behavior on
               the gallery tile so a user can flip through images and mark deletion
               candidates without leaving the lightbox. */}
           {lightboxIndex >= 0 && (() => {
-            const k = itemKey(filteredHistory[lightboxIndex]);
+            const k = itemKey(displayedHistory[lightboxIndex]);
             const isSelected = selectedIds.has(k);
             return (
               <button
@@ -1998,9 +2006,9 @@ function App() {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); navigateLightbox(1); }}
-            disabled={lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1}
+            disabled={lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1}
             title="次の画像 (→)"
-            className={(lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? '' : 'scale-hover'}
+            className={(lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? '' : 'scale-hover'}
             style={{
               position: 'absolute',
               top: '20px',
@@ -2014,8 +2022,8 @@ function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: (lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? 'not-allowed' : 'pointer',
-              opacity: (lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? 0.35 : 1
+              cursor: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 'not-allowed' : 'pointer',
+              opacity: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 0.35 : 1
             }}
           >
             <ChevronRight size={22} />
