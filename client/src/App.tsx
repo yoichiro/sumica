@@ -121,7 +121,9 @@ function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => 
 // Bottom-right "favorite" button overlaid on an image; stacks directly above
 // ZoomButton (offset by stackedAbove + 8px gap). OFF state shows an outline
 // Star; ON state fills it yellow.
-export function FavoriteButton({
+// @ts-expect-error TS6133 — wired into UI in Task 7+
+// eslint-disable-next-line no-unused-vars
+function FavoriteButton({
   isFavorite,
   onClick,
   size = 30,
