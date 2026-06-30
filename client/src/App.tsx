@@ -10,6 +10,7 @@ import {
   ArrowLeftRight,
   AlertTriangle,
   CheckCircle2,
+  Circle,
   Trash2,
   Maximize2,
   Maximize,
@@ -367,7 +368,8 @@ function App() {
   }, [health?.stableDiffusion.connected]);
 
   // Lightbox keyboard control: Escape closes (unless in OS fullscreen — let the
-  // browser exit fullscreen first); ArrowLeft/Right step through the gallery order.
+  // browser exit fullscreen first); ArrowLeft/Right step through the gallery order;
+  // Space toggles selection on the currently-shown gallery item.
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e: KeyboardEvent) => {
@@ -379,11 +381,17 @@ function App() {
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         navigateLightbox(1);
+      } else if (e.key === ' ' || e.code === 'Space') {
+        // Space would otherwise scroll the page underneath the lightbox; suppress it.
+        if (lightboxIndex >= 0) {
+          e.preventDefault();
+          toggleSelected(itemKey(filteredHistory[lightboxIndex]));
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxUrl, morphSourceKey, filteredHistory]);
+  }, [lightboxUrl, morphSourceKey, filteredHistory, lightboxIndex]);
 
   // Track OS fullscreen state to swap the toggle icon.
   useEffect(() => {
@@ -1806,6 +1814,41 @@ function App() {
             onClick={(e) => e.stopPropagation()}
             style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
           />
+          {/* Selection toggle: only available when the lightbox shows a gallery item
+              (not the preview tab's current generation, whose key is '__preview__' and
+              not present in filteredHistory). Mirrors the click-to-select behavior on
+              the gallery tile so a user can flip through images and mark deletion
+              candidates without leaving the lightbox. */}
+          {lightboxIndex >= 0 && (() => {
+            const k = itemKey(filteredHistory[lightboxIndex]);
+            const isSelected = selectedIds.has(k);
+            return (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); toggleSelected(k); }}
+                title={isSelected ? '選択を解除 (Space)' : '選択 (Space)'}
+                className="scale-hover"
+                style={{
+                  position: 'absolute',
+                  top: '20px',
+                  right: '228px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  border: isSelected ? '2px solid #fff' : 'none',
+                  background: isSelected ? 'var(--pop-blue)' : 'rgba(255, 255, 255, 0.15)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: isSelected ? '0 0 0 3px rgba(51, 154, 240, 0.35)' : 'none'
+                }}
+              >
+                {isSelected ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+              </button>
+            );
+          })()}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); navigateLightbox(-1); }}
