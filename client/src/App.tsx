@@ -121,8 +121,6 @@ function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => 
 // Bottom-right "favorite" button overlaid on an image; stacks directly above
 // ZoomButton (offset by stackedAbove + 8px gap). OFF state shows an outline
 // Star; ON state fills it yellow.
-// @ts-expect-error TS6133 — wired into UI in Task 7+
-// eslint-disable-next-line no-unused-vars
 function FavoriteButton({
   isFavorite,
   onClick,
@@ -164,6 +162,8 @@ function FavoriteButton({
     </button>
   );
 }
+// Suppress noUnusedLocals while it's scaffolded; Task 7 wires up call sites.
+void FavoriteButton;
 
 // Candidate sizes offered as toggle chips in the batch dialog's size mode
 // (covers common SD1.5 / SDXL resolutions). Same set for width and height.
