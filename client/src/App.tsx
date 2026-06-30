@@ -228,9 +228,6 @@ function App() {
   const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  // setFavoritesOnly has no caller yet (wired up in a later task); reference it
-  // so `noUnusedLocals` doesn't fail the build while it's scaffolded.
-  void setFavoritesOnly;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Date filter is always set; defaults to today (local YYYY-MM-DD).
   const [filterDate, setFilterDate] = useState(() => {
@@ -1817,16 +1814,41 @@ function App() {
               minHeight: '40px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', opacity: favoritesOnly ? 0.4 : 1 }}>
                   📅
                   <input
                     type="date"
                     className="input-field"
                     value={filterDate}
                     onChange={(e) => { if (e.target.value) setFilterDate(e.target.value); }}
+                    disabled={favoritesOnly}
                     style={{ borderRadius: '8px', padding: '5px 8px', fontSize: '13px', width: 'auto' }}
                   />
                 </label>
+                <button
+                  type="button"
+                  onClick={() => setFavoritesOnly((v) => !v)}
+                  title={favoritesOnly ? 'お気に入りのみの表示を解除' : 'お気に入りのみ表示'}
+                  className="scale-hover"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '5px 10px',
+                    borderRadius: '8px',
+                    border: favoritesOnly ? 'none' : '1.5px solid var(--panel-border)',
+                    background: favoritesOnly ? 'var(--pop-blue)' : 'transparent',
+                    color: favoritesOnly ? '#fff' : 'var(--text-secondary)',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {favoritesOnly
+                    ? <Star size={14} fill="#ffd43b" stroke="#ffd43b" />
+                    : <Star size={14} />}
+                  お気に入りのみ
+                </button>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{displayedHistory.length}件</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
