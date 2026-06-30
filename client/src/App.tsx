@@ -332,8 +332,8 @@ function App() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchCount, setBatchCount] = useState(4);
   const [batchMode, setBatchMode] = useState<'count' | 'size' | 'model'>('count');
-  const [selectedWidths, setSelectedWidths] = useState<number[]>([512]);
-  const [selectedHeights, setSelectedHeights] = useState<number[]>([512]);
+  const [selectedWidths, setSelectedWidths] = useState<number[]>([...SIZE_OPTIONS]);
+  const [selectedHeights, setSelectedHeights] = useState<number[]>([...SIZE_OPTIONS]);
   // Models picked for model-cycling batch. Reset to "all selected" each time the
   // modal opens (via openBatchModal) so the default is always the full available
   // list — the user opts OUT of specific models for that one batch.
