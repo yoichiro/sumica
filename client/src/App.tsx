@@ -499,6 +499,11 @@ function App() {
           e.preventDefault();
           toggleSelected(itemKey(displayedHistory[lightboxIndex]));
         }
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (lightboxIndex >= 0) {
+          e.preventDefault();
+          toggleFavorite(displayedHistory[lightboxIndex]);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -2030,6 +2035,37 @@ function App() {
                 }}
               >
                 {isSelected ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+              </button>
+            );
+          })()}
+          {lightboxIndex >= 0 && (() => {
+            const fav = !!displayedHistory[lightboxIndex].isFavorite;
+            return (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); toggleFavorite(displayedHistory[lightboxIndex]); }}
+                title={fav ? 'お気に入りを解除 (F)' : 'お気に入りに追加 (F)'}
+                className="scale-hover"
+                style={{
+                  position: 'absolute',
+                  top: '20px',
+                  right: '280px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  border: fav ? '2px solid #fff' : 'none',
+                  background: fav ? '#ffd43b' : 'rgba(255, 255, 255, 0.15)',
+                  color: fav ? '#1a1a1a' : '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: fav ? '0 0 0 3px rgba(255, 212, 59, 0.35)' : 'none'
+                }}
+              >
+                {fav
+                  ? <Star size={22} fill="#1a1a1a" stroke="#1a1a1a" />
+                  : <Star size={22} />}
               </button>
             );
           })()}
