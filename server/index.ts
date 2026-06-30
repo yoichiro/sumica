@@ -54,6 +54,7 @@ interface GenerationMetadata {
   sampler?: string;
   scheduler?: string;
   loras?: { name: string; weight: number }[];
+  isFavorite?: boolean;
 }
 
 // Local history metadata helper

@@ -83,6 +83,7 @@ export type GenerationRecord = GenerationParams & {
   timestamp: number;
   createdAt: string;
   backendMode: 'firebase';
+  isFavorite?: boolean;
 };
 
 export function onAuth(cb: (user: AuthUser | null) => void): () => void {

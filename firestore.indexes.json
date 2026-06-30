@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "generations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isFavorite", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

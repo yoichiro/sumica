@@ -47,6 +47,7 @@ interface GenerationData {
   sampler?: string;
   scheduler?: string;
   loras?: { name: string; weight: number }[];
+  isFavorite?: boolean;
 }
 
 interface HealthStatus {
