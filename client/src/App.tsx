@@ -1493,6 +1493,12 @@ function App() {
                     style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', viewTransitionName: (morphSourceKey === '__preview__' && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                   />
                   <ZoomButton size={34} onClick={(e) => { e.stopPropagation(); openLightbox(currentGeneration.imageUrl, '__preview__'); }} />
+                  <FavoriteButton
+                    size={34}
+                    stackedAbove={34}
+                    isFavorite={!!currentGeneration.isFavorite}
+                    onClick={(e) => { e.stopPropagation(); toggleFavorite(currentGeneration); }}
+                  />
                   <div style={{ 
                     position: 'absolute', 
                     top: '12px', 
