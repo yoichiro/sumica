@@ -268,34 +268,36 @@ function App() {
     });
   };
 
-  // Flip isFavorite on the given item. Signed-in mode writes to Firestore and
-  // lets onSnapshot reflect the change. Local mode does an optimistic update
-  // and rolls back on HTTP failure. Items without a persisted id (transient
+  // Flip isFavorite on the given item. Items without a persisted id (transient
   // preview state before save completes) are a no-op.
   const toggleFavorite = async (item: GenerationData) => {
     const id = item.id;
     if (!id) return;
     const next = !item.isFavorite;
+    // Optimistic UI update for snappy feedback. In signed-in mode, the next
+    // Firestore onSnapshot will reconcile to the authoritative value moments
+    // later; in signed-out mode, this IS the authoritative client state.
+    setHistory((prev) =>
+      prev.map((h) => (h.id === id ? { ...h, isFavorite: next } : h)),
+    );
     try {
       if (user) {
         await updateFavorite(user.uid, id, next);
       } else {
-        setHistory((prev) =>
-          prev.map((h) => (h.id === id ? { ...h, isFavorite: next } : h)),
-        );
         const res = await fetch(`${API_BASE}/generations/favorite`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, isFavorite: next }),
         });
         if (!res.ok) {
-          setHistory((prev) =>
-            prev.map((h) => (h.id === id ? { ...h, isFavorite: !next } : h)),
-          );
           throw new Error(`Server returned ${res.status}`);
         }
       }
     } catch (e: any) {
+      // Rollback the optimistic update before surfacing the error toast.
+      setHistory((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, isFavorite: !next } : h)),
+      );
       addToast(`お気に入りの更新に失敗しました: ${e.message}`, 'error');
     }
   };
@@ -408,6 +410,35 @@ function App() {
   const lightboxIndex = lightboxUrl
     ? displayedHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl)
     : -1;
+
+  // Track the last valid lightboxIndex so we can recover the "next" item if
+  // the currently-shown image drops out of displayedHistory (e.g. unfavorited
+  // in favoritesOnly mode).
+  const prevLightboxIndexRef = useRef(-1);
+  useEffect(() => {
+    if (lightboxIndex >= 0) prevLightboxIndexRef.current = lightboxIndex;
+  }, [lightboxIndex]);
+
+  // When the lightbox image is removed from displayedHistory (e.g. due to
+  // unfavoriting in favoritesOnly mode), auto-advance to the item at the
+  // previous index (clamped to the new list length), or close the lightbox
+  // if the list is now empty.
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    if (lightboxIndex >= 0) return; // current image still listed; nothing to do
+    if (displayedHistory.length === 0) {
+      closeLightbox();
+      return;
+    }
+    const targetIdx = Math.min(
+      prevLightboxIndexRef.current,
+      displayedHistory.length - 1,
+    );
+    if (targetIdx < 0) return;
+    const target = displayedHistory[targetIdx];
+    setMorphSourceKey(itemKey(target));
+    setLightboxUrl(target.imageUrl);
+  }, [displayedHistory, lightboxIndex, lightboxUrl]);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
   const [newLmStudioModel, setNewLmStudioModel] = useState('');
@@ -529,10 +560,12 @@ function App() {
   };
 
   // History source follows auth: live Firestore subscription when signed in,
-  // local REST fetch when signed out. The Firestore subscription is also keyed by
-  // `filterDate` — the query is narrowed to that single local day server-side, so
-  // every image from that day comes back (no count cap). Changing the date tears
-  // down the old subscription and opens a new one scoped to the new day.
+  // local REST fetch when signed out. The Firestore subscription branches on
+  // `favoritesOnly`: when ON, `subscribeFavorites` runs a composite query
+  // (where isFavorite==true + orderBy timestamp) and ignores `filterDate`;
+  // when OFF, `subscribeGenerations` is scoped to the single local day from
+  // `filterDate` so every image from that day comes back (no count cap).
+  // Flipping either dep tears down the old subscription and opens a new one.
   useEffect(() => {
     if (user) {
       setHistory([]);
