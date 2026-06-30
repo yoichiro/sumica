@@ -334,6 +334,22 @@ function App() {
   const [batchMode, setBatchMode] = useState<'count' | 'size' | 'model'>('count');
   const [selectedWidths, setSelectedWidths] = useState<number[]>([512]);
   const [selectedHeights, setSelectedHeights] = useState<number[]>([512]);
+  // Models picked for model-cycling batch. Reset to "all selected" each time the
+  // modal opens (via openBatchModal) so the default is always the full available
+  // list — the user opts OUT of specific models for that one batch.
+  const [selectedBatchModels, setSelectedBatchModels] = useState<Set<string>>(new Set());
+
+  const openBatchModal = () => {
+    setSelectedBatchModels(new Set(sdModels));
+    setShowBatchModal(true);
+  };
+  const toggleBatchModel = (m: string) => {
+    setSelectedBatchModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(m)) next.delete(m); else next.add(m);
+      return next;
+    });
+  };
 
   // Talk to the API on the SAME hostname the page was loaded from, not a hardcoded
   // 127.0.0.1. Under WSL2, Windows->WSL forwarding can work for `localhost` but NOT for
@@ -1244,7 +1260,7 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowBatchModal(true)}
+                onClick={openBatchModal}
                 disabled={loading || !prompt.trim()}
                 className="scale-hover"
                 title="複数枚をまとめて生成"
@@ -2255,16 +2271,58 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                       <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
-                        {sdModels.length}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>モデル</span>
+                        {selectedBatchModels.size}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>/ {sdModels.length}モデル</span>
                       </span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '160px', overflowY: 'auto', background: '#f8f9fa', borderRadius: '10px', padding: '10px' }}>
-                      {sdModels.map((m, i) => (
-                        <div key={m} style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '6px' }}>
-                          <span style={{ color: 'var(--text-muted)', fontWeight: 700, minWidth: '20px' }}>{i + 1}.</span>
-                          <span style={{ wordBreak: 'break-all' }}>{m}</span>
-                        </div>
-                      ))}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBatchModels(new Set(sdModels))}
+                        className="scale-hover"
+                        style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--pop-blue)', background: '#fff', color: 'var(--pop-blue)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        全選択
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBatchModels(new Set())}
+                        className="scale-hover"
+                        style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid #e9ecef', background: '#fff', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        全解除
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto', background: '#f8f9fa', borderRadius: '10px', padding: '8px' }}>
+                      {sdModels.map((m, i) => {
+                        const isSelected = selectedBatchModels.has(m);
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => toggleBatchModel(m)}
+                            className="scale-hover"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '6px 8px',
+                              borderRadius: '8px',
+                              border: 'none',
+                              background: isSelected ? 'rgba(51, 154, 240, 0.12)' : 'transparent',
+                              color: isSelected ? 'var(--pop-blue)' : 'var(--text-secondary)',
+                              fontSize: '12px',
+                              fontWeight: isSelected ? 700 : 500,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              width: '100%',
+                            }}
+                          >
+                            {isSelected ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                            <span style={{ color: 'var(--text-muted)', fontWeight: 700, minWidth: '20px', flexShrink: 0 }}>{i + 1}.</span>
+                            <span style={{ wordBreak: 'break-all', flex: 1 }}>{m}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
@@ -2288,15 +2346,17 @@ function App() {
                 type="button"
                 disabled={
                   (batchMode === 'size' && (selectedWidths.length === 0 || selectedHeights.length === 0 || selectedWidths.length * selectedHeights.length > MAX_SIZE_COMBINATIONS)) ||
-                  (batchMode === 'model' && sdModels.length === 0)
+                  (batchMode === 'model' && (sdModels.length === 0 || selectedBatchModels.size === 0))
                 }
                 onClick={() => {
                   setShowBatchModal(false);
+                  // Preserve sdModels' order when filtering so the cycling order matches
+                  // the list the user sees (rather than Set iteration order).
                   const jobs: BatchJob[] = batchMode === 'count'
                     ? Array(batchCount).fill({ width, height })
                     : batchMode === 'size'
                       ? selectedWidths.flatMap(w => selectedHeights.map(h => ({ width: w, height: h })))
-                      : sdModels.map(m => ({ width, height, model: m }));
+                      : sdModels.filter(m => selectedBatchModels.has(m)).map(m => ({ width, height, model: m }));
                   handleBatchGenerate(jobs);
                 }}
                 className="btn-neon"
@@ -2306,7 +2366,7 @@ function App() {
                   ? `${batchCount}枚生成する`
                   : batchMode === 'size'
                     ? `${selectedWidths.length * selectedHeights.length}通り生成する`
-                    : `${sdModels.length}モデルで生成する`}
+                    : `${selectedBatchModels.size}モデルで生成する`}
               </button>
             </div>
           </div>
