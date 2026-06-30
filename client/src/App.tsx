@@ -1602,8 +1602,15 @@ function App() {
           {/* HISTORY GALLERY */}
           {rightTab === 'gallery' && (
           <div style={{ flexShrink: 0 }}>
-            {/* Toolbar: date filter + result count (left) / selection + delete (right) */}
+            {/* Toolbar: date filter + result count (left) / selection + delete (right).
+                Sticks to the top of the surrounding scroll container so it stays
+                visible while the image grid below scrolls — `top: 0` pins it at
+                the TAB CONTENT scroll edge, and the opaque white background keeps
+                the image grid from showing through. */}
             <div style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
               marginBottom: '16px',
               padding: '8px 16px',
               background: 'var(--panel-bg)',
