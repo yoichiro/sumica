@@ -521,6 +521,24 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
   }
 });
 
+// 9. Toggle favorite flag (local mode only).
+app.post('/api/generations/favorite', (req: Request, res: Response) => {
+  const { id, isFavorite } = req.body;
+  if (typeof id !== 'string' || typeof isFavorite !== 'boolean') {
+    return res.status(400).json({
+      error: 'id (string) and isFavorite (boolean) are required',
+    });
+  }
+  const history = getLocalHistory();
+  const target = history.find((it) => it.id === id);
+  if (!target) {
+    return res.status(404).json({ error: 'Generation not found' });
+  }
+  target.isFavorite = isFavorite;
+  saveLocalHistory(history);
+  res.json({ success: true });
+});
+
 // Start Express Server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT} 🚀`);
