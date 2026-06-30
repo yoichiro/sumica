@@ -18,7 +18,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogIn,
-  Layers
+  Layers,
+  Star,
 } from 'lucide-react';
 import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { flushSync } from 'react-dom';
@@ -113,6 +114,51 @@ function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => 
       }}
     >
       <Maximize2 size={Math.round(size * 0.5)} />
+    </button>
+  );
+}
+
+// Bottom-right "favorite" button overlaid on an image; stacks directly above
+// ZoomButton (offset by stackedAbove + 8px gap). OFF state shows an outline
+// Star; ON state fills it yellow.
+export function FavoriteButton({
+  isFavorite,
+  onClick,
+  size = 30,
+  stackedAbove = 30,
+}: {
+  isFavorite: boolean;
+  onClick: (e: React.MouseEvent) => void;
+  size?: number;
+  stackedAbove?: number;
+}) {
+  const iconSize = Math.round(size * 0.5);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={isFavorite ? 'お気に入りを解除' : 'お気に入りに追加'}
+      className="scale-hover"
+      style={{
+        position: 'absolute',
+        bottom: `${8 + stackedAbove + 8}px`,
+        right: '8px',
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '50%',
+        border: 'none',
+        background: 'rgba(0, 0, 0, 0.55)',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
+      }}
+    >
+      {isFavorite
+        ? <Star size={iconSize} fill="#ffd43b" stroke="#ffd43b" />
+        : <Star size={iconSize} />}
     </button>
   );
 }
