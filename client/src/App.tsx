@@ -162,8 +162,6 @@ function FavoriteButton({
     </button>
   );
 }
-// Suppress noUnusedLocals while it's scaffolded; Task 7 wires up call sites.
-void FavoriteButton;
 
 // Candidate sizes offered as toggle chips in the batch dialog's size mode
 // (covers common SD1.5 / SDXL resolutions). Same set for width and height.
@@ -304,9 +302,6 @@ function App() {
       addToast(`お気に入りの更新に失敗しました: ${e.message}`, 'error');
     }
   };
-  // toggleFavorite has no caller yet (wired up in a later task); reference it
-  // so `noUnusedLocals` doesn't fail the build while it's scaffolded.
-  void toggleFavorite;
 
   // Open the confirm modal for the given ids (gallery selection or a single preview image).
   const requestDelete = (ids: string[]) => {
@@ -1894,6 +1889,12 @@ function App() {
                         loading="lazy"
                       />
                       <ZoomButton size={26} onClick={(e) => { e.stopPropagation(); openLightbox(item.imageUrl, itemKey(item)); }} />
+                      <FavoriteButton
+                        size={26}
+                        stackedAbove={26}
+                        isFavorite={!!item.isFavorite}
+                        onClick={(e) => { e.stopPropagation(); toggleFavorite(item); }}
+                      />
                     </div>
 
                     {/* Selected check (top-left) */}
