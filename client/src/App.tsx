@@ -45,6 +45,7 @@ interface GenerationData {
   storagePath?: string;
   seed?: number;
   sampler?: string;
+  scheduler?: string;
   loras?: { name: string; weight: number }[];
 }
 
@@ -174,6 +175,8 @@ function App() {
   const [selectedModel, setSelectedModel] = useState('');
   const [sdSamplers, setSdSamplers] = useState<string[]>([]);
   const [selectedSampler, setSelectedSampler] = useState('');
+  const [sdSchedulers, setSdSchedulers] = useState<string[]>([]);
+  const [selectedScheduler, setSelectedScheduler] = useState('');
   const [sdLoras, setSdLoras] = useState<string[]>([]);
   const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
@@ -362,6 +365,7 @@ function App() {
     fetchHealth();
     fetchSdModels();
     fetchSdSamplers();
+    fetchSdSchedulers();
     fetchSdLoras();
     // Re-check upstream connectivity every 20s so the badges stay fresh.
     const healthInterval = setInterval(fetchHealth, 20000);
@@ -379,6 +383,7 @@ function App() {
     if (health?.stableDiffusion.connected) {
       fetchSdModels();
       fetchSdSamplers();
+      fetchSdSchedulers();
       fetchSdLoras();
     }
   }, [health?.stableDiffusion.connected]);
@@ -519,6 +524,24 @@ function App() {
     }
   };
 
+  // Fetch SD's noise-schedule list. Older SD builds return [] (404 swallowed
+  // server-side) — the UI hides the picker in that case.
+  const fetchSdSchedulers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sd-schedulers`);
+      if (res.ok) {
+        const data = await res.json();
+        const schedulers: string[] = Array.isArray(data.schedulers) ? data.schedulers : [];
+        setSdSchedulers(schedulers);
+        // Default to the SD-standard "Automatic" label so the SD picks its own
+        // scheduler unless the user explicitly overrides.
+        setSelectedScheduler((prev) => prev || (schedulers.includes('Automatic') ? 'Automatic' : ''));
+      }
+    } catch (error) {
+      console.error('Failed to fetch SD schedulers:', error);
+    }
+  };
+
   const fetchSdLoras = async () => {
     try {
       const res = await fetch(`${API_BASE}/sd-loras`);
@@ -551,6 +574,7 @@ function App() {
     setCfgScale(item.cfgScale);
     setSelectedModel(item.model || '');
     setSelectedSampler(item.sampler || '');
+    setSelectedScheduler(item.scheduler || '');
     setSelectedLoras(item.loras || []);
     if (item.seed !== undefined) {
       setSeedLocked(true);
@@ -630,6 +654,7 @@ function App() {
         skipEnhance: true, // Skip enhancement since we already did it!
         seed,
         sampler: selectedSampler || undefined,
+        scheduler: selectedScheduler || undefined,
         loras: selectedLoras,
         clientPersist: !!user
       })
@@ -828,6 +853,7 @@ function App() {
         fetchHealth(); // Re-check connectivity against the newly saved URLs
         fetchSdModels(); // Refresh model list against the newly saved SD URL
         fetchSdSamplers();
+        fetchSdSchedulers();
         fetchSdLoras();
         addToast('設定を保存しました！⚙️', 'success');
         setTimeout(() => {
@@ -1049,25 +1075,47 @@ function App() {
                   )}
                 </div>
 
-                {/* Sampler */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サンプラー (Sampler)</label>
-                  {sdSamplers.length > 0 ? (
-                    <select
-                      className="input-field"
-                      value={selectedSampler}
-                      onChange={(e) => setSelectedSampler(e.target.value)}
-                      disabled={loading}
-                      style={{ borderRadius: '8px' }}
-                    >
-                      {sdSamplers.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                      <option>サンプラー一覧を取得できません（SD未接続）</option>
-                    </select>
+                {/* Sampler + Schedule Type — paired side-by-side when SD exposes a
+                    scheduler list (AUTOMATIC1111 ≥1.9 / recent Forge). On older SD
+                    builds the scheduler picker is hidden and the sampler stretches
+                    to fill the row via `gridColumn: '1 / -1'`. */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left', gridColumn: sdSchedulers.length > 0 ? 'auto' : '1 / -1' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サンプラー (Sampler)</label>
+                    {sdSamplers.length > 0 ? (
+                      <select
+                        className="input-field"
+                        value={selectedSampler}
+                        onChange={(e) => setSelectedSampler(e.target.value)}
+                        disabled={loading}
+                        style={{ borderRadius: '8px' }}
+                      >
+                        {sdSamplers.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
+                        <option>サンプラー一覧を取得できません（SD未接続）</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {sdSchedulers.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>スケジュール (Schedule Type)</label>
+                      <select
+                        className="input-field"
+                        value={selectedScheduler}
+                        onChange={(e) => setSelectedScheduler(e.target.value)}
+                        disabled={loading}
+                        style={{ borderRadius: '8px' }}
+                      >
+                        {sdSchedulers.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </div>
 
@@ -1452,6 +1500,12 @@ function App() {
                       <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
                         <span>サンプラー: </span>
                         <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.sampler}</strong>
+                      </div>
+                    )}
+                    {currentGeneration.scheduler && (
+                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
+                        <span>スケジュール: </span>
+                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.scheduler}</strong>
                       </div>
                     )}
                     {currentGeneration.loras && currentGeneration.loras.length > 0 && (

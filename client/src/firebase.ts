@@ -70,6 +70,7 @@ export type GenerationParams = {
   model: string | null;
   seed?: number;
   sampler?: string;
+  scheduler?: string;
   loras?: { name: string; weight: number }[];
 };
 

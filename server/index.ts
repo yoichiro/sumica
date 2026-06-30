@@ -52,6 +52,7 @@ interface GenerationMetadata {
   backendMode: 'firebase' | 'local';
   seed?: number;
   sampler?: string;
+  scheduler?: string;
   loras?: { name: string; weight: number }[];
 }
 
@@ -150,7 +151,8 @@ async function generateImage(
   cfgScale = 7,
   model = '',
   seed = -1,
-  sampler = 'Euler a'
+  sampler = 'Euler a',
+  scheduler = ''
 ): Promise<{ image: string; seed: number }> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
@@ -164,6 +166,11 @@ async function generateImage(
       sampler_name: sampler,
       seed,
     };
+    // The `scheduler` field is only present on AUTOMATIC1111 ≥1.9 / recent Forge —
+    // omit it entirely on older SD builds so the API doesn't reject the payload.
+    if (scheduler) {
+      payload.scheduler = scheduler;
+    }
     // Switch checkpoint for this request; SD keeps it loaded for subsequent generations.
     if (model) {
       payload.override_settings = { sd_model_checkpoint: model };
@@ -238,7 +245,7 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, loras, clientPersist } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, scheduler, loras, clientPersist } = req.body;
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
   const loraList: { name: string; weight: number }[] = (Array.isArray(loras) ? loras : [])
@@ -282,7 +289,8 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       cfgScale ? parseFloat(cfgScale) : 7,
       model || '',
       seedVal,
-      sampler || 'Euler a'
+      sampler || 'Euler a',
+      scheduler || ''
     );
 
     // Step 3: Persist. When the client owns persistence (signed in), return the
@@ -302,6 +310,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
           model: model || null,
           seed: actualSeed,
           sampler: sampler || 'Euler a',
+          scheduler: scheduler || '',
           loras: loraList,
         },
       });
@@ -327,6 +336,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         model: model || null,
         seed: actualSeed,
         sampler: sampler || 'Euler a',
+        scheduler: scheduler || '',
         loras: loraList,
         imageUrl,
         localPath: localFilePath,
@@ -442,6 +452,24 @@ app.get('/api/sd-samplers', async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Failed to fetch SD samplers:', (error as Error).message);
     res.json({ samplers: [] });
+  }
+});
+
+// 7a. List Stable Diffusion schedulers (for the schedule-type picker).
+// Available on AUTOMATIC1111 ≥1.9 / recent Forge; older builds return 404 and we
+// gracefully degrade to an empty list so the picker hides itself client-side.
+app.get('/api/sd-schedulers', async (_req: Request, res: Response) => {
+  try {
+    const listRes = await axios.get(`${stableDiffusionUrl}/sdapi/v1/schedulers`, { timeout: 5000 });
+    const schedulers = Array.isArray(listRes.data)
+      ? listRes.data
+          .map((s: { name?: string; label?: string }) => s.label || s.name)
+          .filter((n): n is string => Boolean(n))
+      : [];
+    res.json({ schedulers });
+  } catch (error) {
+    console.error('Failed to fetch SD schedulers:', (error as Error).message);
+    res.json({ schedulers: [] });
   }
 });
 
