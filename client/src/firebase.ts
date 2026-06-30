@@ -17,6 +17,7 @@ import {
   query,
   orderBy,
   where,
+  updateDoc,
   type Firestore,
 } from 'firebase/firestore';
 import {
@@ -190,5 +191,52 @@ export async function deleteGenerations(uid: string, records: GenerationRecord[]
       }
       await deleteDoc(doc(dbInstance!, 'users', uid, 'generations', r.id));
     }),
+  );
+}
+
+export async function updateFavorite(
+  uid: string,
+  id: string,
+  isFavorite: boolean,
+): Promise<void> {
+  if (!dbInstance) throw new Error('Firebase is not configured');
+  await updateDoc(
+    doc(dbInstance, 'users', uid, 'generations', id),
+    { isFavorite },
+  );
+}
+
+// Subscribe to the user's favorited generations across all dates.
+// Backed by the composite index isFavorite ASC + timestamp DESC declared in
+// firestore.indexes.json. If the index is not deployed, onError fires with
+// code 'failed-precondition'.
+export function subscribeFavorites(
+  uid: string,
+  cb: (records: GenerationRecord[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  if (!dbInstance) {
+    cb([]);
+    return () => {};
+  }
+  const q = query(
+    collection(dbInstance, 'users', uid, 'generations'),
+    where('isFavorite', '==', true),
+    orderBy('timestamp', 'desc'),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const records: GenerationRecord[] = [];
+      snap.forEach((d) =>
+        records.push({ id: d.id, ...(d.data() as Omit<GenerationRecord, 'id'>) }),
+      );
+      cb(records);
+    },
+    (err) => {
+      console.error('Firestore favorites subscription failed:', err);
+      cb([]);
+      onError?.(err);
+    },
   );
 }
