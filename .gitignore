@@ -17,6 +17,9 @@ firebase-key.json
 server/outputs/
 !server/outputs/.gitkeep
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # IDEs and Editors
 .vscode/
 .idea/
