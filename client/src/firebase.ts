@@ -73,6 +73,11 @@ export type GenerationParams = {
   seed?: number;
   sampler?: string;
   scheduler?: string;
+  enableHr?: boolean;
+  hrUpscaler?: string;
+  hrScale?: number;
+  hrSecondPassSteps?: number;
+  denoisingStrength?: number;
   loras?: { name: string; weight: number }[];
 };
 
