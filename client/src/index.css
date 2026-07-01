@@ -1,20 +1,24 @@
 :root {
   --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  
-  /* Color Palette - Unisex Retro Toy & Tech Pop */
-  --bg-main: #f8f9fa; /* Clean off-white */
+
+  /* Color Palette - Unisex Retro Toy & Tech Pop (light mode defaults) */
+  --bg-main: #f8f9fa;
   --bg-gradient: linear-gradient(135deg, #f1f3f5 0%, #e8f4fd 50%, #eef3f7 100%);
   --panel-bg: #ffffff;
+  --panel-bg-sunk: #f4f6f8;         /* subtle recess: input backgrounds, sub-panels */
   --panel-border: #e9ecef;
-  --panel-border-active: #339af0; /* Pop Blue */
-  
-  --text-primary: #212529; /* Deep charcoal */
-  --text-secondary: #495057; /* Medium charcoal */
+  --panel-border-hover: #dee2e6;
+  --panel-border-active: #339af0;
+  --input-bg: #ffffff;
+
+  --text-primary: #212529;
+  --text-secondary: #495057;
   --text-muted: #868e96;
-  
+
   /* Pop Bright Accents (Google/Slack style) */
   --pop-blue: #339af0;
   --pop-blue-dark: #1c7ed6;
+  --pop-blue-hover: #4dabf7;
   --pop-yellow: #fcc419;
   --pop-orange: #ff922b;
   --pop-green: #51cf66;
@@ -22,8 +26,27 @@
   --success: #51cf66;
   --warning: #fcc419;
   --danger: #ff6b6b;
-  
+  --star-fill: #ffd43b;
+
+  /* Semantic surfaces for the enhanced/negative prompt cards, danger status
+     panel, modal scrim, toast pill, scrollbar rail — all named by role so
+     dark mode can override in one place. */
+  --info-bg: #f8f9fa;
+  --info-border: #e9ecef;
+  --negative-bg: #fff5f5;
+  --negative-border: #ffe3e3;
+  --danger-panel-bg: #fffafb;
+  --warning-bg: #fff4e6;
+  --overlay-scrim: rgba(0, 0, 0, 0.4);
+  --toast-bg: rgba(255, 255, 255, 0.95);
+  --toggle-off-bg: #dee2e6;
+  --track-bg: rgba(0, 0, 0, 0.03);
+  --track-hover-bg: rgba(0, 0, 0, 0.05);
+  --scrollbar-thumb: rgba(51, 154, 240, 0.2);
+  --scrollbar-thumb-hover: rgba(51, 154, 240, 0.4);
+
   --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 12px 28px rgba(0, 0, 0, 0.06);
   --shadow-button: 0 4px 0px var(--pop-blue-dark);
   --radius-sm: 12px;
   --radius-md: 18px;
@@ -35,6 +58,51 @@
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark mode (OS auto-follow). Charcoal-tone palette selected via the design
+   comparison at /tmp/palettes.html — bg 1a1d20 base, 23272b panels, muted
+   accents brightened so they don't dim against the dark ground. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg-main: #1a1d20;
+    --bg-gradient: radial-gradient(120% 100% at 0% 0%, #22262a 0%, #1a1d20 55%, #17191c 100%);
+    --panel-bg: #23272b;
+    --panel-bg-sunk: #1e2226;
+    --panel-border: #333a42;
+    --panel-border-hover: #454b52;
+    --panel-border-active: #4dabf7;
+    --input-bg: #1c1f22;
+
+    --text-primary: #f1f3f5;
+    --text-secondary: #c1c7cd;
+    --text-muted: #7a8288;
+
+    --pop-blue: #4dabf7;
+    --pop-blue-dark: #339af0;
+    --pop-blue-hover: #74c0fc;
+    --danger: #ff8787;
+
+    --info-bg: #2a2f34;
+    --info-border: #363c42;
+    --negative-bg: #382227;
+    --negative-border: #4a2a2f;
+    --danger-panel-bg: #2a1e22;
+    --warning-bg: #3a2b14;
+
+    --overlay-scrim: rgba(0, 0, 0, 0.6);
+    --toast-bg: rgba(35, 39, 43, 0.95);
+    --toggle-off-bg: #3a4147;
+    --track-bg: rgba(255, 255, 255, 0.04);
+    --track-hover-bg: rgba(255, 255, 255, 0.08);
+    --scrollbar-thumb: rgba(77, 171, 247, 0.28);
+    --scrollbar-thumb-hover: rgba(77, 171, 247, 0.5);
+
+    --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-hover: 0 12px 28px rgba(0, 0, 0, 0.5);
+  }
 }
 
 * {
@@ -56,14 +124,14 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--track-bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 154, 240, 0.2);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(51, 154, 240, 0.4);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Glassmorphism panel helper - Clean 3D pop border */
@@ -76,9 +144,9 @@ body {
 }
 
 .glass-panel:hover {
-  border-color: #dee2e6;
+  border-color: var(--panel-border-hover);
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-hover);
 }
 
 .glass-panel.active {
@@ -110,7 +178,7 @@ body {
 }
 
 .btn-neon:hover {
-  background: #4dabf7;
+  background: var(--pop-blue-hover);
 }
 
 .btn-neon:active {
@@ -128,8 +196,8 @@ body {
 /* Custom form elements - Rounded and clean */
 .input-field {
   width: 100%;
-  background: #ffffff;
-  border: 2px solid #e9ecef;
+  background: var(--input-bg);
+  border: 2px solid var(--panel-border);
   color: var(--text-primary);
   padding: 12px 16px;
   border-radius: var(--radius-sm);
@@ -142,7 +210,7 @@ body {
 .input-field:focus {
   border-color: var(--pop-blue);
   box-shadow: 0 0 0 3px rgba(51, 154, 240, 0.15);
-  background: #fff;
+  background: var(--input-bg);
 }
 
 /* Custom range slider - Pop style */
@@ -150,7 +218,7 @@ input[type="range"] {
   -webkit-appearance: none;
   width: 100%;
   height: 8px;
-  background: #e9ecef;
+  background: var(--panel-border);
   border-radius: 4px;
   outline: none;
 }
@@ -192,10 +260,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #dee2e6;
+  background-color: var(--toggle-off-bg);
   transition: .3s;
   border-radius: 34px;
-  border: 2px solid #dee2e6;
+  border: 2px solid var(--toggle-off-bg);
 }
 
 .slider:before {
@@ -338,7 +406,7 @@ input:checked + .slider:before {
   width: 340px;
   padding: 16px;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--toast-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
@@ -393,7 +461,7 @@ input:checked + .slider:before {
 }
 
 .toast-close-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--track-hover-bg);
   color: var(--text-primary);
 }
 

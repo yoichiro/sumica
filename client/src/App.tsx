@@ -1064,7 +1064,7 @@ function App() {
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        background: '#ffffff'
+        background: 'var(--panel-bg)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
@@ -1091,7 +1091,7 @@ function App() {
 
         {/* STATUS BAR & SETTINGS BUTTON */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', background: '#f8f9fa', padding: '8px 16px', borderRadius: '30px', border: '2px solid #e9ecef', boxShadow: '0 2px 8px rgba(0,0,0,0.01)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', background: 'var(--panel-bg-sunk)', padding: '8px 16px', borderRadius: '30px', border: '2px solid var(--panel-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.01)' }}>
             {/* Storage mode + account */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: cloudActive ? 'var(--pop-green)' : 'var(--text-secondary)', fontWeight: '700' }}>
               {cloudActive ? (<><Cloud size={14} /><span>クラウド保存 ☁️</span></>) : (<><Folder size={14} /><span>ローカル保存 📁</span></>)}
@@ -1099,7 +1099,7 @@ function App() {
 
             {isFirebaseConfigured && (
               <>
-                <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
+                <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
                 {user ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {user.photoURL && (
@@ -1112,7 +1112,7 @@ function App() {
                   <button
                     onClick={() => { signInWithGoogle().catch((e) => addToast(`サインインに失敗しました: ${e.message}`, 'error')); }}
                     className="scale-hover"
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '2px solid #e9ecef', background: '#fff', borderRadius: '20px', padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', borderRadius: '20px', padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}
                   >
                     <LogIn size={14} /> Googleでログイン
                   </button>
@@ -1120,7 +1120,7 @@ function App() {
               </>
             )}
 
-            <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
+            <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
             
             {/* LM Studio Status (live health check) */}
             <ServiceStatusBadge
@@ -1130,7 +1130,7 @@ function App() {
               detail={health?.lmStudio.model}
             />
 
-            <div style={{ width: '2px', height: '12px', background: '#e9ecef' }}></div>
+            <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
 
             {/* Stable Diffusion Status (live health check) */}
             <ServiceStatusBadge
@@ -1144,8 +1144,8 @@ function App() {
             onClick={() => setShowSettings(true)}
             className="scale-hover"
             style={{ 
-              background: '#ffffff', 
-              border: '2px solid #e9ecef', 
+              background: 'var(--panel-bg)', 
+              border: '2px solid var(--panel-border)', 
               color: 'var(--pop-blue)', 
               width: '40px', 
               height: '40px', 
@@ -1220,9 +1220,9 @@ function App() {
                 flexDirection: 'column',
                 gap: '16px',
                 padding: '18px',
-                background: '#f8f9fa',
+                background: 'var(--panel-bg-sunk)',
                 borderRadius: '14px',
-                border: '2px solid #e9ecef',
+                border: '2px solid var(--panel-border)',
                 flex: 1,
                 minHeight: 0,
                 overflowY: 'auto'
@@ -1404,7 +1404,7 @@ function App() {
                     </select>
                   )}
                   {selectedLoras.map((l) => (
-                    <div key={l.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', border: '2px solid #e9ecef', borderRadius: '8px', padding: '6px 8px' }}>
+                    <div key={l.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
                       <span style={{ flex: 1, fontSize: '11px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.name}>{l.name}</span>
                       <input
                         type="range"
@@ -1496,7 +1496,7 @@ function App() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: '#fff',
+                  background: 'var(--panel-bg)',
                   color: 'var(--pop-blue)',
                   border: '2px solid var(--pop-blue)',
                   cursor: (loading || !prompt.trim()) ? 'not-allowed' : 'pointer',
@@ -1517,7 +1517,7 @@ function App() {
           overflow: 'hidden'
         }}>
           {/* TAB BAR */}
-          <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginBottom: '16px', background: '#f1f3f5', padding: '6px', borderRadius: '14px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginBottom: '16px', background: 'var(--panel-bg-sunk)', padding: '6px', borderRadius: '14px' }}>
             {([['preview', '🎨 プレビュー＆進捗'], ['gallery', `🖼️ 履歴ギャラリー (${history.length})`]] as const).map(([key, label]) => (
               <button
                 key={key}
@@ -1531,7 +1531,7 @@ function App() {
                   cursor: 'pointer',
                   fontSize: '13px',
                   fontWeight: 800,
-                  background: rightTab === key ? '#ffffff' : 'transparent',
+                  background: rightTab === key ? 'var(--panel-bg)' : 'transparent',
                   color: rightTab === key ? 'var(--pop-blue)' : 'var(--text-secondary)',
                   boxShadow: rightTab === key ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
                   transition: 'all 0.15s ease'
@@ -1560,7 +1560,7 @@ function App() {
             {currentGeneration ? (
               <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
                 {/* Image Frame — hugs the image and centers within its grid track */}
-                <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid #dee2e6', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', justifySelf: 'center', maxWidth: '100%', minHeight: 0 }}>
+                <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid var(--panel-border-hover)', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', justifySelf: 'center', maxWidth: '100%', minHeight: 0 }}>
                   <img
                     src={currentGeneration.imageUrl}
                     alt="Generated output"
@@ -1586,7 +1586,7 @@ function App() {
                     display: 'flex', 
                     alignItems: 'center', 
                     gap: '4px',
-                    border: '1.5px solid #dee2e6',
+                    border: '1.5px solid var(--panel-border-hover)',
                     color: 'var(--text-primary)'
                   }}>
                     {currentGeneration.backendMode === 'firebase' ? (
@@ -1631,7 +1631,7 @@ function App() {
                     <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{currentGeneration.originalPrompt}</p>
                   </div>
                   
-                  <div style={{ borderTop: '2px solid #e9ecef', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
+                  <div style={{ borderTop: '2px solid var(--panel-border)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
                     <div>
                       <span>解像度: </span>
                       <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.width}x{currentGeneration.height}</strong>
@@ -1681,7 +1681,7 @@ function App() {
                       <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
                         <Sparkles size={11} /> 拡張プロンプト (ポジティブ)
                       </span>
-                      <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: '#f8f9fa', padding: '10px', borderRadius: '8px', border: '2px solid #e9ecef', wordBreak: 'break-all' }}>
+                      <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: 'var(--info-bg)', padding: '10px', borderRadius: '8px', border: '2px solid var(--info-border)', wordBreak: 'break-all' }}>
                         {currentGeneration.enhancedPrompt}
                       </p>
                     </div>
@@ -1692,7 +1692,7 @@ function App() {
                       <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
                         ❌ ネガティブプロンプト
                       </span>
-                      <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: '#fff5f5', padding: '10px', borderRadius: '8px', border: '2px solid #ffe3e3', wordBreak: 'break-all' }}>
+                      <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'var(--negative-bg)', padding: '10px', borderRadius: '8px', border: '2px solid var(--negative-border)', wordBreak: 'break-all' }}>
                         {currentGeneration.negativePrompt}
                       </p>
                     </div>
@@ -1734,9 +1734,9 @@ function App() {
               display: 'flex',
               flexDirection: 'column',
               gap: '16px',
-              border: genStatus === 'error' ? '2.5px solid var(--danger)' : '2px solid #e9ecef',
+              border: genStatus === 'error' ? '2.5px solid var(--danger)' : '2px solid var(--panel-border)',
               boxShadow: genStatus === 'error' ? '0 8px 20px rgba(255, 107, 107, 0.08)' : 'var(--shadow-soft)',
-              background: genStatus === 'error' ? '#fffafb' : '#ffffff'
+              background: genStatus === 'error' ? 'var(--danger-panel-bg)' : 'var(--panel-bg)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '24px' }}>
                 {/* Spinner/Status Icon */}
@@ -1978,7 +1978,7 @@ function App() {
                     style={{
                       borderRadius: '12px',
                       overflow: 'hidden',
-                      border: selectedIds.has(itemKey(item)) ? '2px solid var(--pop-blue)' : '2px solid #e9ecef',
+                      border: selectedIds.has(itemKey(item)) ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
                       boxShadow: selectedIds.has(itemKey(item)) ? '0 0 0 3px rgba(51, 154, 240, 0.25)' : 'none',
                       position: 'relative'
                     }}
@@ -2005,7 +2005,7 @@ function App() {
                           }
                           openInPreview(item);
                         }}
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
+                        style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                         loading="lazy"
                         decoding="async"
                         fetchPriority="low"
@@ -2043,7 +2043,7 @@ function App() {
                       )}
                     </div>
 
-                    <div style={{ padding: '10px', textAlign: 'left', background: '#fff' }}>
+                    <div style={{ padding: '10px', textAlign: 'left', background: 'var(--panel-bg)' }}>
                       <p style={{ 
                         fontSize: '12px', 
                         fontWeight: '700', 
@@ -2063,7 +2063,7 @@ function App() {
                 ))}
               </div>
             ) : (
-              <div className="glass-panel" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', borderRadius: '16px', background: '#fff' }}>
+              <div className="glass-panel" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', borderRadius: '16px', background: 'var(--panel-bg)' }}>
                 {history.length === 0
                   ? '生成履歴はありません。最初の画像を生成してみましょう！🎨⚡️'
                   : '指定した日付の画像はありません 📅'}
@@ -2286,7 +2286,7 @@ function App() {
             gap: '20px',
             textAlign: 'center',
             border: '2px solid var(--danger)',
-            background: '#ffffff'
+            background: 'var(--panel-bg)'
           }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255, 107, 107, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2305,7 +2305,7 @@ function App() {
                 onClick={closeConfirm}
                 disabled={deleting}
                 className="scale-hover"
-                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e9ecef', background: '#fff', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
               >
                 キャンセル
               </button>
@@ -2349,7 +2349,7 @@ function App() {
               gap: '20px',
               textAlign: 'left',
               border: '2px solid var(--pop-blue)',
-              background: '#ffffff'
+              background: 'var(--panel-bg)'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2455,7 +2455,7 @@ function App() {
               gap: '20px',
               textAlign: 'left',
               border: '2px solid var(--pop-blue)',
-              background: '#ffffff'
+              background: 'var(--panel-bg)'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2473,7 +2473,7 @@ function App() {
             </div>
 
             {/* Segmented mode tabs */}
-            <div style={{ display: 'flex', gap: '8px', background: '#f1f3f5', borderRadius: '12px', padding: '4px' }}>
+            <div style={{ display: 'flex', gap: '8px', background: 'var(--panel-bg-sunk)', borderRadius: '12px', padding: '4px' }}>
               {([['count', '枚数'], ['size', 'サイズの組合せ'], ['model', 'モデル切替']] as const).map(([mode, label]) => (
                 <button
                   key={mode}
@@ -2542,8 +2542,8 @@ function App() {
                                 flex: 1,
                                 padding: '10px',
                                 borderRadius: '10px',
-                                border: active ? '2px solid var(--pop-blue)' : '2px solid #e9ecef',
-                                background: active ? 'var(--pop-blue)' : '#fff',
+                                border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                                background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
                                 color: active ? '#fff' : 'var(--text-secondary)',
                                 fontWeight: 800,
                                 cursor: 'pointer',
@@ -2578,7 +2578,7 @@ function App() {
                         type="button"
                         onClick={() => setSelectedBatchModels(new Set(sdModels))}
                         className="scale-hover"
-                        style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--pop-blue)', background: '#fff', color: 'var(--pop-blue)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--pop-blue)', background: 'var(--panel-bg)', color: 'var(--pop-blue)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
                       >
                         全選択
                       </button>
@@ -2586,12 +2586,12 @@ function App() {
                         type="button"
                         onClick={() => setSelectedBatchModels(new Set())}
                         className="scale-hover"
-                        style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid #e9ecef', background: '#fff', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
                       >
                         全解除
                       </button>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto', background: '#f8f9fa', borderRadius: '10px', padding: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '8px' }}>
                       {sdModels.map((m, i) => {
                         const isSelected = selectedBatchModels.has(m);
                         return (
@@ -2625,7 +2625,7 @@ function App() {
                     </div>
                   </div>
                 ) : (
-                  <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-orange)', background: '#fff4e6', borderRadius: '10px', padding: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-orange)', background: 'var(--warning-bg)', borderRadius: '10px', padding: '14px' }}>
                     モデルが取得できていません。Stable Diffusion が起動しているか確認してください。
                   </div>
                 )}
@@ -2637,7 +2637,7 @@ function App() {
                 type="button"
                 onClick={() => setShowBatchModal(false)}
                 className="scale-hover"
-                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e9ecef', background: '#fff', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
               >
                 キャンセル
               </button>
