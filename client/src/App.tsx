@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   Circle,
   Trash2,
-  Maximize2,
   Maximize,
   Minimize,
   ChevronLeft,
@@ -88,13 +87,27 @@ function ServiceStatusBadge({ label, checking, connected, detail }: {
   );
 }
 
-// Bottom-right "enlarge" button overlaid on an image; opens the lightbox.
-function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => void; size?: number }) {
+// Bottom-right selection toggle overlaid on a gallery tile. Mirrors the
+// lightbox's select-button design (CheckCircle2/Circle icons, blue when
+// selected with white border + blue glow) so the two controls read as the
+// same affordance. Uses a dark translucent unselected background instead of
+// the lightbox's light one, since gallery tiles sit over arbitrary image
+// content rather than the lightbox's dark backdrop.
+function SelectButton({
+  isSelected,
+  onClick,
+  size = 30,
+}: {
+  isSelected: boolean;
+  onClick: (e: React.MouseEvent) => void;
+  size?: number;
+}) {
+  const iconSize = Math.round(size * 0.5);
   return (
     <button
       type="button"
       onClick={onClick}
-      title="拡大して表示"
+      title={isSelected ? '選択を解除' : '選択'}
       className="scale-hover"
       style={{
         position: 'absolute',
@@ -103,29 +116,30 @@ function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => 
         width: `${size}px`,
         height: `${size}px`,
         borderRadius: '50%',
-        border: 'none',
-        background: 'rgba(0, 0, 0, 0.55)',
+        border: isSelected ? '2px solid #fff' : 'none',
+        background: isSelected ? 'var(--pop-blue)' : 'rgba(0, 0, 0, 0.55)',
         color: '#fff',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
+        boxShadow: isSelected ? '0 0 0 3px rgba(51, 154, 240, 0.35)' : '0 2px 6px rgba(0,0,0,0.25)'
       }}
     >
-      <Maximize2 size={Math.round(size * 0.5)} />
+      {isSelected ? <CheckCircle2 size={iconSize} /> : <Circle size={iconSize} />}
     </button>
   );
 }
 
-// Bottom-right "favorite" button overlaid on an image; stacks directly above
-// ZoomButton (offset by stackedAbove + 8px gap). OFF state shows an outline
-// Star; ON state fills it yellow.
+// Bottom-right "favorite" button overlaid on an image. Alone (stackedAbove=0)
+// it sits at the baseline bottom:8px; when a sibling button of height N is
+// pinned below, pass stackedAbove={N} to stack this one N+8px above it.
+// OFF state shows an outline Star; ON state fills it yellow.
 function FavoriteButton({
   isFavorite,
   onClick,
   size = 30,
-  stackedAbove = 30,
+  stackedAbove = 0,
 }: {
   isFavorite: boolean;
   onClick: (e: React.MouseEvent) => void;
@@ -141,7 +155,7 @@ function FavoriteButton({
       className="scale-hover"
       style={{
         position: 'absolute',
-        bottom: `${8 + stackedAbove + 8}px`,
+        bottom: stackedAbove > 0 ? `${8 + stackedAbove + 8}px` : '8px',
         right: '8px',
         width: `${size}px`,
         height: `${size}px`,
@@ -733,6 +747,15 @@ function App() {
     setLoadingStep(3);
     setRightTab('preview');
   };
+
+  // Pending single-click timer for gallery images. Single-click and double-click
+  // on the same element are ambiguous: React fires onClick twice AND onDoubleClick
+  // on a double-click. To keep both behaviors — click → lightbox, double-click →
+  // recall into preview — we defer the lightbox open by GALLERY_CLICK_DELAY_MS,
+  // and cancel the pending timer if a double-click (or a second click) arrives
+  // within that window. The tradeoff is a small perceived lag on single-click.
+  const galleryClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const GALLERY_CLICK_DELAY_MS = 250;
 
   // Raw result of POST /api/generate, before client-side persistence.
   // Signed in → server returns { success, image(base64), params }.
@@ -1525,12 +1548,12 @@ function App() {
                   <img
                     src={currentGeneration.imageUrl}
                     alt="Generated output"
-                    style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', viewTransitionName: (morphSourceKey === '__preview__' && !lightboxUrl) ? 'lightbox-morph' : undefined }}
+                    onClick={() => openLightbox(currentGeneration.imageUrl, '__preview__')}
+                    style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', cursor: 'pointer', viewTransitionName: (morphSourceKey === '__preview__' && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                   />
-                  <ZoomButton size={34} onClick={(e) => { e.stopPropagation(); openLightbox(currentGeneration.imageUrl, '__preview__'); }} />
                   <FavoriteButton
                     size={34}
-                    stackedAbove={34}
+                    stackedAbove={0}
                     isFavorite={!!currentGeneration.isFavorite}
                     onClick={(e) => { e.stopPropagation(); toggleFavorite(currentGeneration); }}
                   />
@@ -1936,12 +1959,9 @@ function App() {
                   <div
                     key={itemKey(item)}
                     className="glass-panel scale-hover"
-                    onClick={() => toggleSelected(itemKey(item))}
-                    onDoubleClick={() => openInPreview(item)}
                     style={{
                       borderRadius: '12px',
                       overflow: 'hidden',
-                      cursor: 'pointer',
                       border: selectedIds.has(itemKey(item)) ? '2px solid var(--pop-blue)' : '2px solid #e9ecef',
                       boxShadow: selectedIds.has(itemKey(item)) ? '0 0 0 3px rgba(51, 154, 240, 0.25)' : 'none',
                       position: 'relative'
@@ -1951,10 +1971,32 @@ function App() {
                       <img
                         src={item.imageUrl}
                         alt={item.originalPrompt}
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
+                        onClick={() => {
+                          if (galleryClickTimerRef.current !== null) {
+                            clearTimeout(galleryClickTimerRef.current);
+                          }
+                          const url = item.imageUrl;
+                          const key = itemKey(item);
+                          galleryClickTimerRef.current = setTimeout(() => {
+                            galleryClickTimerRef.current = null;
+                            openLightbox(url, key);
+                          }, GALLERY_CLICK_DELAY_MS);
+                        }}
+                        onDoubleClick={() => {
+                          if (galleryClickTimerRef.current !== null) {
+                            clearTimeout(galleryClickTimerRef.current);
+                            galleryClickTimerRef.current = null;
+                          }
+                          openInPreview(item);
+                        }}
+                        style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                         loading="lazy"
                       />
-                      <ZoomButton size={26} onClick={(e) => { e.stopPropagation(); openLightbox(item.imageUrl, itemKey(item)); }} />
+                      <SelectButton
+                        size={26}
+                        isSelected={selectedIds.has(itemKey(item))}
+                        onClick={(e) => { e.stopPropagation(); toggleSelected(itemKey(item)); }}
+                      />
                       <FavoriteButton
                         size={26}
                         stackedAbove={26}
@@ -1962,26 +2004,6 @@ function App() {
                         onClick={(e) => { e.stopPropagation(); toggleFavorite(item); }}
                       />
                     </div>
-
-                    {/* Selected check (top-left) */}
-                    {selectedIds.has(itemKey(item)) && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '6px',
-                        left: '6px',
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: 'var(--pop-blue)',
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
-                      }}>✓</div>
-                    )}
 
                     {/* Badge indicator */}
                     <div style={{ 
