@@ -17,9 +17,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Restrict CORS to the known frontend origin(s). A wide-open policy would let any
-// website the user has open POST to this server (e.g. silently repointing the
-// outbound LM Studio / Stable Diffusion URLs via /api/settings). Override with
-// CORS_ORIGINS (comma-separated) when serving the client from a different origin.
+// website the user has open POST to this server. Override with CORS_ORIGINS
+// (comma-separated) when serving the client from a different origin.
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -92,21 +91,12 @@ const saveLocalHistory = (history: GenerationMetadata[]): void => {
   fs.writeFileSync(metadataPath, JSON.stringify(history, null, 2));
 };
 
-// API settings (mutable at runtime)
-let lmStudioUrl = process.env.LM_STUDIO_URL || 'http://127.0.0.1:1234';
-let stableDiffusionUrl = process.env.STABLE_DIFFUSION_URL || 'http://127.0.0.1:7860';
-let lmStudioModel = process.env.LM_STUDIO_MODEL || ''; // Empty string means using the currently loaded model
-
-// Accept only http(s) URLs for runtime-configurable outbound targets. Loopback/LAN
-// hosts stay allowed on purpose — the legitimate LM Studio / SD services are local.
-const isValidHttpUrl = (value: string): boolean => {
-  try {
-    const { protocol } = new URL(value);
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
+// LM Studio / Stable Diffusion endpoints — .env-only, no runtime override.
+// The UI panel that changed these at runtime was removed; users edit
+// server/.env and restart if they need different targets.
+const lmStudioUrl = process.env.LM_STUDIO_URL || 'http://127.0.0.1:1234';
+const stableDiffusionUrl = process.env.STABLE_DIFFUSION_URL || 'http://127.0.0.1:7860';
+const lmStudioModel = process.env.LM_STUDIO_MODEL || ''; // Empty ⇒ use LM Studio's currently loaded model
 
 interface EnhancedPrompt {
   positive: string;
@@ -412,32 +402,7 @@ app.get('/api/status', (_req: Request, res: Response) => {
   });
 });
 
-// 4. Update API Configuration
-app.post('/api/settings', (req: Request, res: Response) => {
-  const { newLmStudioUrl, newStableDiffusionUrl, newLmStudioModel } = req.body;
-
-  if (newLmStudioUrl && !isValidHttpUrl(newLmStudioUrl)) {
-    return res.status(400).json({ error: 'newLmStudioUrl must be a valid http(s) URL' });
-  }
-  if (newStableDiffusionUrl && !isValidHttpUrl(newStableDiffusionUrl)) {
-    return res.status(400).json({ error: 'newStableDiffusionUrl must be a valid http(s) URL' });
-  }
-
-  if (newLmStudioUrl) lmStudioUrl = newLmStudioUrl;
-  if (newStableDiffusionUrl) stableDiffusionUrl = newStableDiffusionUrl;
-  if (newLmStudioModel !== undefined) lmStudioModel = newLmStudioModel;
-
-  res.json({
-    success: true,
-    settings: {
-      lmStudioUrl,
-      stableDiffusionUrl,
-      lmStudioModel
-    }
-  });
-});
-
-// 5. Connection health check for upstream services (LM Studio + Stable Diffusion).
+// 4. Connection health check for upstream services (LM Studio + Stable Diffusion).
 // Always responds 200 with per-service flags so the client can branch on the result.
 app.get('/api/health', async (_req: Request, res: Response) => {
   const [lmStudio, stableDiffusion] = await Promise.all([

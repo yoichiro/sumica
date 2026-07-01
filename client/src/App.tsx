@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles,
-  Settings,
   Image as ImageIcon,
   RotateCw,
   Cloud,
@@ -434,7 +433,6 @@ function App() {
     setLightboxUrl(target.imageUrl);
   };
 
-  const [showSettings, setShowSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // While the delete confirm dialog plays its exit animation, `showDeleteConfirm`
   // is still true (so the DOM stays mounted) but this flag flips the CSS to the
@@ -492,12 +490,6 @@ function App() {
     setMorphSourceKey(itemKey(target));
     setLightboxUrl(target.imageUrl);
   }, [displayedHistory, lightboxIndex, lightboxUrl]);
-  const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
-  const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
-  const [newLmStudioModel, setNewLmStudioModel] = useState('');
-  const [settingsLoading, setSettingsLoading] = useState(false);
-  const [settingsSuccess, setSettingsSuccess] = useState(false);
-  
   type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
   const [errorStep, setErrorStep] = useState<number | null>(null);
@@ -533,7 +525,6 @@ function App() {
   const API_BASE = `http://${window.location.hostname}:5000/api`;
 
   useEffect(() => {
-    fetchStatus();
     fetchHealth();
     fetchSdModels();
     fetchSdSamplers();
@@ -650,20 +641,6 @@ function App() {
     fetchHistory();
     return undefined;
   }, [user, filterDate, favoritesOnly]);
-
-  const fetchStatus = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/status`);
-      if (res.ok) {
-        const data = await res.json();
-        setNewLmStudioUrl(data.lmStudioUrl);
-        setNewStableDiffusionUrl(data.stableDiffusionUrl);
-        setNewLmStudioModel(data.lmStudioModel || '');
-      }
-    } catch (error) {
-      console.error('Failed to fetch system status:', error);
-    }
-  };
 
   // Check LM Studio / Stable Diffusion connectivity. Guarded so overlapping
   // polls (or a poll racing a manual refresh) never run concurrently.
@@ -1028,48 +1005,6 @@ function App() {
     }
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSettingsLoading(true);
-    setSettingsSuccess(false);
-
-    try {
-      const res = await fetch(`${API_BASE}/settings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          newLmStudioUrl,
-          newStableDiffusionUrl,
-          newLmStudioModel
-        })
-      });
-
-      if (res.ok) {
-        setSettingsSuccess(true);
-        fetchStatus();
-        fetchHealth(); // Re-check connectivity against the newly saved URLs
-        fetchSdModels(); // Refresh model list against the newly saved SD URL
-        fetchSdSamplers();
-        fetchSdSchedulers();
-        fetchSdLoras();
-        addToast('設定を保存しました！⚙️', 'success');
-        setTimeout(() => {
-          setSettingsSuccess(false);
-          setShowSettings(false);
-        }, 1500);
-      } else {
-        throw new Error('Failed to save settings');
-      }
-    } catch (error: any) {
-      console.error('Failed to update settings:', error);
-      addToast(`設定の保存に失敗しました。\n\n詳細: ${error.message || '接続先URLが正しいか確認してください。'}`, 'error');
-    } finally {
-      setSettingsLoading(false);
-    }
-  };
-
   const toggleSize = (
     setter: React.Dispatch<React.SetStateAction<number[]>>,
     value: number
@@ -1162,27 +1097,6 @@ function App() {
               connected={!!health?.stableDiffusion.connected}
             />
           </div>
-
-          <button 
-            onClick={() => setShowSettings(true)}
-            className="scale-hover"
-            style={{ 
-              background: 'var(--panel-bg)', 
-              border: '2px solid var(--panel-border)', 
-              color: 'var(--pop-blue)', 
-              width: '40px', 
-              height: '40px', 
-              borderRadius: '50%', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
-            }}
-            title="Configure System URLs"
-          >
-            <Settings size={20} />
-          </button>
         </div>
       </header>
 
@@ -2346,113 +2260,6 @@ function App() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* MODAL: CONFIGURATION SETTINGS */}
-      {showSettings && (
-        <div style={{ 
-          position: 'fixed', 
-          inset: 0, 
-          backgroundColor: 'rgba(0, 0, 0, 0.4)', 
-          backdropFilter: 'blur(8px)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          zIndex: 110,
-          padding: '20px'
-        }}>
-          <form 
-            onSubmit={handleSaveSettings}
-            className="glass-panel" 
-            style={{ 
-              width: '100%', 
-              maxWidth: '480px', 
-              borderRadius: '20px', 
-              padding: '24px', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '20px',
-              textAlign: 'left',
-              border: '2px solid var(--pop-blue)',
-              background: 'var(--panel-bg)'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Settings color="var(--pop-blue)" size={20} />
-                <span>API接続設定 ⚙️</span>
-              </h3>
-              <button 
-                type="button"
-                onClick={() => setShowSettings(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* LM Studio Endpoint */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-                  LM Studio 接続URL (LLM API)
-                </label>
-                <input 
-                  type="url" 
-                  className="input-field" 
-                  value={newLmStudioUrl}
-                  onChange={(e) => setNewLmStudioUrl(e.target.value)}
-                  placeholder="http://localhost:1234"
-                  style={{ borderRadius: '8px' }}
-                  required
-                />
-              </div>
-
-              {/* Stable Diffusion Endpoint */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-                  Stable Diffusion 接続URL (画像 API)
-                </label>
-                <input 
-                  type="url" 
-                  className="input-field" 
-                  value={newStableDiffusionUrl}
-                  onChange={(e) => setNewStableDiffusionUrl(e.target.value)}
-                  placeholder="http://127.0.0.1:7860"
-                  style={{ borderRadius: '8px' }}
-                  required
-                />
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  AUTOMATIC1111/Forgeを起動するときに <code>--api</code> 引数をつけてください。
-                </span>
-              </div>
-
-              {/* LLM Model override (optional) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-                  LLMモデル識別子 (省略可)
-                </label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  value={newLmStudioModel}
-                  onChange={(e) => setNewLmStudioModel(e.target.value)}
-                  placeholder="空欄の場合は現在ロードされているモデルを使用します"
-                  style={{ borderRadius: '8px' }}
-                />
-              </div>
-            </div>
-
-            <button 
-              type="submit" 
-              className="btn-neon" 
-              style={{ padding: '14px', borderRadius: '10px', fontSize: '15px', marginTop: '10px' }}
-              disabled={settingsLoading}
-            >
-              {settingsLoading ? '保存中...' : settingsSuccess ? '設定を保存しました！ ✓' : '変更を適用する'}
-            </button>
-          </form>
         </div>
       )}
 
