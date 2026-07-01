@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles,
   Settings,
@@ -18,9 +18,10 @@ import {
   ChevronLeft,
   ChevronRight,
   LogIn,
-  Layers
+  Layers,
+  Star,
 } from 'lucide-react';
-import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
+import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { flushSync } from 'react-dom';
 
 // View Transitions API (Baseline 2025-10); typed locally so it works regardless of lib.dom version.
@@ -47,6 +48,7 @@ interface GenerationData {
   sampler?: string;
   scheduler?: string;
   loras?: { name: string; weight: number }[];
+  isFavorite?: boolean;
 }
 
 interface HealthStatus {
@@ -116,6 +118,51 @@ function ZoomButton({ onClick, size = 30 }: { onClick: (e: React.MouseEvent) => 
   );
 }
 
+// Bottom-right "favorite" button overlaid on an image; stacks directly above
+// ZoomButton (offset by stackedAbove + 8px gap). OFF state shows an outline
+// Star; ON state fills it yellow.
+function FavoriteButton({
+  isFavorite,
+  onClick,
+  size = 30,
+  stackedAbove = 30,
+}: {
+  isFavorite: boolean;
+  onClick: (e: React.MouseEvent) => void;
+  size?: number;
+  stackedAbove?: number;
+}) {
+  const iconSize = Math.round(size * 0.5);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={isFavorite ? 'お気に入りを解除' : 'お気に入りに追加'}
+      className="scale-hover"
+      style={{
+        position: 'absolute',
+        bottom: `${8 + stackedAbove + 8}px`,
+        right: '8px',
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '50%',
+        border: 'none',
+        background: 'rgba(0, 0, 0, 0.55)',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
+      }}
+    >
+      {isFavorite
+        ? <Star size={iconSize} fill="#ffd43b" stroke="#ffd43b" />
+        : <Star size={iconSize} />}
+    </button>
+  );
+}
+
 // Candidate sizes offered as toggle chips in the batch dialog's size mode
 // (covers common SD1.5 / SDXL resolutions). Same set for width and height.
 const SIZE_OPTIONS = [512, 768, 1024];
@@ -180,6 +227,7 @@ function App() {
   const [sdLoras, setSdLoras] = useState<string[]>([]);
   const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Date filter is always set; defaults to today (local YYYY-MM-DD).
   const [filterDate, setFilterDate] = useState(() => {
@@ -196,8 +244,16 @@ function App() {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
-  // History narrowed by the date filter (whole-day match); the gallery renders this.
-  const filteredHistory = filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
+  // History narrowed by the active view mode: the favorites-only toggle wins
+  // over the date filter. Signed in + favoritesOnly: subscribeFavorites already
+  // scoped the data, so just pass it through. Signed out + favoritesOnly: the
+  // full history is loaded, filter client-side.
+  const displayedHistory = useMemo(() => {
+    if (favoritesOnly) {
+      return user ? history : history.filter((h) => !!h.isFavorite);
+    }
+    return filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
+  }, [history, favoritesOnly, filterDate, user]);
 
   // Cloud storage is active only when Firebase is configured AND the user is signed in.
   const cloudActive = isFirebaseConfigured && !!user;
@@ -210,6 +266,40 @@ function App() {
       if (next.has(id)) { next.delete(id); } else { next.add(id); }
       return next;
     });
+  };
+
+  // Flip isFavorite on the given item. Items without a persisted id (transient
+  // preview state before save completes) are a no-op.
+  const toggleFavorite = async (item: GenerationData) => {
+    const id = item.id;
+    if (!id) return;
+    const next = !item.isFavorite;
+    // Optimistic UI update for snappy feedback. In signed-in mode, the next
+    // Firestore onSnapshot will reconcile to the authoritative value moments
+    // later; in signed-out mode, this IS the authoritative client state.
+    setHistory((prev) =>
+      prev.map((h) => (h.id === id ? { ...h, isFavorite: next } : h)),
+    );
+    try {
+      if (user) {
+        await updateFavorite(user.uid, id, next);
+      } else {
+        const res = await fetch(`${API_BASE}/generations/favorite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, isFavorite: next }),
+        });
+        if (!res.ok) {
+          throw new Error(`Server returned ${res.status}`);
+        }
+      }
+    } catch (e: any) {
+      // Rollback the optimistic update before surfacing the error toast.
+      setHistory((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, isFavorite: !next } : h)),
+      );
+      addToast(`お気に入りの更新に失敗しました: ${e.message}`, 'error');
+    }
   };
 
   // Open the confirm modal for the given ids (gallery selection or a single preview image).
@@ -296,13 +386,13 @@ function App() {
   };
 
   // Step the lightbox to the prev/next image in the gallery's displayed order
-  // (filteredHistory). Clamps at the ends; no-op if the current image isn't listed.
+  // (displayedHistory). Clamps at the ends; no-op if the current image isn't listed.
   const navigateLightbox = (delta: number) => {
-    const idx = filteredHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl);
+    const idx = displayedHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl);
     if (idx === -1) return;
     const next = idx + delta;
-    if (next < 0 || next >= filteredHistory.length) return;
-    const target = filteredHistory[next];
+    if (next < 0 || next >= displayedHistory.length) return;
+    const target = displayedHistory[next];
     setMorphSourceKey(itemKey(target));
     setLightboxUrl(target.imageUrl);
   };
@@ -318,8 +408,37 @@ function App() {
   // Index of the lightbox image within the displayed gallery order (-1 if not listed),
   // used to disable the prev/next buttons at the ends.
   const lightboxIndex = lightboxUrl
-    ? filteredHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl)
+    ? displayedHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl)
     : -1;
+
+  // Track the last valid lightboxIndex so we can recover the "next" item if
+  // the currently-shown image drops out of displayedHistory (e.g. unfavorited
+  // in favoritesOnly mode).
+  const prevLightboxIndexRef = useRef(-1);
+  useEffect(() => {
+    if (lightboxIndex >= 0) prevLightboxIndexRef.current = lightboxIndex;
+  }, [lightboxIndex]);
+
+  // When the lightbox image is removed from displayedHistory (e.g. due to
+  // unfavoriting in favoritesOnly mode), auto-advance to the item at the
+  // previous index (clamped to the new list length), or close the lightbox
+  // if the list is now empty.
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    if (lightboxIndex >= 0) return; // current image still listed; nothing to do
+    if (displayedHistory.length === 0) {
+      closeLightbox();
+      return;
+    }
+    const targetIdx = Math.min(
+      prevLightboxIndexRef.current,
+      displayedHistory.length - 1,
+    );
+    if (targetIdx < 0) return;
+    const target = displayedHistory[targetIdx];
+    setMorphSourceKey(itemKey(target));
+    setLightboxUrl(target.imageUrl);
+  }, [displayedHistory, lightboxIndex, lightboxUrl]);
   const [newLmStudioUrl, setNewLmStudioUrl] = useState('');
   const [newStableDiffusionUrl, setNewStableDiffusionUrl] = useState('');
   const [newLmStudioModel, setNewLmStudioModel] = useState('');
@@ -406,13 +525,18 @@ function App() {
         // Space would otherwise scroll the page underneath the lightbox; suppress it.
         if (lightboxIndex >= 0) {
           e.preventDefault();
-          toggleSelected(itemKey(filteredHistory[lightboxIndex]));
+          toggleSelected(itemKey(displayedHistory[lightboxIndex]));
+        }
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (lightboxIndex >= 0) {
+          e.preventDefault();
+          toggleFavorite(displayedHistory[lightboxIndex]);
         }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxUrl, morphSourceKey, filteredHistory, lightboxIndex]);
+  }, [lightboxUrl, morphSourceKey, displayedHistory, lightboxIndex]);
 
   // Track OS fullscreen state to swap the toggle icon.
   useEffect(() => {
@@ -436,30 +560,43 @@ function App() {
   };
 
   // History source follows auth: live Firestore subscription when signed in,
-  // local REST fetch when signed out. The Firestore subscription is also keyed by
-  // `filterDate` — the query is narrowed to that single local day server-side, so
-  // every image from that day comes back (no count cap). Changing the date tears
-  // down the old subscription and opens a new one scoped to the new day.
+  // local REST fetch when signed out. The Firestore subscription branches on
+  // `favoritesOnly`: when ON, `subscribeFavorites` runs a composite query
+  // (where isFavorite==true + orderBy timestamp) and ignores `filterDate`;
+  // when OFF, `subscribeGenerations` is scoped to the single local day from
+  // `filterDate` so every image from that day comes back (no count cap).
+  // Flipping either dep tears down the old subscription and opens a new one.
   useEffect(() => {
     if (user) {
-      setHistory([]); // clear local items before the cloud snapshot arrives
-      const unsub = subscribeGenerations(
-        user.uid,
-        filterDate || null,
-        (records) => setHistory(records as unknown as GenerationData[]),
-        (err) => {
-          // FirestoreError exposes `code` (e.g. "permission-denied", "failed-precondition")
-          // even when `message` is empty — surface both so the user can act on it.
-          const e = err as unknown as { code?: string; message?: string };
-          const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
-          addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${detail}`, 'error');
-        },
-      );
+      setHistory([]);
+      const unsub = favoritesOnly
+        ? subscribeFavorites(
+            user.uid,
+            (records) => setHistory(records as unknown as GenerationData[]),
+            (err) => {
+              const e = err as unknown as { code?: string; message?: string };
+              const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
+              addToast(
+                `お気に入りの取得に失敗しました（Firestore のインデックス (isFavorite + timestamp) がデプロイされているか確認してください）: ${detail}`,
+                'error',
+              );
+            },
+          )
+        : subscribeGenerations(
+            user.uid,
+            filterDate || null,
+            (records) => setHistory(records as unknown as GenerationData[]),
+            (err) => {
+              const e = err as unknown as { code?: string; message?: string };
+              const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
+              addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${detail}`, 'error');
+            },
+          );
       return unsub;
     }
     fetchHistory();
     return undefined;
-  }, [user, filterDate]);
+  }, [user, filterDate, favoritesOnly]);
 
   const fetchStatus = async () => {
     try {
@@ -1391,6 +1528,12 @@ function App() {
                     style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', viewTransitionName: (morphSourceKey === '__preview__' && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                   />
                   <ZoomButton size={34} onClick={(e) => { e.stopPropagation(); openLightbox(currentGeneration.imageUrl, '__preview__'); }} />
+                  <FavoriteButton
+                    size={34}
+                    stackedAbove={34}
+                    isFavorite={!!currentGeneration.isFavorite}
+                    onClick={(e) => { e.stopPropagation(); toggleFavorite(currentGeneration); }}
+                  />
                   <div style={{ 
                     position: 'absolute', 
                     top: '12px', 
@@ -1704,17 +1847,42 @@ function App() {
               minHeight: '40px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', opacity: favoritesOnly ? 0.4 : 1 }}>
                   📅
                   <input
                     type="date"
                     className="input-field"
                     value={filterDate}
                     onChange={(e) => { if (e.target.value) setFilterDate(e.target.value); }}
+                    disabled={favoritesOnly}
                     style={{ borderRadius: '8px', padding: '5px 8px', fontSize: '13px', width: 'auto' }}
                   />
                 </label>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{filteredHistory.length}件</span>
+                <button
+                  type="button"
+                  onClick={() => setFavoritesOnly((v) => !v)}
+                  title={favoritesOnly ? 'お気に入りのみの表示を解除' : 'お気に入りのみ表示'}
+                  className="scale-hover"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '5px 10px',
+                    borderRadius: '8px',
+                    border: favoritesOnly ? 'none' : '1.5px solid var(--panel-border)',
+                    background: favoritesOnly ? 'var(--pop-blue)' : 'transparent',
+                    color: favoritesOnly ? '#fff' : 'var(--text-secondary)',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {favoritesOnly
+                    ? <Star size={14} fill="#ffd43b" stroke="#ffd43b" />
+                    : <Star size={14} />}
+                  お気に入りのみ
+                </button>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{displayedHistory.length}件</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
@@ -1758,13 +1926,13 @@ function App() {
               </button>
               </div>
             </div>
-            {filteredHistory.length > 0 ? (
+            {displayedHistory.length > 0 ? (
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
                 gap: '18px'
               }}>
-                {filteredHistory.map((item) => (
+                {displayedHistory.map((item) => (
                   <div
                     key={itemKey(item)}
                     className="glass-panel scale-hover"
@@ -1787,6 +1955,12 @@ function App() {
                         loading="lazy"
                       />
                       <ZoomButton size={26} onClick={(e) => { e.stopPropagation(); openLightbox(item.imageUrl, itemKey(item)); }} />
+                      <FavoriteButton
+                        size={26}
+                        stackedAbove={26}
+                        isFavorite={!!item.isFavorite}
+                        onClick={(e) => { e.stopPropagation(); toggleFavorite(item); }}
+                      />
                     </div>
 
                     {/* Selected check (top-left) */}
@@ -1886,11 +2060,11 @@ function App() {
           />
           {/* Selection toggle: only available when the lightbox shows a gallery item
               (not the preview tab's current generation, whose key is '__preview__' and
-              not present in filteredHistory). Mirrors the click-to-select behavior on
+              not present in displayedHistory). Mirrors the click-to-select behavior on
               the gallery tile so a user can flip through images and mark deletion
               candidates without leaving the lightbox. */}
           {lightboxIndex >= 0 && (() => {
-            const k = itemKey(filteredHistory[lightboxIndex]);
+            const k = itemKey(displayedHistory[lightboxIndex]);
             const isSelected = selectedIds.has(k);
             return (
               <button
@@ -1916,6 +2090,37 @@ function App() {
                 }}
               >
                 {isSelected ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+              </button>
+            );
+          })()}
+          {lightboxIndex >= 0 && (() => {
+            const fav = !!displayedHistory[lightboxIndex].isFavorite;
+            return (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); toggleFavorite(displayedHistory[lightboxIndex]); }}
+                title={fav ? 'お気に入りを解除 (F)' : 'お気に入りに追加 (F)'}
+                className="scale-hover"
+                style={{
+                  position: 'absolute',
+                  top: '20px',
+                  right: '280px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  border: fav ? '2px solid #fff' : 'none',
+                  background: fav ? '#ffd43b' : 'rgba(255, 255, 255, 0.15)',
+                  color: fav ? '#1a1a1a' : '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: fav ? '0 0 0 3px rgba(255, 212, 59, 0.35)' : 'none'
+                }}
+              >
+                {fav
+                  ? <Star size={22} fill="#1a1a1a" stroke="#1a1a1a" />
+                  : <Star size={22} />}
               </button>
             );
           })()}
@@ -1947,9 +2152,9 @@ function App() {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); navigateLightbox(1); }}
-            disabled={lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1}
+            disabled={lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1}
             title="次の画像 (→)"
-            className={(lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? '' : 'scale-hover'}
+            className={(lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? '' : 'scale-hover'}
             style={{
               position: 'absolute',
               top: '20px',
@@ -1963,8 +2168,8 @@ function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: (lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? 'not-allowed' : 'pointer',
-              opacity: (lightboxIndex < 0 || lightboxIndex >= filteredHistory.length - 1) ? 0.35 : 1
+              cursor: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 'not-allowed' : 'pointer',
+              opacity: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 0.35 : 1
             }}
           >
             <ChevronRight size={22} />
