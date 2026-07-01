@@ -28,6 +28,7 @@ import {
   deleteObject,
   type FirebaseStorage,
 } from 'firebase/storage';
+import { generateThumbnail } from './utils/thumbnail';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -81,6 +82,11 @@ export type GenerationRecord = GenerationParams & {
   id: string;
   imageUrl: string;
   storagePath: string;
+  // 256px WebP produced client-side and stored alongside the PNG. Optional
+  // for backwards-compatibility with pre-thumbnail records; consumers fall
+  // back to imageUrl when absent.
+  thumbnailUrl?: string;
+  thumbnailStoragePath?: string;
   timestamp: number;
   createdAt: string;
   backendMode: 'firebase';
@@ -119,10 +125,28 @@ export async function saveGeneration(
   await uploadString(objectRef, base64, 'base64', { contentType: 'image/png' });
   const imageUrl = await getDownloadURL(objectRef);
 
+  // Sidecar 256px WebP for the gallery grid. Non-fatal on failure — the
+  // gallery falls back to imageUrl via `thumbnailUrl ?? imageUrl`.
+  let thumbnailUrl: string | undefined;
+  let thumbnailStoragePath: string | undefined;
+  try {
+    const thumb = await generateThumbnail(base64, 'image/png');
+    const ext = thumb.mimeType === 'image/webp' ? 'webp' : 'jpg';
+    thumbnailStoragePath = `users/${uid}/thumbs/generated_${timestamp}.${ext}`;
+    const thumbRef = ref(storageInstance, thumbnailStoragePath);
+    await uploadString(thumbRef, thumb.base64, 'base64', { contentType: thumb.mimeType });
+    thumbnailUrl = await getDownloadURL(thumbRef);
+  } catch (thumbErr) {
+    console.warn('Thumbnail generation/upload failed (non-fatal):', thumbErr);
+    thumbnailStoragePath = undefined;
+  }
+
   const record: Omit<GenerationRecord, 'id'> = {
     ...params,
     imageUrl,
     storagePath,
+    ...(thumbnailUrl ? { thumbnailUrl } : {}),
+    ...(thumbnailStoragePath ? { thumbnailStoragePath } : {}),
     timestamp,
     createdAt: new Date(timestamp).toISOString(),
     backendMode: 'firebase',
@@ -186,8 +210,13 @@ export async function deleteGenerations(uid: string, records: GenerationRecord[]
   if (!dbInstance || !storageInstance) throw new Error('Firebase is not configured');
   await Promise.all(
     records.map(async (r) => {
+      // Remove the PNG and its sidecar thumbnail. Both are best-effort —
+      // Firestore doc removal is the source of truth for the gallery listing.
       if (r.storagePath) {
         await deleteObject(ref(storageInstance!, r.storagePath)).catch(() => {});
+      }
+      if (r.thumbnailStoragePath) {
+        await deleteObject(ref(storageInstance!, r.thumbnailStoragePath)).catch(() => {});
       }
       await deleteDoc(doc(dbInstance!, 'users', uid, 'generations', r.id));
     }),

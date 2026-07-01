@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 
 // Load environment variables
@@ -46,7 +47,12 @@ interface GenerationMetadata {
   cfgScale: number | string;
   model: string | null;
   imageUrl: string;
+  // Optional 256px WebP produced alongside the PNG. Present on new generations
+  // and on legacy items after the backfill script runs. Undefined = fall back
+  // to imageUrl in the gallery.
+  thumbnailUrl?: string;
   localPath?: string;
+  thumbnailPath?: string;
   timestamp: number;
   createdAt: string;
   backendMode: 'firebase' | 'local';
@@ -56,6 +62,18 @@ interface GenerationMetadata {
   loras?: { name: string; weight: number }[];
   isFavorite?: boolean;
 }
+
+// Thumbnail spec — 256px max dimension, WebP quality 80. Aspect ratio preserved
+// (sharp's `fit: 'inside'`). At SD's common 512-1024px inputs this yields
+// ~15-30KB per thumb, vs 500KB-2MB PNG originals.
+const THUMBNAIL_MAX_DIMENSION = 256;
+const THUMBNAIL_QUALITY = 80;
+
+const generateThumbnailBuffer = async (imageBuffer: Buffer): Promise<Buffer> =>
+  sharp(imageBuffer)
+    .resize(THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: THUMBNAIL_QUALITY })
+    .toBuffer();
 
 // Local history metadata helper
 const metadataPath = path.join(outputsDir, 'metadata.json');
@@ -324,6 +342,20 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       const localFilePath = path.join(outputsDir, fileName);
       fs.writeFileSync(localFilePath, imageBuffer);
 
+      // Sidecar 256px WebP thumbnail used by the gallery grid. Failure to
+      // generate it is non-fatal — we still save the PNG and metadata; the
+      // gallery will fall back to the full image via `thumbnailUrl ?? imageUrl`.
+      const thumbFileName = `generated_${timestamp}_thumb.webp`;
+      const thumbLocalPath = path.join(outputsDir, thumbFileName);
+      let thumbnailUrl: string | undefined;
+      try {
+        const thumbBuffer = await generateThumbnailBuffer(imageBuffer);
+        fs.writeFileSync(thumbLocalPath, thumbBuffer);
+        thumbnailUrl = `http://localhost:${PORT}/api/outputs/${thumbFileName}`;
+      } catch (thumbErr) {
+        console.error('Thumbnail generation failed (non-fatal):', (thumbErr as Error).message);
+      }
+
       const imageUrl = `http://localhost:${PORT}/api/outputs/${fileName}`;
       const metadata: GenerationMetadata = {
         id: `local_${timestamp}`,
@@ -340,7 +372,9 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         scheduler: scheduler || '',
         loras: loraList,
         imageUrl,
+        thumbnailUrl,
         localPath: localFilePath,
+        thumbnailPath: thumbnailUrl ? thumbLocalPath : undefined,
         timestamp,
         createdAt: new Date(timestamp).toISOString(),
         backendMode: 'local',
@@ -501,11 +535,15 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
     const remaining: GenerationMetadata[] = [];
     for (const item of getLocalHistory()) {
       if (item.id && idSet.has(item.id)) {
-        if (item.localPath && fs.existsSync(item.localPath)) {
-          try {
-            fs.unlinkSync(item.localPath);
-          } catch (e) {
-            console.error(`Failed to remove file ${item.localPath}:`, (e as Error).message);
+        // Remove the PNG and any sidecar WebP thumbnail. `thumbnailPath` is
+        // optional on legacy items — silently skip when absent or missing.
+        for (const p of [item.localPath, item.thumbnailPath]) {
+          if (p && fs.existsSync(p)) {
+            try {
+              fs.unlinkSync(p);
+            } catch (e) {
+              console.error(`Failed to remove file ${p}:`, (e as Error).message);
+            }
           }
         }
         deleted++;

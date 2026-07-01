@@ -39,10 +39,14 @@ interface GenerationData {
   cfgScale: number;
   model?: string | null;
   imageUrl: string;
+  // Sidecar 256px WebP for the gallery grid. Optional for backwards-compat
+  // with pre-thumbnail generations; consumers fall back to imageUrl.
+  thumbnailUrl?: string;
   timestamp: number;
   createdAt: string;
   backendMode: 'firebase' | 'local';
   storagePath?: string;
+  thumbnailStoragePath?: string;
   seed?: number;
   sampler?: string;
   scheduler?: string;
@@ -1985,12 +1989,15 @@ function App() {
                   >
                     <div style={{ position: 'relative' }}>
                       <img
-                        src={item.imageUrl}
+                        src={item.thumbnailUrl ?? item.imageUrl}
                         alt={item.originalPrompt}
                         onClick={() => {
                           if (galleryClickTimerRef.current !== null) {
                             clearTimeout(galleryClickTimerRef.current);
                           }
+                          // Lightbox always shows the full-resolution imageUrl,
+                          // even when the tile displayed a thumbnail — click →
+                          // zoom to the real thing.
                           const url = item.imageUrl;
                           const key = itemKey(item);
                           galleryClickTimerRef.current = setTimeout(() => {

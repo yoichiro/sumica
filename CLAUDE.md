@@ -25,7 +25,7 @@ npm run dev:client # client only — http://localhost:5173
 ## Architecture
 
 Two packages, each collapsed into a small number of source files:
-- **`server/index.ts`** — Express 5 (TypeScript, ESM) API, all routes + the LLM/SD pipeline. Firebase-free; run on the fly with tsx.
+- **`server/index.ts`** — Express 5 (TypeScript, ESM) API, all routes + the LLM/SD pipeline. Firebase-free at runtime; run on the fly with tsx. Uses `sharp` to produce a 256px WebP thumbnail alongside each locally-saved PNG.
 - **`client/src/App.tsx`** — the entire React 19 UI (~1950 lines, one component tree).
 - **`client/src/firebase.ts`** — Firebase SDK initialization (Auth, Firestore, Storage) and helper types (`AuthUser`, `GenerationRecord`, `GenerationParams`).
 
@@ -43,12 +43,16 @@ The enhance and generate steps are **split into two client requests on purpose**
 
 ### Storage: client Firebase ↔ server local fallback
 
-The server is **Firebase-free** — `firebase-admin` has been removed from `server/package.json`; no service-account key is required. Storage is split by auth state:
+The runtime server is **Firebase-free** — the Express app never imports `firebase-admin`; no service-account key is required to run `npm run dev`. Storage is split by auth state:
 
-- **Signed in** (Firebase Auth via Google): the client (`client/src/firebase.ts`) uploads the base64 image to Firebase Storage at `users/{uid}/images/<timestamp>.png` and writes metadata to Firestore at `users/{uid}/generations/{id}`. History is driven by a live Firestore `onSnapshot` subscription, **scoped to the gallery's date-filter day** via a `where('timestamp', >=/<=, dayBounds)` range query — every image from the selected day is returned with no per-day count cap. Changing the date filter tears down the old subscription and opens a new one for the new day. Same-field `where`+`orderBy` on `timestamp` uses Firestore's automatic single-field index (no composite index required). Deletion removes the Firestore doc and the Storage object.
-- **Signed out**: the client sends `POST /api/generate` without `clientPersist`; the server saves to `server/outputs/` and records metadata in `server/outputs/metadata.json`, served back via `GET /api/outputs/*`. `/api/history` reads that JSON. `/api/generations/delete` removes the image files and JSON entries.
+- **Signed in** (Firebase Auth via Google): the client (`client/src/firebase.ts`) uploads the base64 image to Firebase Storage at `users/{uid}/images/<timestamp>.png` and writes metadata to Firestore at `users/{uid}/generations/{id}`. Alongside the PNG, the client generates a 256px WebP thumbnail via Canvas API (`client/src/utils/thumbnail.ts`) and uploads it to `users/{uid}/thumbs/<timestamp>.webp`; the download URL is stored on the Firestore doc as `thumbnailUrl`. Storage rules (`storage.rules`) allow reads/writes under both `users/{uid}/images/*` and `users/{uid}/thumbs/*` for the owning user. History is driven by a live Firestore `onSnapshot` subscription, **scoped to the gallery's date-filter day** via a `where('timestamp', >=/<=, dayBounds)` range query — every image from the selected day is returned with no per-day count cap. Changing the date filter tears down the old subscription and opens a new one for the new day. Same-field `where`+`orderBy` on `timestamp` uses Firestore's automatic single-field index (no composite index required). Deletion removes the Firestore doc plus both Storage objects.
+- **Signed out**: the client sends `POST /api/generate` without `clientPersist`; the server saves to `server/outputs/` (PNG + `<name>_thumb.webp` sidecar produced by `sharp`) and records metadata in `server/outputs/metadata.json`, served back via `GET /api/outputs/*`. `/api/history` reads that JSON. `/api/generations/delete` removes the image files, thumbnail files, and JSON entries.
+
+The gallery grid uses `thumbnailUrl ?? imageUrl` — legacy records without a thumbnail fall back to full-res, and the lightbox always fetches `imageUrl` at full resolution regardless.
 
 The `clientPersist` flag in the `/api/generate` request body is the switch: present-and-true → server returns raw base64 and skips saving; absent/false → server saves locally and returns metadata.
+
+**One-off maintenance scripts** live in `server/scripts/` and use `firebase-admin` (a **devDependency**, not loaded at runtime): `backfill-thumbnails.ts` regenerates local sidecar WebPs for pre-existing PNGs, and `backfill-firebase-thumbnails.ts` does the same across the cloud path via `collectionGroup('generations')`. The cloud script requires `server/firebase-key.json` (a downloaded service-account JSON — matches `*key.json` in `.gitignore`) and honors `FIREBASE_STORAGE_BUCKET` in `server/.env` for projects whose bucket isn't `${project_id}.appspot.com`. Both scripts are idempotent (skip records with an existing `thumbnailUrl`) and support `THUMB_DRY_RUN=1`.
 
 ### Runtime-mutable config
 
