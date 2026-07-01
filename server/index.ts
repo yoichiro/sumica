@@ -58,6 +58,11 @@ interface GenerationMetadata {
   seed?: number;
   sampler?: string;
   scheduler?: string;
+  enableHr?: boolean;
+  hrUpscaler?: string;
+  hrScale?: number;
+  hrSecondPassSteps?: number;
+  denoisingStrength?: number;
   loras?: { name: string; weight: number }[];
   isFavorite?: boolean;
 }
@@ -161,7 +166,12 @@ async function generateImage(
   model = '',
   seed = -1,
   sampler = 'Euler a',
-  scheduler = ''
+  scheduler = '',
+  enableHr = false,
+  hrUpscaler = '',
+  hrScale = 2,
+  hrSecondPassSteps = 0,
+  denoisingStrength = 0.7
 ): Promise<{ image: string; seed: number }> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
@@ -179,6 +189,15 @@ async function generateImage(
     // omit it entirely on older SD builds so the API doesn't reject the payload.
     if (scheduler) {
       payload.scheduler = scheduler;
+    }
+    // Hires.fix fields are only meaningful (and only sent) when enabled, so a
+    // disabled request produces a payload identical to pre-Hires.fix behavior.
+    if (enableHr) {
+      payload.enable_hr = true;
+      payload.hr_scale = hrScale;
+      payload.denoising_strength = denoisingStrength;
+      if (hrUpscaler) payload.hr_upscaler = hrUpscaler;
+      if (hrSecondPassSteps) payload.hr_second_pass_steps = hrSecondPassSteps;
     }
     // Switch checkpoint for this request; SD keeps it loaded for subsequent generations.
     if (model) {
@@ -254,7 +273,7 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, scheduler, loras, clientPersist } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, scheduler, loras, enableHr, hrUpscaler, hrScale, hrSecondPassSteps, denoisingStrength, clientPersist } = req.body;
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
   const loraList: { name: string; weight: number }[] = (Array.isArray(loras) ? loras : [])
@@ -299,7 +318,12 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       model || '',
       seedVal,
       sampler || 'Euler a',
-      scheduler || ''
+      scheduler || '',
+      !!enableHr,
+      hrUpscaler || '',
+      hrScale ? parseFloat(hrScale) : 2,
+      hrSecondPassSteps ? parseInt(hrSecondPassSteps) : 0,
+      denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7
     );
 
     // Step 3: Persist. When the client owns persistence (signed in), return the
@@ -320,6 +344,13 @@ app.post('/api/generate', async (req: Request, res: Response) => {
           seed: actualSeed,
           sampler: sampler || 'Euler a',
           scheduler: scheduler || '',
+          enableHr: !!enableHr,
+          ...(enableHr ? {
+            hrUpscaler: hrUpscaler || undefined,
+            hrScale: hrScale ? parseFloat(hrScale) : 2,
+            hrSecondPassSteps: hrSecondPassSteps ? parseInt(hrSecondPassSteps) : 0,
+            denoisingStrength: denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7,
+          } : {}),
           loras: loraList,
         },
       });
@@ -360,6 +391,13 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         seed: actualSeed,
         sampler: sampler || 'Euler a',
         scheduler: scheduler || '',
+        enableHr: !!enableHr,
+        ...(enableHr ? {
+          hrUpscaler: hrUpscaler || undefined,
+          hrScale: hrScale ? parseFloat(hrScale) : 2,
+          hrSecondPassSteps: hrSecondPassSteps ? parseInt(hrSecondPassSteps) : 0,
+          denoisingStrength: denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7,
+        } : {}),
         loras: loraList,
         imageUrl,
         thumbnailUrl,
@@ -484,6 +522,27 @@ app.get('/api/sd-loras', async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Failed to fetch SD LoRAs:', (error as Error).message);
     res.json({ loras: [] });
+  }
+});
+
+// 7c. List Stable Diffusion upscalers (for the Hires.fix upscaler picker). Merges
+// GAN-based upscalers with latent-space upscale modes into one flat name list,
+// since SD's `hr_upscaler` field accepts either kind interchangeably.
+app.get('/api/sd-upscalers', async (_req: Request, res: Response) => {
+  try {
+    const [upscalersRes, latentRes] = await Promise.all([
+      axios.get(`${stableDiffusionUrl}/sdapi/v1/upscalers`, { timeout: 5000 }),
+      axios.get(`${stableDiffusionUrl}/sdapi/v1/latent-upscale-modes`, { timeout: 5000 }),
+    ]);
+    const names = (data: unknown): string[] =>
+      Array.isArray(data)
+        ? data.map((u: { name?: string }) => u.name).filter((n): n is string => Boolean(n))
+        : [];
+    const upscalers = [...names(upscalersRes.data), ...names(latentRes.data)];
+    res.json({ upscalers });
+  } catch (error) {
+    console.error('Failed to fetch SD upscalers:', (error as Error).message);
+    res.json({ upscalers: [] });
   }
 });
 
