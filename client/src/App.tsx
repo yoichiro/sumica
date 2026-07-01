@@ -367,16 +367,35 @@ function App() {
   // Open the lightbox, morphing from the clicked source image via a View Transition.
   // The source image and the lightbox image share `view-transition-name: lightbox-morph`;
   // morphSourceKey ensures exactly one element carries the name per snapshot.
+  //
+  // We preload the full-resolution URL BEFORE calling startViewTransition — otherwise
+  // the "new" snapshot is captured while the lightbox <img> is still loading, so the
+  // browser cross-fades from the gallery thumbnail to a blank element, and the actual
+  // image pops in only after the animation finishes. That pop-in reads to the user as
+  // a second expansion on top of the morph. Preloading guarantees the new snapshot has
+  // real pixels the moment it is taken. onerror falls through so a broken URL doesn't
+  // strand the transition; unlike a promise-based path there's no unhandled rejection
+  // on rapid re-clicks.
   const openLightbox = (url: string, sourceKey: string) => {
     const start = (document as DocumentWithViewTransition).startViewTransition;
     if (!start) {
       setLightboxUrl(url);
       return;
     }
-    flushSync(() => setMorphSourceKey(sourceKey)); // old snapshot: source carries the name
-    start.call(document, () => {
-      flushSync(() => setLightboxUrl(url)); // new snapshot: lightbox image carries the name
-    });
+    const runTransition = () => {
+      flushSync(() => setMorphSourceKey(sourceKey)); // old snapshot: source carries the name
+      start.call(document, () => {
+        flushSync(() => setLightboxUrl(url)); // new snapshot: lightbox image carries the name
+      });
+    };
+    const preloader = new Image();
+    preloader.src = url;
+    if (preloader.complete && preloader.naturalWidth > 0) {
+      runTransition();
+    } else {
+      preloader.onload = runTransition;
+      preloader.onerror = runTransition;
+    }
   };
 
   const closeLightbox = () => {
