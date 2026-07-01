@@ -2007,6 +2007,8 @@ function App() {
                         }}
                         style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: '#f8f9fa', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                         loading="lazy"
+                        decoding="async"
+                        fetchPriority="low"
                       />
                       <SelectButton
                         size={26}
