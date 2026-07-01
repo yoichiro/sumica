@@ -272,6 +272,52 @@ input:checked + .slider:before {
   transform: scale(1.02);
 }
 
+/* Modal dialog enter/exit animations. The overlay fades; the panel scales +
+   translates so it feels like it pops in from behind. Consumers hold the
+   overlay/panel in the DOM during exit (see `dialogExiting` state) so the
+   `.exiting` variant can play out before unmount. */
+.dialog-overlay {
+  animation: dialogOverlayIn 180ms ease-out forwards;
+}
+.dialog-overlay.exiting {
+  animation: dialogOverlayOut 160ms ease-in forwards;
+}
+.dialog-panel {
+  animation: dialogPanelIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.dialog-panel.exiting {
+  animation: dialogPanelOut 160ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes dialogOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogOverlayOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes dialogPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes dialogPanelOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
 /* Toast Toaster Notification System */
 .toast-container {
   position: fixed;

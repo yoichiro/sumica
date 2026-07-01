@@ -350,8 +350,8 @@ function App() {
       if (currentGeneration && deletedSet.has(itemKey(currentGeneration))) {
         setCurrentGeneration(null);
       }
-      setShowDeleteConfirm(false);
-      setDeleteTargetIds([]);
+      // closeConfirm also resets deleteTargetIds after the exit animation.
+      closeConfirm();
       addToast(`${deleteTargetIds.length}件の画像を削除しました 🗑️`, 'success');
     } catch (error: any) {
       addToast(`削除に失敗しました。\n\n詳細: ${error.message}`, 'error');
@@ -413,7 +413,23 @@ function App() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // While the delete confirm dialog plays its exit animation, `showDeleteConfirm`
+  // is still true (so the DOM stays mounted) but this flag flips the CSS to the
+  // `.exiting` variant. The timeout below unmounts once the animation completes.
+  const [confirmExiting, setConfirmExiting] = useState(false);
+  const CONFIRM_EXIT_MS = 180; // keep in sync with dialogOverlayOut duration in index.css
   const [deleting, setDeleting] = useState(false);
+
+  // Trigger the confirm dialog's exit animation, then unmount. Replaces every
+  // in-line setShowDeleteConfirm(false) call.
+  const closeConfirm = () => {
+    setConfirmExiting(true);
+    setTimeout(() => {
+      setShowDeleteConfirm(false);
+      setConfirmExiting(false);
+      setDeleteTargetIds([]);
+    }, CONFIRM_EXIT_MS);
+  };
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [morphSourceKey, setMorphSourceKey] = useState<string | null>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
@@ -2247,7 +2263,7 @@ function App() {
 
       {/* MODAL: DELETE CONFIRMATION */}
       {showDeleteConfirm && (
-        <div style={{
+        <div className={`dialog-overlay${confirmExiting ? ' exiting' : ''}`} style={{
           position: 'fixed',
           inset: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -2258,7 +2274,7 @@ function App() {
           zIndex: 120,
           padding: '20px'
         }}>
-          <div className="glass-panel" style={{
+          <div className={`glass-panel dialog-panel${confirmExiting ? ' exiting' : ''}`} style={{
             width: '100%',
             maxWidth: '420px',
             borderRadius: '20px',
@@ -2284,7 +2300,7 @@ function App() {
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
                 type="button"
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={closeConfirm}
                 disabled={deleting}
                 className="scale-hover"
                 style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e9ecef', background: '#fff', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
