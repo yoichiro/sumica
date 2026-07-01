@@ -49,6 +49,11 @@ interface GenerationData {
   seed?: number;
   sampler?: string;
   scheduler?: string;
+  enableHr?: boolean;
+  hrUpscaler?: string;
+  hrScale?: number;
+  hrSecondPassSteps?: number;
+  denoisingStrength?: number;
   loras?: { name: string; weight: number }[];
   isFavorite?: boolean;
 }
@@ -243,6 +248,12 @@ function App() {
   const [selectedScheduler, setSelectedScheduler] = useState('');
   const [sdLoras, setSdLoras] = useState<string[]>([]);
   const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
+  const [sdUpscalers, setSdUpscalers] = useState<string[]>([]);
+  const [hiresFixEnabled, setHiresFixEnabled] = useState(false);
+  const [selectedUpscaler, setSelectedUpscaler] = useState('');
+  const [hiresScale, setHiresScale] = useState(2);
+  const [hiresSteps, setHiresSteps] = useState(0);
+  const [hiresDenoising, setHiresDenoising] = useState(0.7);
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -530,6 +541,7 @@ function App() {
     fetchSdSamplers();
     fetchSdSchedulers();
     fetchSdLoras();
+    fetchSdUpscalers();
     // Re-check upstream connectivity every 20s so the badges stay fresh.
     const healthInterval = setInterval(fetchHealth, 20000);
     return () => clearInterval(healthInterval);
@@ -548,6 +560,7 @@ function App() {
       fetchSdSamplers();
       fetchSdSchedulers();
       fetchSdLoras();
+      fetchSdUpscalers();
     }
   }, [health?.stableDiffusion.connected]);
 
@@ -721,6 +734,21 @@ function App() {
     }
   };
 
+  // Fetch SD's combined upscaler list (GAN upscalers + latent upscale modes) for
+  // the Hires.fix picker. No "current" concept (like samplers) — stays empty
+  // until the user picks one; SD falls back to its own default upscaler.
+  const fetchSdUpscalers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sd-upscalers`);
+      if (res.ok) {
+        const data = await res.json();
+        setSdUpscalers(Array.isArray(data.upscalers) ? data.upscalers : []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch SD upscalers:', error);
+    }
+  };
+
   // LoRA stack helpers (default weight 0.8; applied as <lora:name:weight> at generation).
   const addLora = (name: string) => {
     if (!name) return;
@@ -743,6 +771,11 @@ function App() {
     setSelectedSampler(item.sampler || '');
     setSelectedScheduler(item.scheduler || '');
     setSelectedLoras(item.loras || []);
+    setHiresFixEnabled(!!item.enableHr);
+    setSelectedUpscaler(item.hrUpscaler || '');
+    setHiresScale(item.hrScale ?? 2);
+    setHiresSteps(item.hrSecondPassSteps ?? 0);
+    setHiresDenoising(item.denoisingStrength ?? 0.7);
     if (item.seed !== undefined) {
       setSeedLocked(true);
       setSeedValue(item.seed);
@@ -832,6 +865,13 @@ function App() {
         sampler: selectedSampler || undefined,
         scheduler: selectedScheduler || undefined,
         loras: selectedLoras,
+        enableHr: hiresFixEnabled,
+        ...(hiresFixEnabled ? {
+          hrUpscaler: selectedUpscaler || undefined,
+          hrScale: hiresScale,
+          hrSecondPassSteps: hiresSteps || undefined,
+          denoisingStrength: hiresDenoising,
+        } : {}),
         clientPersist: !!user
       })
     });
@@ -1319,6 +1359,90 @@ function App() {
                     disabled={loading}
                   />
                 </div>
+                {/* Hires.fix */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: loading ? 'default' : 'pointer', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                    <input
+                      type="checkbox"
+                      checked={hiresFixEnabled}
+                      onChange={(e) => setHiresFixEnabled(e.target.checked)}
+                      disabled={loading}
+                    />
+                    Hires.fixを有効にする
+                  </label>
+                  {hiresFixEnabled && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '4px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>アップスケーラー (Upscaler)</label>
+                        {sdUpscalers.length > 0 ? (
+                          <select
+                            className="input-field"
+                            value={selectedUpscaler}
+                            onChange={(e) => setSelectedUpscaler(e.target.value)}
+                            disabled={loading}
+                            style={{ borderRadius: '8px' }}
+                          >
+                            <option value="">SDのデフォルトを使用</option>
+                            {sdUpscalers.map((u) => (
+                              <option key={u} value={u}>{u}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
+                            <option>アップスケーラー一覧を取得できません（SD未接続）</option>
+                          </select>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                          <span>アップスケール倍率</span>
+                          <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{hiresScale.toFixed(1)}x</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="4"
+                          step="0.1"
+                          value={hiresScale}
+                          onChange={(e) => setHiresScale(parseFloat(e.target.value))}
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                          <span>Hires用ステップ数 (0 = Stepsと同じ)</span>
+                          <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{hiresSteps === 0 ? 'Stepsと同じ' : hiresSteps}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="50"
+                          value={hiresSteps}
+                          onChange={(e) => setHiresSteps(parseInt(e.target.value))}
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                          <span>Denoising strength</span>
+                          <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{hiresDenoising.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={hiresDenoising}
+                          onChange={(e) => setHiresDenoising(parseFloat(e.target.value))}
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
                 {/* LoRA (multiple, each with a weight) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                   <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>LoRA (複数適用可)</label>
@@ -1609,6 +1733,14 @@ function App() {
                       <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
                         <span>LoRA: </span>
                         <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.loras.map((l) => `${l.name} (${l.weight})`).join(', ')}</strong>
+                      </div>
+                    )}
+                    {currentGeneration.enableHr && (
+                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
+                        <span>Hires.fix: </span>
+                        <strong style={{ color: 'var(--text-primary)' }}>
+                          ON ({(currentGeneration.hrScale ?? 2).toFixed(1)}x{currentGeneration.hrUpscaler ? `, ${currentGeneration.hrUpscaler}` : ''})
+                        </strong>
                       </div>
                     )}
                   </div>
