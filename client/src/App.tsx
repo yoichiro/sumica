@@ -1592,28 +1592,6 @@ function App() {
                     <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{currentGeneration.originalPrompt}</p>
                   </div>
                   
-                  {currentGeneration.enhancedPrompt !== currentGeneration.originalPrompt && (
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                        <Sparkles size={11} /> 拡張プロンプト (ポジティブ)
-                      </span>
-                      <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: '#f8f9fa', padding: '10px', borderRadius: '8px', border: '2px solid #e9ecef', wordBreak: 'break-all' }}>
-                        {currentGeneration.enhancedPrompt}
-                      </p>
-                    </div>
-                  )}
-
-                  {currentGeneration.negativePrompt && (
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                        ❌ ネガティブプロンプト
-                      </span>
-                      <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: '#fff5f5', padding: '10px', borderRadius: '8px', border: '2px solid #ffe3e3', wordBreak: 'break-all' }}>
-                        {currentGeneration.negativePrompt}
-                      </p>
-                    </div>
-                  )}
-
                   <div style={{ borderTop: '2px solid #e9ecef', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
                     <div>
                       <span>解像度: </span>
@@ -1658,6 +1636,28 @@ function App() {
                       </div>
                     )}
                   </div>
+
+                  {currentGeneration.enhancedPrompt !== currentGeneration.originalPrompt && (
+                    <div>
+                      <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
+                        <Sparkles size={11} /> 拡張プロンプト (ポジティブ)
+                      </span>
+                      <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: '#f8f9fa', padding: '10px', borderRadius: '8px', border: '2px solid #e9ecef', wordBreak: 'break-all' }}>
+                        {currentGeneration.enhancedPrompt}
+                      </p>
+                    </div>
+                  )}
+
+                  {currentGeneration.negativePrompt && (
+                    <div>
+                      <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
+                        ❌ ネガティブプロンプト
+                      </span>
+                      <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: '#fff5f5', padding: '10px', borderRadius: '8px', border: '2px solid #ffe3e3', wordBreak: 'break-all' }}>
+                        {currentGeneration.negativePrompt}
+                      </p>
+                    </div>
+                  )}
                   </div>
                 </div>
               </div>
