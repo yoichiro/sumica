@@ -251,9 +251,9 @@ function App() {
   const [sdUpscalers, setSdUpscalers] = useState<string[]>([]);
   const [hiresFixEnabled, setHiresFixEnabled] = useState(false);
   const [selectedUpscaler, setSelectedUpscaler] = useState('');
-  const [hiresScale, setHiresScale] = useState(2);
+  const [hiresScale, setHiresScale] = useState(1.5);
   const [hiresSteps, setHiresSteps] = useState(0);
-  const [hiresDenoising, setHiresDenoising] = useState(0.7);
+  const [hiresDenoising, setHiresDenoising] = useState(0.5);
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1506,7 +1506,7 @@ function App() {
                         <input
                           type="range"
                           min="1"
-                          max="4"
+                          max="2"
                           step="0.1"
                           value={hiresScale}
                           onChange={(e) => setHiresScale(parseFloat(e.target.value))}
