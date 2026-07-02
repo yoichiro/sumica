@@ -103,6 +103,12 @@ const lmStudioUrl = process.env.LM_STUDIO_URL || 'http://127.0.0.1:1234';
 const stableDiffusionUrl = process.env.STABLE_DIFFUSION_URL || 'http://127.0.0.1:7860';
 const lmStudioModel = process.env.LM_STUDIO_MODEL || ''; // Empty ⇒ use LM Studio's currently loaded model
 
+// Set by POST /api/generate/interrupt, consumed by the in-flight POST /api/generate
+// handler once its call to generateImage() resolves. A single flag is sufficient
+// because SD only ever processes one generation job at a time for this
+// single-local-user tool — no per-job tracking is needed.
+let cancelRequested = false;
+
 interface EnhancedPrompt {
   positive: string;
   negative: string;
@@ -274,6 +280,7 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
   const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, scheduler, loras, enableHr, hrUpscaler, hrScale, hrSecondPassSteps, denoisingStrength, clientPersist } = req.body;
+  cancelRequested = false; // defensive reset — clears any stale flag from an unrelated, already-finished request
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
   const loraList: { name: string; weight: number }[] = (Array.isArray(loras) ? loras : [])
@@ -325,6 +332,14 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       hrSecondPassSteps ? parseInt(hrSecondPassSteps) : 0,
       denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7
     );
+
+    // If the user cancelled while SD was still rendering, generateImage() resolves
+    // with whatever partial image SD had at the moment of interruption — discard it
+    // instead of persisting it.
+    if (cancelRequested) {
+      cancelRequested = false;
+      return res.json({ success: false, cancelled: true });
+    }
 
     // Step 3: Persist. When the client owns persistence (signed in), return the
     // raw image + params and save nothing. Otherwise fall back to local save.
@@ -418,6 +433,20 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     console.error('Generation pipeline failed:', error);
     res.status(500).json({ error: (error as Error).message || 'Image generation pipeline failed.' });
   }
+});
+
+// 1b. Interrupt the currently-running Stable Diffusion generation, if any.
+// Best-effort: always reports success, since there's nothing the client can do
+// differently if SD itself is unreachable (the pending generation will fail on
+// its own regardless).
+app.post('/api/generate/interrupt', async (_req: Request, res: Response) => {
+  cancelRequested = true;
+  try {
+    await axios.post(`${stableDiffusionUrl}/sdapi/v1/interrupt`, {}, { timeout: 5000 });
+  } catch (error) {
+    console.error('Failed to interrupt Stable Diffusion generation:', (error as Error).message);
+  }
+  res.json({ success: true });
 });
 
 // 2. Retrieve History
