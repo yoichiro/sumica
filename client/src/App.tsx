@@ -504,6 +504,7 @@ function App() {
   type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
   const [errorStep, setErrorStep] = useState<number | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   // Batch generation state
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
@@ -809,12 +810,18 @@ function App() {
   // Raw result of POST /api/generate, before client-side persistence.
   // Signed in → server returns { success, image(base64), params }.
   // Signed out → server already saved locally and returns { success, data }.
+  // cancelled → the user interrupted the generation; no image/data is present.
   type GenResult = {
     success: boolean;
+    cancelled?: boolean;
     image?: string;
     params?: GenerationParams;
     data?: GenerationData;
   };
+
+  // Thrown by the client generateImage() helper when the server reports the
+  // generation was cancelled, so callers can distinguish it from a real failure.
+  class GenerationCancelledError extends Error {}
 
   // One image's parameters in a batch run. All batch modes (count, size cross-product,
   // model-cycling) build a BatchJob[] and feed it to the single sequential loop in
@@ -879,7 +886,9 @@ function App() {
       const errData = await genRes.json();
       throw new Error(errData.error || 'Failed to generate image');
     }
-    return await genRes.json();
+    const result: GenResult = await genRes.json();
+    if (result.cancelled) throw new GenerationCancelledError('Generation was cancelled');
+    return result;
   };
 
   // Step 3: persist a generated image. Signed in → upload to Firebase; signed
@@ -906,6 +915,21 @@ function App() {
     if (!result.success) throw new Error('Image generation returned an unsuccessful result');
     return await persistResult(result);
   };
+
+  // Tell the server to interrupt the current SD job, if any. The original
+  // /api/generate request (still pending) resolves on its own once SD stops —
+  // no AbortController is used here.
+  const requestCancel = async () => {
+    setCancelling(true);
+    try {
+      await fetch(`${API_BASE}/generate/interrupt`, { method: 'POST' });
+    } catch (error) {
+      console.error('Failed to send cancel request:', error);
+      addToast('キャンセル要求の送信に失敗しました。', 'error');
+      setCancelling(false);
+    }
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || loading) return;
@@ -965,6 +989,15 @@ function App() {
         addToast('画像を生成しました！🎨⚡️', 'success');
       }
     } catch (error: any) {
+      if (error instanceof GenerationCancelledError) {
+        // Restore previous generation and return to idle — this is a deliberate
+        // user action, not an error, so no error panel is shown.
+        setCurrentGeneration(prevGen);
+        setGenStatus('idle');
+        addToast('画像生成をキャンセルしました🛑', 'success');
+        return;
+      }
+
       console.error(error);
 
       // Restore previous generation to keep it visible on error
@@ -977,6 +1010,7 @@ function App() {
       addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
     } finally {
       setLoading(false);
+      setCancelling(false);
     }
   };
 
@@ -1009,6 +1043,7 @@ function App() {
 
       let succeeded = 0;
       let failed = 0;
+      let cancelledInLoop = false;
 
       for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
@@ -1019,19 +1054,31 @@ function App() {
           succeeded++;
           setCurrentGeneration(saved); // live preview update
         } catch (genErr) {
+          if (genErr instanceof GenerationCancelledError) {
+            cancelledInLoop = true;
+            break; // stop the batch entirely — don't run remaining jobs
+          }
           failed++;
           console.error(genErr);
         }
       }
 
-      if (succeeded === 0) setErrorStep(2);
-      setGenStatus(succeeded > 0 ? 'success' : 'error');
       if (!user) fetchHistory(); // signed-in history updates via onSnapshot
 
-      if (failed === 0) {
-        addToast(`${succeeded}枚の画像を生成しました！🎨⚡️`, 'success');
-      } else {
+      if (cancelledInLoop) {
+        setGenStatus(succeeded > 0 ? 'success' : 'idle');
+        addToast(`${succeeded}枚生成した時点でキャンセルしました🛑`, 'success');
+      } else if (succeeded === 0) {
+        setErrorStep(2);
+        setGenStatus('error');
         addToast(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+      } else {
+        setGenStatus('success');
+        if (failed === 0) {
+          addToast(`${succeeded}枚の画像を生成しました！🎨⚡️`, 'success');
+        } else {
+          addToast(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+        }
       }
     } catch (error: any) {
       // enhanceOnce failed before the loop → abort like single generation.
@@ -1042,6 +1089,7 @@ function App() {
     } finally {
       setLoading(false);
       setBatchProgress(null);
+      setCancelling(false);
     }
   };
 
@@ -1923,6 +1971,20 @@ function App() {
                     <span>保存完了</span>
                   </div>
                 </div>
+
+                {genStatus === 'generating' && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={requestCancel}
+                      disabled={cancelling}
+                      className="scale-hover"
+                      style={{ padding: '8px 16px', borderRadius: '10px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', fontSize: '12px', cursor: cancelling ? 'default' : 'pointer' }}
+                    >
+                      {cancelling ? 'キャンセル中...' : 'キャンセル'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
