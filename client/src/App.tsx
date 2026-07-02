@@ -927,7 +927,7 @@ function App() {
       await fetch(`${API_BASE}/generate/interrupt`, { method: 'POST' });
     } catch (error) {
       console.error('Failed to send cancel request:', error);
-      addToast('キャンセル要求の送信に失敗しました。', 'error');
+      addToast('生成の停止要求の送信に失敗しました。', 'error');
       setCancelling(false);
     }
   };
@@ -1048,7 +1048,7 @@ function App() {
         // user action, not an error, so no error panel is shown.
         setCurrentGeneration(prevGen);
         setGenStatus('idle');
-        addToast('画像生成をキャンセルしました🛑', 'success');
+        addToast('画像生成を止めました🛑', 'success');
         return;
       }
 
@@ -1123,7 +1123,7 @@ function App() {
 
       if (cancelledInLoop) {
         setGenStatus(succeeded > 0 ? 'success' : 'idle');
-        addToast(`${succeeded}枚生成した時点でキャンセルしました🛑`, 'success');
+        addToast(`${succeeded}枚生成した時点で止めました🛑`, 'success');
       } else if (succeeded === 0) {
         setErrorStep(2);
         setGenStatus('error');
@@ -1964,13 +1964,24 @@ function App() {
                   </div>
                 </div>
 
-                {/* Cancel button + elapsed/remaining time — sits to the left of the
+                {/* Stop button + elapsed/remaining time — sits to the left of the
                     steps sequence, inside the same row, so the steps row's own
                     height never changes when a generation starts/stops (it did
                     when these lived in separate rows below, which visibly shifted
-                    "プロンプト拡張→画像生成→保存完了"). */}
+                    "プロンプト拡張→画像生成→保存完了"). The button comes first so its
+                    own position stays fixed even as the progress text/bar next to
+                    it changes width. */}
                 {genStatus === 'generating' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={requestCancel}
+                      disabled={cancelling}
+                      className="scale-hover"
+                      style={{ padding: '8px 16px', borderRadius: '10px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', fontSize: '12px', cursor: cancelling ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {cancelling ? '生成を止めています...' : '生成を止める'}
+                    </button>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
                       <span>
                         経過{formatDuration(elapsedSeconds)}
@@ -1987,15 +1998,6 @@ function App() {
                         </div>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={requestCancel}
-                      disabled={cancelling}
-                      className="scale-hover"
-                      style={{ padding: '8px 16px', borderRadius: '10px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', fontSize: '12px', cursor: cancelling ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      {cancelling ? 'キャンセル中...' : 'キャンセル'}
-                    </button>
                   </div>
                 )}
 
