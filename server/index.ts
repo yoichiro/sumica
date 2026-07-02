@@ -203,7 +203,7 @@ async function generateImage(
     if (model) {
       payload.override_settings = { sd_model_checkpoint: model };
     }
-    const response = await axios.post(`${stableDiffusionUrl}/sdapi/v1/txt2img`, payload, { timeout: 180000 }); // 3 minutes timeout
+    const response = await axios.post(`${stableDiffusionUrl}/sdapi/v1/txt2img`, payload, { timeout: 600000 }); // 10 minutes timeout — Hires.fix's second pass can push generation well past the old 3-minute cap
 
     if (response.data && response.data.images && response.data.images[0]) {
       let actualSeed = seed;
