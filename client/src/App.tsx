@@ -1964,6 +1964,41 @@ function App() {
                   </div>
                 </div>
 
+                {/* Cancel button + elapsed/remaining time — sits to the left of the
+                    steps sequence, inside the same row, so the steps row's own
+                    height never changes when a generation starts/stops (it did
+                    when these lived in separate rows below, which visibly shifted
+                    "プロンプト拡張→画像生成→保存完了"). */}
+                {genStatus === 'generating' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      <span>
+                        経過{formatDuration(elapsedSeconds)}
+                        {sdProgress && sdProgress.etaRelative > 0 ? ` / 残り約${formatDuration(sdProgress.etaRelative)}` : ''}
+                      </span>
+                      {sdProgress && (
+                        <div style={{ width: '80px', height: '4px', borderRadius: '2px', background: 'var(--panel-border)', overflow: 'hidden' }}>
+                          <div style={{
+                            width: `${Math.min(100, Math.max(0, sdProgress.progress * 100))}%`,
+                            height: '100%',
+                            background: 'var(--pop-blue)',
+                            transition: 'width 0.3s ease',
+                          }} />
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={requestCancel}
+                      disabled={cancelling}
+                      className="scale-hover"
+                      style={{ padding: '8px 16px', borderRadius: '10px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', fontSize: '12px', cursor: cancelling ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {cancelling ? 'キャンセル中...' : 'キャンセル'}
+                    </button>
+                  </div>
+                )}
+
                 {/* Steps Horizontally */}
                 <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
@@ -2027,39 +2062,6 @@ function App() {
                     <span>保存完了</span>
                   </div>
                 </div>
-
-                {genStatus === 'generating' && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button
-                      type="button"
-                      onClick={requestCancel}
-                      disabled={cancelling}
-                      className="scale-hover"
-                      style={{ padding: '8px 16px', borderRadius: '10px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', fontSize: '12px', cursor: cancelling ? 'default' : 'pointer' }}
-                    >
-                      {cancelling ? 'キャンセル中...' : 'キャンセル'}
-                    </button>
-                  </div>
-                )}
-
-                {genStatus === 'generating' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    <span>
-                      経過{formatDuration(elapsedSeconds)}
-                      {sdProgress && sdProgress.etaRelative > 0 ? ` / 残り約${formatDuration(sdProgress.etaRelative)}` : ''}
-                    </span>
-                    {sdProgress && (
-                      <div style={{ width: '100%', height: '4px', borderRadius: '2px', background: 'var(--panel-border)', overflow: 'hidden' }}>
-                        <div style={{
-                          width: `${Math.min(100, Math.max(0, sdProgress.progress * 100))}%`,
-                          height: '100%',
-                          background: 'var(--pop-blue)',
-                          transition: 'width 0.3s ease',
-                        }} />
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           )}
