@@ -504,6 +504,8 @@ function App() {
   type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
   const [errorStep, setErrorStep] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [sdProgress, setSdProgress] = useState<{ progress: number; etaRelative: number } | null>(null);
 
   // Batch generation state
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
@@ -906,6 +908,57 @@ function App() {
     if (!result.success) throw new Error('Image generation returned an unsuccessful result');
     return await persistResult(result);
   };
+
+  // Formats a duration in seconds as "12秒" or, past a minute, "1分5秒" —
+  // Hires.fix generations can run several minutes.
+  const formatDuration = (totalSeconds: number): string => {
+    const s = Math.max(0, Math.round(totalSeconds));
+    if (s < 60) return `${s}秒`;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}分${rem}秒`;
+  };
+
+  // Wraps a single SD call with a live elapsed-time timer (client-side, no
+  // network) and remaining-time/progress polling (GET /api/sd-progress,
+  // which proxies SD's own progress estimate). Used by both single and batch
+  // generation so each batch job gets its own reset elapsed/progress display.
+  const runWithProgressTracking = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    const startTime = Date.now();
+    setElapsedSeconds(0);
+    setSdProgress(null);
+
+    const elapsedTimer = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+
+    const pollProgress = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/sd-progress`);
+        if (res.ok) {
+          const data = await res.json();
+          setSdProgress({
+            progress: typeof data.progress === 'number' ? data.progress : 0,
+            etaRelative: typeof data.etaRelative === 'number' ? data.etaRelative : 0,
+          });
+        }
+      } catch {
+        // best-effort — keep showing the last known progress rather than clearing it
+      }
+    };
+    pollProgress(); // fire immediately so the first update doesn't wait a full interval
+    const progressTimer = setInterval(pollProgress, 1500);
+
+    try {
+      return await fn();
+    } finally {
+      clearInterval(elapsedTimer);
+      clearInterval(progressTimer);
+      setElapsedSeconds(0);
+      setSdProgress(null);
+    }
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || loading) return;
@@ -931,7 +984,9 @@ function App() {
       setLoadingStep(2);
       setGenStatus('generating');
 
-      const result = await generateImage(positive, negative, prompt, seedLocked ? seedValue : -1, width, height);
+      const result = await runWithProgressTracking(() =>
+        generateImage(positive, negative, prompt, seedLocked ? seedValue : -1, width, height)
+      );
 
       if (result.success) {
         // --- Transition to Step 3: Saving ---
@@ -1015,7 +1070,9 @@ function App() {
         setBatchProgress({ current: i + 1, total: jobs.length });
         const seed = seedLocked ? seedValue : -1;
         try {
-          const saved = await generateAndPersist(positive, negative, prompt, seed, job.width, job.height, job.model);
+          const saved = await runWithProgressTracking(() =>
+            generateAndPersist(positive, negative, prompt, seed, job.width, job.height, job.model)
+          );
           succeeded++;
           setCurrentGeneration(saved); // live preview update
         } catch (genErr) {
@@ -1923,6 +1980,25 @@ function App() {
                     <span>保存完了</span>
                   </div>
                 </div>
+
+                {genStatus === 'generating' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    <span>
+                      経過{formatDuration(elapsedSeconds)}
+                      {sdProgress && sdProgress.etaRelative > 0 ? ` / 残り約${formatDuration(sdProgress.etaRelative)}` : ''}
+                    </span>
+                    {sdProgress && (
+                      <div style={{ width: '100%', height: '4px', borderRadius: '2px', background: 'var(--panel-border)', overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${Math.min(100, Math.max(0, sdProgress.progress * 100))}%`,
+                          height: '100%',
+                          background: 'var(--pop-blue)',
+                          transition: 'width 0.3s ease',
+                        }} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
