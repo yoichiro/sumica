@@ -1962,17 +1962,9 @@ function App() {
                       {genStatus === 'error' ? '処理の途中でエラーが発生しました' : genStatus === 'success' ? 'すべての処理が正常に完了しました' : 'バックエンドでタスクを実行しています'}
                     </span>
                   </div>
-                </div>
 
-                {/* Stop button + elapsed/remaining time — sits to the left of the
-                    steps sequence, inside the same row, so the steps row's own
-                    height never changes when a generation starts/stops (it did
-                    when these lived in separate rows below, which visibly shifted
-                    "プロンプト拡張→画像生成→保存完了"). The button comes first so its
-                    own position stays fixed even as the progress text/bar next to
-                    it changes width. */}
-                {genStatus === 'generating' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Stop button — sits right next to the "画像生成パイプライン進行中" status text. */}
+                  {genStatus === 'generating' && (
                     <button
                       type="button"
                       onClick={requestCancel}
@@ -1982,6 +1974,17 @@ function App() {
                     >
                       {cancelling ? '生成を止めています...' : '生成を止める'}
                     </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  {/* Elapsed/remaining time — sits right next to (to the left of) the
+                      steps sequence. Both this row and the stop button above render
+                      only during 'generating', so the steps row's own height never
+                      changes when a generation starts/stops (it did when these lived
+                      in separate rows below, which visibly shifted
+                      "プロンプト拡張→画像生成→保存完了"). */}
+                  {genStatus === 'generating' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
                       <span>
                         経過{formatDuration(elapsedSeconds)}
@@ -1998,8 +2001,7 @@ function App() {
                         </div>
                       )}
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Steps Horizontally */}
                 <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
@@ -2063,6 +2065,7 @@ function App() {
                     </div>
                     <span>保存完了</span>
                   </div>
+                </div>
                 </div>
               </div>
             </div>
