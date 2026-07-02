@@ -546,6 +546,25 @@ app.get('/api/sd-upscalers', async (_req: Request, res: Response) => {
   }
 });
 
+// 7d. Poll Stable Diffusion's own progress/ETA for the currently-running job
+// (used by the client to show elapsed/remaining time during step 2). Degrades
+// to zeros on any failure, same as the other optional SD proxy endpoints.
+app.get('/api/sd-progress', async (_req: Request, res: Response) => {
+  try {
+    const response = await axios.get(`${stableDiffusionUrl}/sdapi/v1/progress`, {
+      params: { skip_current_image: true },
+      timeout: 5000,
+    });
+    res.json({
+      progress: typeof response.data?.progress === 'number' ? response.data.progress : 0,
+      etaRelative: typeof response.data?.eta_relative === 'number' ? response.data.eta_relative : 0,
+    });
+  } catch (error) {
+    console.error('Failed to fetch SD progress:', (error as Error).message);
+    res.json({ progress: 0, etaRelative: 0 });
+  }
+});
+
 // 8. Delete selected generations (image files + metadata).
 app.post('/api/generations/delete', async (req: Request, res: Response) => {
   const { ids } = req.body;
