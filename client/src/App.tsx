@@ -581,6 +581,21 @@ function App() {
     }
   }, [health?.stableDiffusion.connected]);
 
+  // Re-validate everything that depends on the active architecture whenever the
+  // toggle flips. sdModels is intentionally not a dependency here — this should
+  // only run on an explicit toggle flip, not every time the model list happens
+  // to refresh with the same toggle value still selected.
+  useEffect(() => {
+    const options = SIZE_OPTIONS_BY_TYPE[modelTypeFilter];
+    const fallback = modelTypeFilter === 'sdxl' ? 1024 : 512;
+
+    setSelectedModel((prev) => (sdModels.some((m) => m.type === modelTypeFilter && m.title === prev) ? prev : (sdModels.find((m) => m.type === modelTypeFilter)?.title ?? '')));
+    setWidth((prev) => (options.includes(prev) ? prev : fallback));
+    setHeight((prev) => (options.includes(prev) ? prev : fallback));
+    setSelectedWidths((prev) => { const kept = prev.filter((w) => options.includes(w)); return kept.length ? kept : [...options]; });
+    setSelectedHeights((prev) => { const kept = prev.filter((h) => options.includes(h)); return kept.length ? kept : [...options]; });
+  }, [modelTypeFilter]);
+
   // Lightbox keyboard control: Escape closes (unless in OS fullscreen — let the
   // browser exit fullscreen first); ArrowLeft/Right step through the gallery order;
   // Space toggles selection on the currently-shown gallery item.
@@ -1434,9 +1449,9 @@ function App() {
                       disabled={loading}
                       style={{ borderRadius: '8px' }}
                     >
-                      <option value="512">512 px</option>
-                      <option value="768">768 px</option>
-                      <option value="1024">1024 px</option>
+                      {SIZE_OPTIONS_BY_TYPE[modelTypeFilter].map((size) => (
+                        <option key={size} value={size}>{size} px</option>
+                      ))}
                     </select>
                   </div>
                   
@@ -1471,9 +1486,9 @@ function App() {
                       disabled={loading}
                       style={{ borderRadius: '8px' }}
                     >
-                      <option value="512">512 px</option>
-                      <option value="768">768 px</option>
-                      <option value="1024">1024 px</option>
+                      {SIZE_OPTIONS_BY_TYPE[modelTypeFilter].map((size) => (
+                        <option key={size} value={size}>{size} px</option>
+                      ))}
                     </select>
                   </div>
                 </div>
