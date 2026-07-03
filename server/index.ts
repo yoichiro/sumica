@@ -522,28 +522,30 @@ app.get('/api/health', async (_req: Request, res: Response) => {
   res.json({ lmStudio, stableDiffusion });
 });
 
-// 6. List Stable Diffusion checkpoints and the currently active one (for the model picker).
-// Always responds 200; on failure returns an empty list so the client can disable the selector.
+// 6. List Stable Diffusion checkpoints, tagged with their architecture, and the
+// currently active one (for the model picker). Always responds 200; on failure
+// returns an empty list so the client can disable the selector. No checkpoints
+// are excluded — the client scopes the picker to one architecture via its own
+// "SD / SDXL" toggle instead.
 app.get('/api/sd-models', async (_req: Request, res: Response) => {
   try {
     const [listRes, optionsRes] = await Promise.all([
       axios.get(`${stableDiffusionUrl}/sdapi/v1/sd-models`, { timeout: 5000 }),
       axios.get(`${stableDiffusionUrl}/sdapi/v1/options`, { timeout: 5000 }),
     ]);
-    // Exclude Stable Diffusion XL checkpoints, detected by reading each .safetensors header.
     const rawModels: Array<{ title?: string; filename?: string }> = Array.isArray(listRes.data) ? listRes.data : [];
-    const checkedModels = await Promise.all(
+    const models = await Promise.all(
       rawModels
         .filter((m): m is { title: string; filename?: string } => Boolean(m.title))
-        .map(async (m) => ({ title: m.title, isXl: await isSdxlCheckpoint(m.filename, m.title) }))
+        .map(async (m) => ({
+          title: m.title,
+          type: (await isSdxlCheckpoint(m.filename, m.title)) ? 'sdxl' as const : 'sd15' as const,
+        }))
     );
-    const models = checkedModels.filter((m) => !m.isXl).map((m) => m.title);
     const activeCheckpoint = optionsRes.data?.sd_model_checkpoint ?? null;
-    // If the active checkpoint was filtered out (e.g. an XL model), fall back to the
-    // first valid model so the picker never points at a hidden entry.
-    const current = activeCheckpoint && models.includes(activeCheckpoint)
+    const current = activeCheckpoint && models.some((m) => m.title === activeCheckpoint)
       ? activeCheckpoint
-      : models[0] ?? null;
+      : models[0]?.title ?? null;
     res.json({ models, current });
   } catch (error) {
     console.error('Failed to fetch SD models:', (error as Error).message);
