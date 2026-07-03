@@ -2757,6 +2757,12 @@ function App() {
                   (batchMode === 'model' && (sdModels.length === 0 || selectedBatchModels.size === 0))
                 }
                 onClick={() => {
+                  // Give the user an immediate, unmistakable acknowledgement that
+                  // their click registered — enhanceOnce()'s LM Studio round trip
+                  // that handleBatchGenerate kicks off next can take several
+                  // seconds with no other visible feedback, which otherwise reads
+                  // as the screen having frozen.
+                  addToast('バッチ生成を開始しました⚡️', 'success');
                   setShowBatchModal(false);
                   // Preserve sdModels' order when filtering so the cycling order matches
                   // the list the user sees (rather than Set iteration order).
