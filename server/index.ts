@@ -254,6 +254,49 @@ async function checkStableDiffusion(): Promise<{ connected: boolean; error: stri
   }
 }
 
+// Translate a Windows-style absolute path (e.g. "E:\foo\bar.safetensors", as returned by
+// SD running natively on Windows) into its WSL2 mount-point equivalent ("/mnt/e/foo/bar.safetensors")
+// so Node running inside WSL can open the file. No-op for any other path shape or platform
+// (native Linux SD installs already report a POSIX path; native Windows Node can open the path as-is).
+function toWslPath(windowsPath: string): string {
+  if (process.platform !== 'linux') return windowsPath;
+  const match = /^([A-Za-z]):\\(.*)$/.exec(windowsPath);
+  if (!match) return windowsPath;
+  const [, drive, rest] = match;
+  return `/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`;
+}
+
+// Detect whether a checkpoint is SDXL-based by reading the .safetensors header (an 8-byte
+// little-endian length prefix followed by that many bytes of JSON tensor metadata) without
+// loading any tensor data. SDXL's GeneralConditioner wraps its text encoder(s) under keys
+// named "conditioner.embedders.N" — present for both the base checkpoint (2 encoders) and the
+// refiner checkpoint (1 encoder, so a "dual encoder" check alone would miss it) — whereas SD1.5
+// uses "cond_stage_model.*" and other architectures (e.g. Flux) use neither, so this check
+// naturally leaves them un-excluded. Falls back to the old name-based heuristic if the file
+// can't be read (e.g. filename missing, or an unreachable path), so a filesystem hiccup
+// degrades gracefully instead of breaking the model list.
+async function isSdxlCheckpoint(filename: string | undefined, title: string): Promise<boolean> {
+  if (filename) {
+    try {
+      const handle = await fs.promises.open(toWslPath(filename), 'r');
+      try {
+        const lengthBuffer = Buffer.alloc(8);
+        await handle.read(lengthBuffer, 0, 8, 0);
+        const headerLength = Number(lengthBuffer.readBigUInt64LE(0));
+        const headerBuffer = Buffer.alloc(headerLength);
+        await handle.read(headerBuffer, 0, headerLength, 8);
+        const keys = Object.keys(JSON.parse(headerBuffer.toString('utf-8')));
+        return keys.some((k) => k.startsWith('conditioner.embedders.'));
+      } finally {
+        await handle.close();
+      }
+    } catch (error) {
+      console.error(`Failed to read safetensors header for ${title}, falling back to name heuristic:`, (error as Error).message);
+    }
+  }
+  return title.toLowerCase().includes('xl');
+}
+
 // Serve local outputs statically
 app.use('/api/outputs', express.static(outputsDir));
 
@@ -487,13 +530,14 @@ app.get('/api/sd-models', async (_req: Request, res: Response) => {
       axios.get(`${stableDiffusionUrl}/sdapi/v1/sd-models`, { timeout: 5000 }),
       axios.get(`${stableDiffusionUrl}/sdapi/v1/options`, { timeout: 5000 }),
     ]);
-    // Exclude Stable Diffusion XL checkpoints: judged purely by the name containing "xl".
-    const models = Array.isArray(listRes.data)
-      ? listRes.data
-          .map((m: { title?: string }) => m.title)
-          .filter((t): t is string => Boolean(t))
-          .filter((t) => !t.toLowerCase().includes('xl'))
-      : [];
+    // Exclude Stable Diffusion XL checkpoints, detected by reading each .safetensors header.
+    const rawModels: Array<{ title?: string; filename?: string }> = Array.isArray(listRes.data) ? listRes.data : [];
+    const checkedModels = await Promise.all(
+      rawModels
+        .filter((m): m is { title: string; filename?: string } => Boolean(m.title))
+        .map(async (m) => ({ title: m.title, isXl: await isSdxlCheckpoint(m.filename, m.title) }))
+    );
+    const models = checkedModels.filter((m) => !m.isXl).map((m) => m.title);
     const activeCheckpoint = optionsRes.data?.sd_model_checkpoint ?? null;
     // If the active checkpoint was filtered out (e.g. an XL model), fall back to the
     // first valid model so the picker never points at a hidden entry.
