@@ -567,7 +567,7 @@ Place this new effect directly after the existing reconnect effect at `client/sr
   }, [modelTypeFilter]);
 ```
 
-Note: this project's oxlint config does not enable an `exhaustive-deps` rule (checked `client/.oxlintrc.json` — only `react/rules-of-hooks` and `react/only-export-components` are configured), so no `eslint-disable` comment is needed for the intentionally-partial dependency array — the explanatory comment above the effect is sufficient.
+Note: oxlint's `react` plugin does flag this as an `exhaustive-deps` **warning** (confirmed via a baseline `npm run lint --prefix client` run before this task started, which already shows 4 pre-existing warnings of the same kind for other effects with intentionally-partial dependency arrays, e.g. the reconnect effect at `App.tsx:560-568`). Warnings do not fail `npm run lint`'s exit code — only errors do. No `eslint-disable` comment is needed; none of the 4 pre-existing warnings use one either. A 5th warning appearing for this new effect is expected and acceptable.
 
 - [ ] **Step 2: Update the width/height `<select>` option lists**
 
@@ -604,7 +604,7 @@ cd /home/yoichiro/projects/sumica/client && npx tsc -b
 npm run lint --prefix /home/yoichiro/projects/sumica/client
 ```
 
-Expected: both exit 0.
+Expected: `tsc -b` exits 0. Lint exits 0 — a 5th `react-hooks(exhaustive-deps)` warning for the new effect (Step 1) is expected and acceptable, joining the 4 pre-existing warnings already present at baseline (`App.tsx:545`, `562`, `580`, `657`); warnings do not fail the lint command's exit code, only errors do.
 
 - [ ] **Step 4: Manual verification**
 
