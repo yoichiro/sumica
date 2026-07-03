@@ -2047,7 +2047,7 @@ function App() {
 
                   <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep >= 3 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : (loadingStep >= 3 || genStatus === 'success') ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
                     <div style={{ 
                       width: '18px', 
                       height: '18px', 
