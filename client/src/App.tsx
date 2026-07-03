@@ -535,7 +535,7 @@ function App() {
   const [selectedBatchModels, setSelectedBatchModels] = useState<Set<string>>(new Set());
 
   const openBatchModal = () => {
-    setSelectedBatchModels(new Set(sdModels.map((m) => m.title)));
+    setSelectedBatchModels(new Set(sdModels.filter((m) => m.type === modelTypeFilter).map((m) => m.title)));
     setShowBatchModal(true);
   };
   const toggleBatchModel = (m: string) => {
@@ -2701,7 +2701,7 @@ function App() {
                     <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}:</span>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        {SIZE_OPTIONS_BY_TYPE.sd15.map(size => {
+                        {SIZE_OPTIONS_BY_TYPE[modelTypeFilter].map(size => {
                           const active = selected.includes(size);
                           return (
                             <button
@@ -2737,17 +2737,17 @@ function App() {
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
                   利用可能なモデルを順番に切り替えながら、1モデルにつき1枚ずつ生成します。サイズは現在のフォーム設定（{width}×{height}）を使用します。
                 </p>
-                {sdModels.length > 0 ? (
+                {(() => { const modelsInBatchScope = sdModels.filter((m) => m.type === modelTypeFilter); return modelsInBatchScope.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                       <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
-                        {selectedBatchModels.size}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>/ {sdModels.length}モデル</span>
+                        {selectedBatchModels.size}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>/ {modelsInBatchScope.length}モデル</span>
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                       <button
                         type="button"
-                        onClick={() => setSelectedBatchModels(new Set(sdModels.map((m) => m.title)))}
+                        onClick={() => setSelectedBatchModels(new Set(modelsInBatchScope.map((m) => m.title)))}
                         className="scale-hover"
                         style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--pop-blue)', background: 'var(--panel-bg)', color: 'var(--pop-blue)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
                       >
@@ -2763,7 +2763,7 @@ function App() {
                       </button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '8px' }}>
-                      {sdModels.map((m, i) => {
+                      {modelsInBatchScope.map((m, i) => {
                         const isSelected = selectedBatchModels.has(m.title);
                         return (
                           <button
@@ -2797,9 +2797,9 @@ function App() {
                   </div>
                 ) : (
                   <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-orange)', background: 'var(--warning-bg)', borderRadius: '10px', padding: '14px' }}>
-                    モデルが取得できていません。Stable Diffusion が起動しているか確認してください。
+                    {sdModels.length === 0 ? 'モデルが取得できていません。Stable Diffusion が起動しているか確認してください。' : `${modelTypeFilter === 'sdxl' ? 'SDXL' : 'SD'}モデルが見つかりません。`}
                   </div>
-                )}
+                ); })()}
               </>
             )}
 
@@ -2816,7 +2816,7 @@ function App() {
                 type="button"
                 disabled={
                   (batchMode === 'size' && (selectedWidths.length === 0 || selectedHeights.length === 0 || selectedWidths.length * selectedHeights.length > MAX_SIZE_COMBINATIONS)) ||
-                  (batchMode === 'model' && (sdModels.length === 0 || selectedBatchModels.size === 0))
+                  (batchMode === 'model' && (sdModels.filter((m) => m.type === modelTypeFilter).length === 0 || selectedBatchModels.size === 0))
                 }
                 onClick={() => {
                   // Give the user an immediate, unmistakable acknowledgement that
