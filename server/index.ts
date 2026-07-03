@@ -586,12 +586,28 @@ app.get('/api/sd-schedulers', async (_req: Request, res: Response) => {
   }
 });
 
-// 7b. List Stable Diffusion LoRAs (for the LoRA picker). Applied via <lora:name:weight> in the prompt.
+// Classify a LoRA's base architecture from the training metadata AUTOMATIC1111/Forge
+// already parses and returns via /sdapi/v1/loras. Prefers the modelspec.sai_model_spec
+// convention's `modelspec.architecture` field; falls back to the looser `ss_base_model_version`
+// field some older trainers write instead. Returns 'unknown' when neither is present —
+// true for roughly 40% of LoRAs in practice (older or non-modelspec-aware trainers),
+// so callers must not treat 'unknown' as "incompatible".
+function classifyLoraArchitecture(metadata: Record<string, unknown> | undefined): 'sd15' | 'sdxl' | 'unknown' {
+  const arch = String(metadata?.['modelspec.architecture'] ?? metadata?.['ss_base_model_version'] ?? '').toLowerCase();
+  if (arch.includes('xl')) return 'sdxl';
+  if (arch.includes('stable-diffusion-v1') || arch.startsWith('sd_v1') || arch.startsWith('sd_1')) return 'sd15';
+  return 'unknown';
+}
+
+// 7b. List Stable Diffusion LoRAs, tagged with their architecture (for the LoRA picker).
+// Applied via <lora:name:weight> in the prompt.
 app.get('/api/sd-loras', async (_req: Request, res: Response) => {
   try {
     const listRes = await axios.get(`${stableDiffusionUrl}/sdapi/v1/loras`, { timeout: 5000 });
     const loras = Array.isArray(listRes.data)
-      ? listRes.data.map((l: { name?: string }) => l.name).filter((n): n is string => Boolean(n))
+      ? listRes.data
+          .filter((l: { name?: string }): l is { name: string; metadata?: Record<string, unknown> } => Boolean(l.name))
+          .map((l) => ({ name: l.name, type: classifyLoraArchitecture(l.metadata) }))
       : [];
     res.json({ loras });
   } catch (error) {
