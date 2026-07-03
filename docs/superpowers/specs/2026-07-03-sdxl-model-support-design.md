@@ -1,39 +1,39 @@
-# Design: SDXL Model Support in UI
+# 設計書: SDXLモデルのUI対応
 
-Date: 2026-07-03
-Status: Approved
+日付: 2026-07-03
+ステータス: 承認済み
 
-## Summary
+## 概要
 
-Stop excluding SDXL checkpoints from the app and let the user generate with them. The core idea is a new **"SD / SDXL" architecture toggle** that scopes the whole form to one architecture at a time: it filters which checkpoints appear in the model picker, drives which resolution options are offered, and scopes which models "モデル切替" batch mode cycles through. Because the toggle guarantees the form never mixes architectures, no per-model or per-batch-job resolution overrides are needed — the single width/height already selected is always appropriate for whatever is currently visible.
+SDXLチェックポイントを一覧から除外するのをやめ、ユーザーが実際に生成に使えるようにします。核となるアイデアは、新設する**「SD / SDXL」種別トグル**です。これがフォーム全体を常にひとつのアーキテクチャだけに絞り込みます。具体的には、モデルピッカーに表示されるチェックポイントを絞り込み、どの解像度選択肢を提示するかを決め、「まとめて生成」の「モデル切替」モードで対象となるモデルの範囲も決めます。このトグルによってフォームがアーキテクチャを混在させることが構造上あり得なくなるため、モデルごと・バッチジョブごとの解像度上書きロジックは一切不要になります。今選ばれている単一の幅/高さは、常にその時点で表示されているものすべてに対して適切な値であり続けます。
 
-LoRA compatibility is surfaced but not enforced: the LoRA picker shows a "⚠" badge on entries whose architecture is confidently known and different from the active toggle, and leaves everything else (including LoRAs with no architecture metadata at all — about 40% of this environment's LoRAs, per investigation) untouched and selectable, exactly as today.
+LoRAの互換性については、可視化はしますが強制はしません。LoRA追加プルダウンでは、アーキテクチャが確実に判明していて、かつ現在のトグルと異なるものにだけ「⚠」バッジを表示します。それ以外（アーキテクチャのメタデータが一切無いLoRA — 今回調査したこの環境では全体の約4割に相当）は、今まで通り何も手を加えずそのまま選択可能にしておきます。
 
-This builds directly on [[adr-0009-safetensors-header-sdxl-detection]]'s per-checkpoint SDXL detection.
+この設計は[[adr-0009-safetensors-header-sdxl-detection]]で実装したチェックポイント単位のSDXL判定をそのまま土台にしています。
 
-## Current behavior (as-is)
+## 現状の挙動（as-is）
 
-- `/api/sd-models` excludes any checkpoint whose `.safetensors` header shows the SDXL `conditioner.embedders.*` signature (ADR-9), returning a flat `models: string[]`. SDXL checkpoints never appear anywhere in the client.
-- The model picker (`client/src/App.tsx`) is a single flat `<select>` over `sdModels`.
-- Width/height are two independent `<select>`s sharing one hardcoded option list, `[512, 768, 1024]`, used both by the main form and by "まとめて生成"'s "サイズの組み合わせ" batch mode (`SIZE_OPTIONS` module constant).
-- "まとめて生成" has three modes: 枚数 (count), サイズの組み合わせ (size combinations, cross product of `SIZE_OPTIONS` on each axis), モデル切替 (model cycling — one job per selected checkpoint, all jobs using the main form's current width/height).
-- `/api/sd-loras` returns a flat `loras: string[]` of names only; SD's own `/sdapi/v1/loras` response actually includes a `metadata` object per LoRA with training-time info, but the server discards everything except `name`. There is no compatibility information anywhere in the LoRA picker.
+- `/api/sd-models`は、`.safetensors`ヘッダーにSDXL特有の`conditioner.embedders.*`というキーが存在するチェックポイントを除外して返しています（ADR-9）。返却されるのはフラットな`models: string[]`で、SDXLチェックポイントはクライアントのどこにも一切現れません。
+- モデルピッカー（`client/src/App.tsx`）は`sdModels`に対する単純なフラットな`<select>`一つです。
+- 幅/高さは独立した2つの`<select>`で、どちらもハードコードされた同一の選択肢`[512, 768, 1024]`（`SIZE_OPTIONS`というモジュール定数）を共有しています。この定数はメインフォームだけでなく、「まとめて生成」の「サイズの組み合わせ」モードでも使われています。
+- 「まとめて生成」には3つのモードがあります：枚数（count）、サイズの組み合わせ（size combinations、`SIZE_OPTIONS`の各軸の掛け合わせ）、モデル切替（model cycling、選択したチェックポイントごとに1枚ずつ、すべてのジョブがメインフォームの現在の幅/高さをそのまま使用）。
+- `/api/sd-loras`はフラットな`loras: string[]`（名前のみ）を返しています。SD自体の`/sdapi/v1/loras`のレスポンスには実際には学習時の情報を含む`metadata`オブジェクトがLoRAごとに含まれていますが、サーバーは`name`以外をすべて捨てています。LoRAピッカーには互換性に関する情報が一切ありません。
 
-## Desired behavior (to-be)
+## あるべき挙動（to-be）
 
-- All checkpoints are returned by the server, tagged with an architecture `type`.
-- A new segmented toggle ("SD" / "SDXL") sits near the model picker, visually consistent with the existing batch-mode tabs. Its initial value matches SD's actual currently-loaded checkpoint's architecture.
-- The model `<select>` only lists checkpoints matching the active toggle value.
-- The width/height `<select>`s offer different option sets depending on the toggle: `[512, 768, 1024]` for "SD", `[1024, 1152, 1280]` for "SDXL". Flipping the toggle keeps the current width/height if it's still a valid option in the new set, otherwise resets it to that architecture's default (512 for SD, 1024 for SDXL).
-- "サイズの組み合わせ" batch mode's candidate sizes follow the same toggle-driven option set.
-- "モデル切替" batch mode only cycles through checkpoints matching the active toggle, so every job in that batch shares one architecture and the form's single width/height is always valid for all of them — no per-job resolution logic is needed.
-- The "+ LoRAを追加" dropdown appends a "⚠" marker to any LoRA whose detected architecture is confidently known and does not match the active toggle. LoRAs with no detectable architecture are shown exactly as today, unmarked.
+- すべてのチェックポイントをサーバーが返すようになり、それぞれにアーキテクチャの`type`というタグが付きます。
+- モデルピッカーの近くに新しいセグメント型トグル（「SD」/「SDXL」）を設けます。見た目は既存のバッチモードタブと統一します。初期値はSDで実際に現在ロードされているチェックポイントのアーキテクチャに合わせます。
+- モデルの`<select>`は、アクティブなトグルの値に一致するチェックポイントだけを一覧表示します。
+- 幅/高さの`<select>`は、トグルに応じて異なる選択肢を提供します：「SD」なら`[512, 768, 1024]`、「SDXL」なら`[1024, 1152, 1280]`。トグルを切り替えたとき、現在の幅/高さが新しい選択肢の中にまだ存在すればそのまま維持し、存在しなければそのアーキテクチャの既定値（SDは512、SDXLは1024）にリセットします。
+- 「サイズの組み合わせ」バッチモードの候補サイズも、同じトグル連動の選択肢に従います。
+- 「モデル切替」バッチモードは、アクティブなトグルに一致するチェックポイントだけを対象に切り替えます。これにより、そのバッチの全ジョブが同一アーキテクチャに揃うため、フォームの単一の幅/高さが常に全ジョブに対して有効になり、ジョブごとの解像度ロジックは不要になります。
+- 「＋LoRAを追加」プルダウンでは、検出されたアーキテクチャが確実に判明していて、かつアクティブなトグルと一致しないLoRAに「⚠」マークを付記します。アーキテクチャが判定不能なLoRAは、今まで通り何もマークを付けずに表示します。
 
-## Server changes (`server/index.ts`)
+## サーバー側の変更（`server/index.ts`）
 
 ### `/api/sd-models`
 
-Remove the exclusion filter entirely. Reuse the existing `isSdxlCheckpoint()` helper (ADR-9) to tag each checkpoint instead of dropping it. Non-SDXL results (including truly unknown architectures such as Flux, which `isSdxlCheckpoint()` already returns `false` for) are tagged `'sd15'` — this matches the earlier decision that unknown-architecture checkpoints are treated the same as SD1.5 for exclusion purposes, so no third bucket is needed at this layer.
+除外フィルタを完全に撤廃します。既存の`isSdxlCheckpoint()`ヘルパー（ADR-9）をそのまま再利用し、チェックポイントを除外する代わりにタグ付けします。SDXLでないもの（`isSdxlCheckpoint()`がすでに`false`を返すFluxのような真に不明なアーキテクチャも含む）は`'sd15'`とタグ付けします。これは、不明なアーキテクチャのチェックポイントは除外の観点ではSD1.5と同等に扱うという先の決定と一致しており、このレイヤーでは3つ目の区分は不要です。
 
 ```ts
 app.get('/api/sd-models', async (_req: Request, res: Response) => {
@@ -63,19 +63,21 @@ app.get('/api/sd-models', async (_req: Request, res: Response) => {
 });
 ```
 
-Response shape changes from `{ models: string[], current }` to `{ models: { title: string; type: 'sd15' | 'sdxl' }[], current }`.
+レスポンスの形は`{ models: string[], current }`から`{ models: { title: string; type: 'sd15' | 'sdxl' }[], current }`に変わります。
 
 ### `/api/sd-loras`
 
-New helper, placed near `isSdxlCheckpoint()`:
+`isSdxlCheckpoint()`の近くに新しいヘルパーを置きます。
 
 ```ts
-// Classify a LoRA's base architecture from the training metadata AUTOMATIC1111/Forge
-// already parses and returns via /sdapi/v1/loras. Prefers the modelspec.sai_model_spec
-// convention's `modelspec.architecture` field; falls back to the looser `ss_base_model_version`
-// field some older trainers write instead. Returns 'unknown' when neither is present —
-// true for roughly 40% of LoRAs in practice (older or non-modelspec-aware trainers),
-// so callers must not treat 'unknown' as "incompatible".
+// AUTOMATIC1111/ForgeがすでにパースしてくれているLoRAの学習メタデータ
+// （/sdapi/v1/lorasのレスポンス）から、LoRAのベースアーキテクチャを分類する。
+// modelspec.sai_model_spec規約に沿った `modelspec.architecture` フィールドを
+// 優先し、古いトレーナーが代わりに書く、より緩い `ss_base_model_version`
+// フィールドにフォールバックする。どちらも無い場合は 'unknown' を返す
+// — 実際にはLoRAの約4割がこれに該当する（modelspec規約に対応していない
+// 古いトレーナーで作られたものなど）ため、呼び出し側は 'unknown' を
+// 「非互換」として扱ってはならない。
 function classifyLoraArchitecture(metadata: Record<string, unknown> | undefined): 'sd15' | 'sdxl' | 'unknown' {
   const arch = String(metadata?.['modelspec.architecture'] ?? metadata?.['ss_base_model_version'] ?? '').toLowerCase();
   if (arch.includes('xl')) return 'sdxl';
@@ -84,7 +86,7 @@ function classifyLoraArchitecture(metadata: Record<string, unknown> | undefined)
 }
 ```
 
-Update the route:
+ルート側の更新：
 
 ```ts
 app.get('/api/sd-loras', async (_req: Request, res: Response) => {
@@ -103,20 +105,20 @@ app.get('/api/sd-loras', async (_req: Request, res: Response) => {
 });
 ```
 
-Response shape changes from `{ loras: string[] }` to `{ loras: { name: string; type: 'sd15' | 'sdxl' | 'unknown' }[] }`.
+レスポンスの形は`{ loras: string[] }`から`{ loras: { name: string; type: 'sd15' | 'sdxl' | 'unknown' }[] }`に変わります。
 
-## Client changes (`client/src/App.tsx`)
+## クライアント側の変更（`client/src/App.tsx`）
 
-### Types
+### 型
 
 ```ts
 type SdModel = { title: string; type: 'sd15' | 'sdxl' };
 type SdLora = { name: string; type: 'sd15' | 'sdxl' | 'unknown' };
 ```
 
-### Constants
+### 定数
 
-Replace the single `SIZE_OPTIONS` constant with a lookup covering both architectures:
+単一の`SIZE_OPTIONS`定数を、両アーキテクチャをカバーするルックアップに置き換えます。
 
 ```ts
 const SIZE_OPTIONS_BY_TYPE: Record<'sd15' | 'sdxl', number[]> = {
@@ -125,18 +127,18 @@ const SIZE_OPTIONS_BY_TYPE: Record<'sd15' | 'sdxl', number[]> = {
 };
 ```
 
-`SIZE_OPTIONS` (the old flat constant) is removed; every former usage switches to `SIZE_OPTIONS_BY_TYPE[modelTypeFilter]`.
+`SIZE_OPTIONS`（旧来のフラットな定数）は削除し、これまでの利用箇所はすべて`SIZE_OPTIONS_BY_TYPE[modelTypeFilter]`に切り替えます。
 
-### State changes
+### state の変更
 
 ```ts
-const [sdModels, setSdModels] = useState<SdModel[]>([]);       // was string[]
-const [sdLoras, setSdLoras] = useState<SdLora[]>([]);          // was string[]
+const [sdModels, setSdModels] = useState<SdModel[]>([]);       // 旧: string[]
+const [sdLoras, setSdLoras] = useState<SdLora[]>([]);          // 旧: string[]
 const [modelTypeFilter, setModelTypeFilter] = useState<'sd15' | 'sdxl'>('sd15');
-const modelTypeInitialized = useRef(false); // set true after the first real /api/sd-models response
+const modelTypeInitialized = useRef(false); // 最初の実際の/api/sd-modelsレスポンス後にtrueにする
 ```
 
-`selectedLoras` (`{ name, weight }[]`) is unchanged — it stores LoRA choices, not architecture info, which is looked up from `sdLoras` at render time. `addLora`/`removeLora`/`setLoraWeight` key on `name: string` only and are untouched. `fetchSdLoras()` itself needs no code change either — it already does `setSdLoras(Array.isArray(data.loras) ? data.loras : [])`, which passes the new `{ name, type }[]` shape through verbatim; only the `sdLoras` state's type annotation changes.
+`selectedLoras`（`{ name, weight }[]`）は変更しません — これはLoRAの選択状態を保持するものであり、アーキテクチャ情報ではないため、描画時に`sdLoras`から都度参照します。`addLora`/`removeLora`/`setLoraWeight`は`name: string`だけをキーにしており、変更不要です。`fetchSdLoras()`自体もコード変更は不要です — すでに`setSdLoras(Array.isArray(data.loras) ? data.loras : [])`という実装になっており、新しい`{ name, type }[]`という形をそのまま素通しできます。変わるのは`sdLoras`のstateの型注釈だけです。
 
 ### `fetchSdModels()`
 
@@ -163,9 +165,9 @@ const fetchSdModels = async () => {
 };
 ```
 
-The `modelTypeInitialized` ref makes the toggle default itself once from SD's real active checkpoint, without stomping on a manual toggle choice the user might have made before a later re-fetch (e.g. the reconnect-triggered re-fetch in the `health.stableDiffusion.connected` effect).
+`modelTypeInitialized`というrefにより、トグルはSDの実際のアクティブチェックポイントから一度だけ自動的に初期値を決めます。ユーザーがすでに手動でトグルを変更していた場合に、その後の再取得（例えば`health.stableDiffusion.connected`のeffectによる再接続時の再取得）で上書きしてしまうことはありません。
 
-### Model picker + toggle
+### モデルピッカー＋トグル
 
 ```tsx
 <div style={{ display: 'flex', gap: '8px', ... }}>
@@ -175,7 +177,7 @@ The `modelTypeInitialized` ref makes the toggle default itself once from SD's re
       type="button"
       onClick={() => setModelTypeFilter(t)}
       disabled={loading}
-      style={{ /* same segmented-tab look as batchMode tabs */
+      style={{ /* batchModeタブと同じセグメント型の見た目 */
         background: modelTypeFilter === t ? 'var(--pop-blue)' : 'transparent',
         color: modelTypeFilter === t ? '#fff' : 'var(--text-secondary)',
       }}
@@ -202,15 +204,15 @@ const modelsInScope = sdModels.filter((m) => m.type === modelTypeFilter);
 )}
 ```
 
-### Resolution + toggle reset effect
+### 解像度＋トグルのリセットeffect
 
-One effect reacts to `modelTypeFilter` changes and re-validates every value that depends on it — `selectedModel`, the main-form `width`/`height`, and the batch modal's `selectedWidths`/`selectedHeights`:
+`modelTypeFilter`の変化に反応するeffectをひとつ用意し、それに依存するすべての値 — `selectedModel`、メインフォームの`width`/`height`、バッチモーダルの`selectedWidths`/`selectedHeights` — を再検証します。
 
 ```ts
-// Re-validate everything that depends on the active architecture whenever the
-// toggle flips. sdModels is intentionally not a dependency here — this should
-// only run on an explicit toggle flip, not every time the model list happens
-// to refresh with the same toggle value still selected.
+// トグルが切り替わるたびに、アクティブなアーキテクチャに依存する値をすべて
+// 再検証する。sdModelsは意図的に依存配列に含めていない — このeffectは
+// 明示的なトグルの切り替え時にだけ実行されるべきで、同じトグル値のまま
+// モデル一覧がたまたま再取得された場合には実行されてほしくないため。
 useEffect(() => {
   const options = SIZE_OPTIONS_BY_TYPE[modelTypeFilter];
   const fallback = modelTypeFilter === 'sdxl' ? 1024 : 512;
@@ -223,20 +225,20 @@ useEffect(() => {
 }, [modelTypeFilter]);
 ```
 
-### Batch modal
+### バッチモーダル
 
-- `openBatchModal()`: seed `selectedBatchModels` from the filtered list instead of all of `sdModels`:
+- `openBatchModal()`：`selectedBatchModels`の初期値を、`sdModels`全体ではなく絞り込み後の一覧から作るようにします。
   ```ts
   const openBatchModal = () => {
     setSelectedBatchModels(new Set(sdModels.filter((m) => m.type === modelTypeFilter).map((m) => m.title)));
     setShowBatchModal(true);
   };
   ```
-- "サイズの組み合わせ" mode's size-toggle buttons iterate `SIZE_OPTIONS_BY_TYPE[modelTypeFilter]` instead of the old `SIZE_OPTIONS` constant.
-- "モデル切替" mode's candidate list (the checkbox list, the "全選択"/"全解除" buttons, and the job-building `.filter(...).map(...)` at submit) all operate over `sdModels.filter((m) => m.type === modelTypeFilter)` instead of the full `sdModels`.
-- The submit-time job builder is otherwise unchanged — it still emits `{ width, height, model: m.title }` per selected checkpoint, and both `width`/`height` are already guaranteed valid for `modelTypeFilter` by the effect above.
+- 「サイズの組み合わせ」モードのサイズ切替ボタンは、旧`SIZE_OPTIONS`定数ではなく`SIZE_OPTIONS_BY_TYPE[modelTypeFilter]`を反復するようにします。
+- 「モデル切替」モードの候補一覧（チェックボックス一覧、「全選択」/「全解除」ボタン、送信時のジョブ生成処理の`.filter(...).map(...)`）はすべて、`sdModels`全体ではなく`sdModels.filter((m) => m.type === modelTypeFilter)`に対して操作するようにします。
+- 送信時のジョブ生成処理自体はそれ以外変更ありません — 選択されたチェックポイントごとに`{ width, height, model: m.title }`を生成する処理は変わらず、`width`/`height`はどちらも上記のeffectによって`modelTypeFilter`に対してすでに妥当な値であることが保証されています。
 
-### LoRA picker badge
+### LoRAピッカーのバッジ
 
 ```tsx
 {sdLoras.filter((l) => !selectedLoras.some((sl) => sl.name === l.name)).map((l) => {
@@ -249,63 +251,65 @@ useEffect(() => {
 })}
 ```
 
-No other LoRA behavior changes — selection, weight, and the `<lora:name:weight>` prompt suffix at generation time are untouched.
+それ以外のLoRAの挙動 — 選択、weight、生成時の`<lora:name:weight>`プロンプト付記 — には一切手を加えません。
 
-## Data flow
+## データフロー
 
 ```
-Page load → fetchSdModels() → /api/sd-models returns tagged models + current
-  → modelTypeFilter initializes to current's type (once)
-  → model <select> and width/height <option>s scope to modelTypeFilter
+ページ読み込み → fetchSdModels() → /api/sd-modelsがタグ付き済みモデル + currentを返す
+  → modelTypeFilterがcurrentのtypeで初期化される（一度だけ）
+  → モデル<select>と幅/高さの<option>がmodelTypeFilterに絞り込まれる
 
-User flips "SD / SDXL" toggle
-  → effect re-validates selectedModel / width / height / selectedWidths / selectedHeights
-  → model <select> options swap to the other architecture's checkpoints
+ユーザーが「SD / SDXL」トグルを切り替える
+  → effectがselectedModel / width / height / selectedWidths / selectedHeightsを再検証
+  → モデル<select>の選択肢が別アーキテクチャのチェックポイントに切り替わる
 
-User opens "まとめて生成" → モデル切替
-  → candidate list = sdModels already scoped to modelTypeFilter
-  → every job shares one architecture, so the form's width/height applies validly to all of them
-  → handleBatchGenerate runs unchanged
+ユーザーが「まとめて生成」→モデル切替を開く
+  → 候補一覧 = すでにmodelTypeFilterで絞り込み済みのsdModels
+  → 全ジョブが単一アーキテクチャに揃うので、フォームの幅/高さがすべてのジョブに対して有効なまま適用される
+  → handleBatchGenerateは変更なしで動作する
 
-User opens LoRA dropdown
-  → fetchSdLoras() classification (server-side) drives the "⚠" badge against modelTypeFilter
+ユーザーがLoRAプルダウンを開く
+  → fetchSdLoras()の分類結果（サーバー側で判定済み）とmodelTypeFilterを突き合わせて「⚠」バッジを出す
 ```
 
-## Edge cases
+## エッジケース
 
-| Case | Handling |
+| ケース | 扱い |
 |---|---|
-| SD has zero SDXL checkpoints installed | Toggling to "SDXL" shows the disabled "SDXLモデルが見つかりません" placeholder; user can still toggle back to "SD" |
-| SD has zero checkpoints of the initial toggle's type (unlikely, but e.g. active checkpoint deleted) | `modelTypeInitialized` still gets set from `data.current`'s type even if that specific model later disappears from a re-fetch; the picker shows the empty-state placeholder rather than crashing |
-| User flips the toggle while "まとめて生成" modal is open | `selectedBatchModels`/`selectedWidths`/`selectedHeights` were seeded from the toggle value *at modal-open time*; flipping the toggle while the modal is open is not specially handled — the modal's own state stays as last seeded. This matches the existing pattern where the modal's local choices aren't reactive to background state changes. |
-| LoRA has no architecture metadata (`unknown`) | Always shown unmarked, exactly as today — never hidden, never badged, regardless of `modelTypeFilter` |
-| LoRA's `type` matches `modelTypeFilter` | Shown unmarked |
-| History item generated before this feature, reloaded via "♻️ フォームにロード" | `loadIntoForm()` sets `width`/`height`/`model` from the saved record directly (unchanged code path); if the saved model's architecture differs from the current `modelTypeFilter`, the toggle is not auto-flipped — out of scope, see below |
-| `/api/sd-models` or `/api/sd-loras` unreachable | Same as today: empty arrays, disabled placeholders; `modelTypeFilter` stays at its last value (default `'sd15'` if never initialized) |
+| SDにSDXLチェックポイントが1件も無い | 「SDXL」に切り替えると「SDXLモデルが見つかりません」という無効化された選択肢が表示される。「SD」に戻すことは引き続き可能 |
+| 初期トグルのアーキテクチャに該当するチェックポイントがSDに1件も無い（例えば、アクティブなチェックポイントが後で削除された等、稀なケース） | `data.current`のtypeから`modelTypeInitialized`は設定される。仮にそのモデルが後の再取得で一覧から消えても、クラッシュはせず空状態のプレースホルダーが表示される |
+| 「まとめて生成」モーダルを開いた状態でトグルを切り替える | `selectedBatchModels`/`selectedWidths`/`selectedHeights`は**モーダルを開いた時点**のトグル値から初期化されている。モーダルを開いたままトグルを切り替えるケースは特別扱いしない — モーダル内のローカルな選択状態は最後に初期化された値のまま維持される。これはモーダルのローカルな選択がバックグラウンドの状態変化に反応しない、という既存のパターンと一致する |
+| LoRAにアーキテクチャのメタデータが無い（`unknown`） | 今まで通り、常にマーク無しで表示される — `modelTypeFilter`に関わらず、隠されることもバッジが付くこともない |
+| LoRAの`type`が`modelTypeFilter`と一致する | マーク無しで表示される |
+| この機能以前に生成された履歴項目を「♻️ フォームにロード」で読み込む | `loadIntoForm()`は保存されたレコードから直接`width`/`height`/`model`を設定する（既存のコードパスのまま）。保存されていたモデルのアーキテクチャが現在の`modelTypeFilter`と異なっていても、トグルは自動的には切り替わらない — スコープ外とする（下記参照） |
+| `/api/sd-models`または`/api/sd-loras`に接続できない | 今まで通り：空配列、無効化されたプレースホルダー。`modelTypeFilter`は最後の値のまま（一度も初期化されていなければ既定の`'sd15'`） |
 
-## Testing / verification
+## テスト・検証
 
-No automated tests in this project. Verify manually after typecheck + lint:
+このプロジェクトに自動テストは無し。型チェック・lintの後、手動で以下を確認する。
 
-1. Page load with SD connected → toggle defaults to match the actually-loaded checkpoint's architecture.
-2. Toggle to "SDXL" → model list shows only SDXL checkpoints; width/height options become `1024/1152/1280`; if the previous width/height (e.g. 512) isn't valid, it resets to 1024.
-3. Toggle back to "SD" → same checks in reverse, default 512.
-4. Generate a single image with an SDXL checkpoint selected → succeeds, image looks correct at 1024×1024 (previously excluded entirely).
-5. "まとめて生成" → モデル切替 with toggle on "SDXL" → checkbox list only shows SDXL checkpoints; batch completes with one image per checked model, all at the same (valid) resolution.
-6. "まとめて生成" → サイズの組み合わせ with toggle on "SDXL" → size buttons show `1024/1152/1280`.
-7. Add a LoRA known to be SDXL-only while toggle is on "SD" → dropdown entry shows the "⚠SDXL用" marker. Toggle to "SDXL" → marker disappears for that entry, appears instead on known-SD1.5 LoRAs.
-8. Add a LoRA with no architecture metadata → never shows a marker, in either toggle state.
-9. SD unreachable → both pickers show existing disabled-placeholder behavior; no crash from the new toggle logic.
+1. SD接続済みの状態でページを読み込む → トグルが実際にロードされているチェックポイントのアーキテクチャに一致した初期値になる
+2. 「SDXL」に切り替える → モデル一覧がSDXLチェックポイントのみになる。幅/高さの選択肢が`1024/1152/1280`になる。それまでの幅/高さ（例：512）がその選択肢に無ければ1024にリセットされる
+3. 「SD」に戻す → 逆方向で同様に確認、既定値は512
+4. SDXLチェックポイントを選択した状態で単体生成する → 成功し、1024×1024で正しい見た目の画像になる（これまでは一覧から完全に除外されていた）
+5. トグルを「SDXL」にした状態で「まとめて生成」→モデル切替 → チェックボックス一覧にSDXLチェックポイントだけが表示される。チェックした各モデルにつき1枚、すべて同じ（妥当な）解像度でバッチが完了する
+6. トグルを「SDXL」にした状態で「まとめて生成」→サイズの組み合わせ → サイズボタンが`1024/1152/1280`になる
+7. トグルが「SD」の状態でSDXL専用と分かっているLoRAを追加する → プルダウンの項目に「⚠SDXL用」マークが表示される。「SDXL」に切り替えると、そのLoRAのマークは消え、代わりにSD1.5と判明しているLoRAにマークが付く
+8. アーキテクチャのメタデータが無いLoRAを追加する → どちらのトグル状態でもマークは一切付かない
+9. SDに接続できない → 両方のピッカーで既存の無効化プレースホルダーの挙動になる。新しいトグルのロジックに起因するクラッシュは無い
 
-Also run:
-- `npm run typecheck --prefix server` → zero errors
-- `cd client && npx tsc -b` → zero errors
-- `npm run lint --prefix client` → no new errors
+加えて以下も実行する：
+- `npm run typecheck --prefix server` → エラー0件
+- `cd client && npx tsc -b` → エラー0件
+- `npm run lint --prefix client` → 新規エラー無し
 
-## Out of scope
+## スコープ外
 
-- Auto-flipping `modelTypeFilter` when loading a past generation (via "♻️ フォームにロード") whose saved model belongs to the other architecture. The form would show the loaded model's width/height/model correctly, but the toggle and the *other* dropdown's option set could look inconsistent until the user interacts with the toggle. Left for a follow-up if it proves confusing in practice.
-- A three-way toggle separating true SD1.5 from other unknown architectures (Flux, HunyuanVideo, etc.) that happen to be installed. They stay bucketed under "SD".
-- Automatic LoRA weight adjustment or any enforcement (blocking, filtering) based on architecture mismatch — badges are purely informational.
-- Hires.fix parameter tuning specific to SDXL (e.g. different default denoising strength). The existing sliders are reused unchanged.
-- Persisting the toggle choice across page reloads (no localStorage, consistent with sampler/scheduler/LoRA selections today).
+- 「♻️ フォームにロード」で、保存されているモデルが現在のトグルと異なるアーキテクチャに属する過去の生成を読み込んだ場合の、`modelTypeFilter`の自動切り替え。読み込まれたモデル・幅/高さ自体は正しく表示されるが、トグルともう一方の幅/高さの選択肢が、ユーザーがトグルを操作するまで見た目上ちぐはぐになり得る。実運用で分かりにくいと判明したら別途対応する
+- 真のSD1.5と、たまたまインストールされている他の不明アーキテクチャ（Flux、HunyuanVideoなど）を分ける3値トグル。これらは引き続き「SD」側にまとめられる
+- アーキテクチャの不一致に基づくLoRAの重みの自動調整や、選択のブロック・絞り込みといった強制。バッジはあくまで情報提供のみ
+- SDXL向けのHires.fixパラメータのチューニング（例えばdenoising strengthの既定値を変えるなど）。既存のスライダーをそのまま流用する
+- トグルの選択状態をページリロードをまたいで保持すること（サンプラー/スケジューラー/LoRAの選択状態が今もそうであるように、localStorageは使わない）
+- SDXLのRefiner対応（base モデルと refiner モデルを組み合わせた二段階生成パイプライン、SDの`refiner_checkpoint`/`refiner_switch_at`パラメータ）。今回の設計では、単体のチェックポイントをこれまで通り単一の`model`として扱うだけで、base/refinerを別々に選んで組み合わせる仕組みは追加しない。ADR-9の判定ロジック上はrefinerチェックポイントも`sdxl`として一覧に現れ、通常のチェックポイントとして単独選択・単独生成はできるが、それ以上の専用対応はスコープ外とする
+- VAEの選択・切り替え。Sumicaには現状VAEを指定するUI・APIが一切無く、今回のSDXL対応でも新設しない。SDXLでは推奨されるfp16-fixed VAE等があるが、その選択は範囲外とし、SD側の現在のVAE設定（`override_settings`未指定時の既定挙動）に委ねる
