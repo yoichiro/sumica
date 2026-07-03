@@ -1621,9 +1621,14 @@ function App() {
                       style={{ borderRadius: '8px' }}
                     >
                       <option value="">＋ LoRAを追加…</option>
-                      {sdLoras.filter((l) => !selectedLoras.some((sl) => sl.name === l.name)).map((l) => (
-                        <option key={l.name} value={l.name}>{l.name}</option>
-                      ))}
+                      {sdLoras.filter((l) => !selectedLoras.some((sl) => sl.name === l.name)).map((l) => {
+                        const mismatched = l.type !== 'unknown' && l.type !== modelTypeFilter;
+                        return (
+                          <option key={l.name} value={l.name}>
+                            {l.name}{mismatched ? ` ⚠${l.type === 'sdxl' ? 'SDXL' : 'SD1.5'}用` : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   ) : (
                     <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
