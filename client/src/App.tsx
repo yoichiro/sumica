@@ -187,7 +187,15 @@ function FavoriteButton({
 
 // Candidate sizes offered as toggle chips in the batch dialog's size mode
 // (covers common SD1.5 / SDXL resolutions). Same set for width and height.
-const SIZE_OPTIONS = [512, 768, 1024];
+type SdModel = { title: string; type: 'sd15' | 'sdxl' };
+type SdLora = { name: string; type: 'sd15' | 'sdxl' | 'unknown' };
+
+// Resolution options differ by architecture: SDXL was trained around 1024×1024
+// and looks poor well below it, while SD1.5's native range is lower.
+const SIZE_OPTIONS_BY_TYPE: Record<'sd15' | 'sdxl', number[]> = {
+  sd15: [512, 768, 1024],
+  sdxl: [1024, 1152, 1280],
+};
 // Defensive cap on the width×height cross product (3×3 = 9 today, room to grow).
 const MAX_SIZE_COMBINATIONS = 16;
 
@@ -240,13 +248,19 @@ function App() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthChecking, setHealthChecking] = useState(false);
   const healthInFlight = useRef(false);
-  const [sdModels, setSdModels] = useState<string[]>([]);
+  const [sdModels, setSdModels] = useState<SdModel[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [sdSamplers, setSdSamplers] = useState<string[]>([]);
   const [selectedSampler, setSelectedSampler] = useState('');
   const [sdSchedulers, setSdSchedulers] = useState<string[]>([]);
   const [selectedScheduler, setSelectedScheduler] = useState('');
-  const [sdLoras, setSdLoras] = useState<string[]>([]);
+  const [sdLoras, setSdLoras] = useState<SdLora[]>([]);
+  // Which architecture the form is currently scoped to. Drives the model picker
+  // filter, the width/height option sets, and which models "モデル切替" batch
+  // mode cycles through. Initializes from SD's actual active checkpoint the
+  // first time fetchSdModels() succeeds (see modelTypeInitialized below).
+  const [modelTypeFilter, setModelTypeFilter] = useState<'sd15' | 'sdxl'>('sd15');
+  const modelTypeInitialized = useRef(false);
   const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
   const [sdUpscalers, setSdUpscalers] = useState<string[]>([]);
   const [hiresFixEnabled, setHiresFixEnabled] = useState(false);
@@ -513,15 +527,15 @@ function App() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchCount, setBatchCount] = useState(5);
   const [batchMode, setBatchMode] = useState<'count' | 'size' | 'model'>('count');
-  const [selectedWidths, setSelectedWidths] = useState<number[]>([...SIZE_OPTIONS]);
-  const [selectedHeights, setSelectedHeights] = useState<number[]>([...SIZE_OPTIONS]);
+  const [selectedWidths, setSelectedWidths] = useState<number[]>([...SIZE_OPTIONS_BY_TYPE.sd15]);
+  const [selectedHeights, setSelectedHeights] = useState<number[]>([...SIZE_OPTIONS_BY_TYPE.sd15]);
   // Models picked for model-cycling batch. Reset to "all selected" each time the
   // modal opens (via openBatchModal) so the default is always the full available
   // list — the user opts OUT of specific models for that one batch.
   const [selectedBatchModels, setSelectedBatchModels] = useState<Set<string>>(new Set());
 
   const openBatchModal = () => {
-    setSelectedBatchModels(new Set(sdModels));
+    setSelectedBatchModels(new Set(sdModels.map((m) => m.title)));
     setShowBatchModal(true);
   };
   const toggleBatchModel = (m: string) => {
@@ -684,9 +698,16 @@ function App() {
       const res = await fetch(`${API_BASE}/sd-models`);
       if (res.ok) {
         const data = await res.json();
-        const models: string[] = Array.isArray(data.models) ? data.models : [];
+        const models: SdModel[] = Array.isArray(data.models) ? data.models : [];
         setSdModels(models);
         setSelectedModel((prev) => prev || data.current || '');
+        if (!modelTypeInitialized.current && data.current) {
+          const currentType = models.find((m) => m.title === data.current)?.type;
+          if (currentType) {
+            setModelTypeFilter(currentType);
+            modelTypeInitialized.current = true;
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to fetch SD models:', error);
@@ -1313,23 +1334,49 @@ function App() {
                 {/* Stable Diffusion Model Selector */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                   <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>モデル (Stable Diffusion)</label>
-                  {sdModels.length > 0 ? (
-                    <select
-                      className="input-field"
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      disabled={loading}
-                      style={{ borderRadius: '8px' }}
-                    >
-                      {sdModels.map((m) => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                      <option>モデル一覧を取得できません（SD未接続）</option>
-                    </select>
-                  )}
+                  <div style={{ display: 'flex', gap: '6px', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '3px' }}>
+                    {(['sd15', 'sdxl'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setModelTypeFilter(t)}
+                        disabled={loading}
+                        style={{
+                          flex: 1,
+                          padding: '6px',
+                          borderRadius: '7px',
+                          border: 'none',
+                          cursor: loading ? 'default' : 'pointer',
+                          fontWeight: 800,
+                          fontSize: '12px',
+                          background: modelTypeFilter === t ? 'var(--pop-blue)' : 'transparent',
+                          color: modelTypeFilter === t ? '#fff' : 'var(--text-secondary)',
+                        }}
+                      >
+                        {t === 'sd15' ? 'SD' : 'SDXL'}
+                      </button>
+                    ))}
+                  </div>
+                  {(() => {
+                    const modelsInScope = sdModels.filter((m) => m.type === modelTypeFilter);
+                    return modelsInScope.length > 0 ? (
+                      <select
+                        className="input-field"
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        disabled={loading}
+                        style={{ borderRadius: '8px' }}
+                      >
+                        {modelsInScope.map((m) => (
+                          <option key={m.title} value={m.title}>{m.title}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
+                        <option>{sdModels.length === 0 ? 'モデル一覧を取得できません（SD未接続）' : modelTypeFilter === 'sdxl' ? 'SDXLモデルが見つかりません' : 'SD1.5モデルが見つかりません'}</option>
+                      </select>
+                    );
+                  })()}
                 </div>
 
                 {/* Sampler + Schedule Type — paired side-by-side when SD exposes a
@@ -1559,8 +1606,8 @@ function App() {
                       style={{ borderRadius: '8px' }}
                     >
                       <option value="">＋ LoRAを追加…</option>
-                      {sdLoras.filter((n) => !selectedLoras.some((l) => l.name === n)).map((n) => (
-                        <option key={n} value={n}>{n}</option>
+                      {sdLoras.filter((l) => !selectedLoras.some((sl) => sl.name === l.name)).map((l) => (
+                        <option key={l.name} value={l.name}>{l.name}</option>
                       ))}
                     </select>
                   ) : (
@@ -2639,7 +2686,7 @@ function App() {
                     <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}:</span>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        {SIZE_OPTIONS.map(size => {
+                        {SIZE_OPTIONS_BY_TYPE.sd15.map(size => {
                           const active = selected.includes(size);
                           return (
                             <button
@@ -2685,7 +2732,7 @@ function App() {
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                       <button
                         type="button"
-                        onClick={() => setSelectedBatchModels(new Set(sdModels))}
+                        onClick={() => setSelectedBatchModels(new Set(sdModels.map((m) => m.title)))}
                         className="scale-hover"
                         style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--pop-blue)', background: 'var(--panel-bg)', color: 'var(--pop-blue)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
                       >
@@ -2702,12 +2749,12 @@ function App() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '8px' }}>
                       {sdModels.map((m, i) => {
-                        const isSelected = selectedBatchModels.has(m);
+                        const isSelected = selectedBatchModels.has(m.title);
                         return (
                           <button
-                            key={m}
+                            key={m.title}
                             type="button"
-                            onClick={() => toggleBatchModel(m)}
+                            onClick={() => toggleBatchModel(m.title)}
                             className="scale-hover"
                             style={{
                               display: 'flex',
@@ -2727,7 +2774,7 @@ function App() {
                           >
                             {isSelected ? <CheckCircle2 size={16} /> : <Circle size={16} />}
                             <span style={{ color: 'var(--text-muted)', fontWeight: 700, minWidth: '20px', flexShrink: 0 }}>{i + 1}.</span>
-                            <span style={{ wordBreak: 'break-all', flex: 1 }}>{m}</span>
+                            <span style={{ wordBreak: 'break-all', flex: 1 }}>{m.title}</span>
                           </button>
                         );
                       })}
@@ -2770,7 +2817,7 @@ function App() {
                     ? Array(batchCount).fill({ width, height })
                     : batchMode === 'size'
                       ? selectedWidths.flatMap(w => selectedHeights.map(h => ({ width: w, height: h })))
-                      : sdModels.filter(m => selectedBatchModels.has(m)).map(m => ({ width, height, model: m }));
+                      : sdModels.filter(m => selectedBatchModels.has(m.title)).map(m => ({ width, height, model: m.title }));
                   handleBatchGenerate(jobs);
                 }}
                 className="btn-neon"
