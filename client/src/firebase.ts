@@ -79,6 +79,14 @@ export type GenerationParams = {
   hrSecondPassSteps?: number;
   denoisingStrength?: number;
   loras?: { name: string; weight: number }[];
+  // SDXL-only refinement pass: `refiner` is the checkpoint title, `refinerSwitchAt`
+  // is the 0.0-1.0 fraction of steps at which SD switches from the base model to
+  // the refiner. Both absent (or refiner === '') means no refinement.
+  refiner?: string;
+  refinerSwitchAt?: number;
+  // External VAE override. Absent or 'Automatic' means SD keeps its current setting
+  // (usually the checkpoint's baked-in VAE).
+  vae?: string;
 };
 
 // Keep this shape in sync with GenerationData in App.tsx.

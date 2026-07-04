@@ -64,6 +64,15 @@ interface GenerationMetadata {
   hrSecondPassSteps?: number;
   denoisingStrength?: number;
   loras?: { name: string; weight: number }[];
+  // SDXL-only refinement pass: a second checkpoint applied for the last
+  // (1 − refinerSwitchAt) fraction of steps. Both fields are absent when the
+  // user didn't opt in.
+  refiner?: string;
+  refinerSwitchAt?: number;
+  // External VAE override (SDXL benefits from an SDXL-matched VAE when the
+  // checkpoint didn't bake one in). Empty / undefined means "leave SD's current
+  // VAE setting alone", which is usually "Automatic".
+  vae?: string;
   isFavorite?: boolean;
 }
 
@@ -177,7 +186,10 @@ async function generateImage(
   hrUpscaler = '',
   hrScale = 2,
   hrSecondPassSteps = 0,
-  denoisingStrength = 0.7
+  denoisingStrength = 0.7,
+  refiner = '',
+  refinerSwitchAt = 0.8,
+  vae = ''
 ): Promise<{ image: string; seed: number }> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
@@ -205,9 +217,20 @@ async function generateImage(
       if (hrUpscaler) payload.hr_upscaler = hrUpscaler;
       if (hrSecondPassSteps) payload.hr_second_pass_steps = hrSecondPassSteps;
     }
-    // Switch checkpoint for this request; SD keeps it loaded for subsequent generations.
-    if (model) {
-      payload.override_settings = { sd_model_checkpoint: model };
+    // SDXL Refiner: only send both fields when a refiner checkpoint is chosen,
+    // so opt-out requests keep the exact pre-refiner payload shape.
+    if (refiner) {
+      payload.refiner_checkpoint = refiner;
+      payload.refiner_switch_at = refinerSwitchAt;
+    }
+    // Switch checkpoint (and optionally VAE) for this request; SD keeps them
+    // loaded for subsequent generations. Empty string / "Automatic" means "leave
+    // the current VAE alone" and is intentionally NOT forwarded.
+    const overrides: Record<string, unknown> = {};
+    if (model) overrides.sd_model_checkpoint = model;
+    if (vae && vae !== 'Automatic') overrides.sd_vae = vae;
+    if (Object.keys(overrides).length > 0) {
+      payload.override_settings = overrides;
     }
     const response = await axios.post(`${stableDiffusionUrl}/sdapi/v1/txt2img`, payload, { timeout: 600000 }); // 10 minutes timeout — Hires.fix's second pass can push generation well past the old 3-minute cap
 
@@ -322,7 +345,7 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, scheduler, loras, enableHr, hrUpscaler, hrScale, hrSecondPassSteps, denoisingStrength, clientPersist } = req.body;
+  const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, scheduler, loras, enableHr, hrUpscaler, hrScale, hrSecondPassSteps, denoisingStrength, refiner, refinerSwitchAt, vae, clientPersist } = req.body;
   cancelRequested = false; // defensive reset — clears any stale flag from an unrelated, already-finished request
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
@@ -373,7 +396,10 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       hrUpscaler || '',
       hrScale ? parseFloat(hrScale) : 2,
       hrSecondPassSteps ? parseInt(hrSecondPassSteps) : 0,
-      denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7
+      denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7,
+      refiner || '',
+      refinerSwitchAt !== undefined ? parseFloat(refinerSwitchAt) : 0.8,
+      vae || ''
     );
 
     // If the user cancelled while SD was still rendering, generateImage() resolves
@@ -409,6 +435,11 @@ app.post('/api/generate', async (req: Request, res: Response) => {
             hrSecondPassSteps: hrSecondPassSteps ? parseInt(hrSecondPassSteps) : 0,
             denoisingStrength: denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7,
           } : {}),
+          ...(refiner ? {
+            refiner,
+            refinerSwitchAt: refinerSwitchAt !== undefined ? parseFloat(refinerSwitchAt) : 0.8,
+          } : {}),
+          ...(vae && vae !== 'Automatic' ? { vae } : {}),
           loras: loraList,
         },
       });
@@ -456,6 +487,11 @@ app.post('/api/generate', async (req: Request, res: Response) => {
           hrSecondPassSteps: hrSecondPassSteps ? parseInt(hrSecondPassSteps) : 0,
           denoisingStrength: denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7,
         } : {}),
+        ...(refiner ? {
+          refiner,
+          refinerSwitchAt: refinerSwitchAt !== undefined ? parseFloat(refinerSwitchAt) : 0.8,
+        } : {}),
+        ...(vae && vae !== 'Automatic' ? { vae } : {}),
         loras: loraList,
         imageUrl,
         thumbnailUrl,
@@ -634,6 +670,24 @@ app.get('/api/sd-upscalers', async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Failed to fetch SD upscalers:', (error as Error).message);
     res.json({ upscalers: [] });
+  }
+});
+
+// 7ca. List Stable Diffusion VAEs (Variational AutoEncoders). SDXL benefits from
+// picking a matching external VAE (e.g. `sdxl_vae.safetensors`) when the checkpoint
+// wasn't shipped with one baked in; SD1.5 has its own VAE files too but the
+// current UI only surfaces this picker on SDXL. Returns `[]` on failure so the
+// client-side selector can hide itself, matching the other optional SD proxies.
+app.get('/api/sd-vaes', async (_req: Request, res: Response) => {
+  try {
+    const listRes = await axios.get(`${stableDiffusionUrl}/sdapi/v1/sd-vae`, { timeout: 5000 });
+    const vaes = Array.isArray(listRes.data)
+      ? listRes.data.map((v: { model_name?: string }) => v.model_name).filter((n): n is string => Boolean(n))
+      : [];
+    res.json({ vaes });
+  } catch (error) {
+    console.error('Failed to fetch SD VAEs:', (error as Error).message);
+    res.json({ vaes: [] });
   }
 });
 

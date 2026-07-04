@@ -55,6 +55,11 @@ interface GenerationData {
   hrSecondPassSteps?: number;
   denoisingStrength?: number;
   loras?: { name: string; weight: number }[];
+  // SDXL-only extras. Both absent means the pipeline ran without the refinement
+  // pass / external VAE, identical to pre-feature generations.
+  refiner?: string;
+  refinerSwitchAt?: number;
+  vae?: string;
   isFavorite?: boolean;
 }
 
@@ -398,6 +403,14 @@ function App() {
   const [hiresScale, setHiresScale] = useState(1.5);
   const [hiresSteps, setHiresSteps] = useState(0);
   const [hiresDenoising, setHiresDenoising] = useState(0.5);
+  // SDXL-only extras: an optional Refiner checkpoint (second-pass model, active
+  // for the final (1 − refinerSwitchAt) fraction of steps) and an optional
+  // external VAE override. Both default to "not set" — the pipeline behaves
+  // identically to before when nothing is picked.
+  const [sdVaes, setSdVaes] = useState<string[]>([]);
+  const [selectedRefiner, setSelectedRefiner] = useState('');
+  const [refinerSwitchAt, setRefinerSwitchAt] = useState(0.8);
+  const [selectedVae, setSelectedVae] = useState('');
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -700,6 +713,7 @@ function App() {
     fetchSdSchedulers();
     fetchSdLoras();
     fetchSdUpscalers();
+    fetchSdVaes();
     // Re-check upstream connectivity every 20s so the badges stay fresh.
     const healthInterval = setInterval(fetchHealth, 20000);
     return () => clearInterval(healthInterval);
@@ -719,6 +733,7 @@ function App() {
       fetchSdSchedulers();
       fetchSdLoras();
       fetchSdUpscalers();
+      fetchSdVaes();
     }
   }, [health?.stableDiffusion.connected]);
 
@@ -755,6 +770,10 @@ function App() {
     setHeight((prev) => (SD15_SIZE_OPTIONS.includes(prev) ? prev : 512));
     setSelectedWidths((prev) => { const kept = prev.filter((w) => SD15_SIZE_OPTIONS.includes(w)); return kept.length ? kept : [...SD15_SIZE_OPTIONS]; });
     setSelectedHeights((prev) => { const kept = prev.filter((h) => SD15_SIZE_OPTIONS.includes(h)); return kept.length ? kept : [...SD15_SIZE_OPTIONS]; });
+    // Refiner/VAE are SDXL-only concepts; clear them so a subsequent SD1.5
+    // generation doesn't carry a stale SDXL refiner pick.
+    setSelectedRefiner('');
+    setSelectedVae('');
   }, [modelTypeFilter]);
 
   // SDXL picker → width/height projection. Whenever the ratio/orientation/size
@@ -974,6 +993,21 @@ function App() {
     }
   };
 
+  // Fetch SD's external VAE list (for the SDXL VAE picker). Empty until SD is
+  // reachable; the picker itself always includes an "Automatic" sentinel option
+  // so the user can opt out even before the list arrives.
+  const fetchSdVaes = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sd-vaes`);
+      if (res.ok) {
+        const data = await res.json();
+        setSdVaes(Array.isArray(data.vaes) ? data.vaes : []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch SD VAEs:', error);
+    }
+  };
+
   // LoRA stack helpers (default weight 0.8; applied as <lora:name:weight> at generation).
   const addLora = (name: string) => {
     if (!name) return;
@@ -1018,6 +1052,9 @@ function App() {
     setHiresScale(item.hrScale ?? 2);
     setHiresSteps(item.hrSecondPassSteps ?? 0);
     setHiresDenoising(item.denoisingStrength ?? 0.7);
+    setSelectedRefiner(item.refiner || '');
+    setRefinerSwitchAt(item.refinerSwitchAt ?? 0.8);
+    setSelectedVae(item.vae || '');
     if (item.seed !== undefined) {
       setSeedLocked(true);
       setSeedValue(item.seed);
@@ -1120,6 +1157,13 @@ function App() {
           hrSecondPassSteps: hiresSteps || undefined,
           denoisingStrength: hiresDenoising,
         } : {}),
+        // SDXL-only extras — only forwarded when the toggle is on SDXL, so
+        // flipping back to SD1.5 doesn't accidentally leak refiner/vae picks.
+        ...(modelTypeFilter === 'sdxl' && selectedRefiner ? {
+          refiner: selectedRefiner,
+          refinerSwitchAt,
+        } : {}),
+        ...(modelTypeFilter === 'sdxl' && selectedVae ? { vae: selectedVae } : {}),
         clientPersist: !!user
       })
     });
@@ -2016,6 +2060,69 @@ function App() {
                   ))}
                 </div>
 
+                {/* SDXL-only extras: Refiner (second-pass checkpoint) and VAE.
+                    Rendered only when SDXL is the active architecture — SD1.5
+                    users don't need this complexity for now. */}
+                {modelTypeFilter === 'sdxl' && (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                        Refiner (仕上げモデル) <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— 任意</span>
+                      </label>
+                      <select
+                        className="input-field"
+                        value={selectedRefiner}
+                        onChange={(e) => setSelectedRefiner(e.target.value)}
+                        disabled={loading}
+                        style={{ borderRadius: '8px' }}
+                      >
+                        <option value="">（使わない）</option>
+                        {sdModels.filter((m) => m.type === 'sdxl').map((m) => (
+                          <option key={m.title} value={m.title}>{m.title}</option>
+                        ))}
+                      </select>
+                      {selectedRefiner && (
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                            <span>切替タイミング (Switch at)</span>
+                            <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{refinerSwitchAt.toFixed(2)}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={refinerSwitchAt}
+                            onChange={(e) => setRefinerSwitchAt(parseFloat(e.target.value))}
+                            disabled={loading}
+                          />
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            全体の {Math.round(refinerSwitchAt * 100)}% までベースモデル、以降Refinerで仕上げ
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                        VAE <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— 任意</span>
+                      </label>
+                      <select
+                        className="input-field"
+                        value={selectedVae}
+                        onChange={(e) => setSelectedVae(e.target.value)}
+                        disabled={loading}
+                        style={{ borderRadius: '8px' }}
+                      >
+                        <option value="">Automatic（自動）</option>
+                        {sdVaes.map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+
                 {/* Seed */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: loading ? 'default' : 'pointer', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
@@ -2272,6 +2379,20 @@ function App() {
                         <strong style={{ color: 'var(--text-primary)' }}>
                           ON ({(currentGeneration.hrScale ?? 2).toFixed(1)}x{currentGeneration.hrUpscaler ? `, ${currentGeneration.hrUpscaler}` : ''})
                         </strong>
+                      </div>
+                    )}
+                    {currentGeneration.refiner && (
+                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
+                        <span>Refiner: </span>
+                        <strong style={{ color: 'var(--text-primary)' }}>
+                          {currentGeneration.refiner} (switch at {(currentGeneration.refinerSwitchAt ?? 0.8).toFixed(2)})
+                        </strong>
+                      </div>
+                    )}
+                    {currentGeneration.vae && (
+                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
+                        <span>VAE: </span>
+                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.vae}</strong>
                       </div>
                     )}
                   </div>
