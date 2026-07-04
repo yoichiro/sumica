@@ -18,6 +18,7 @@ import {
   LogIn,
   Layers,
   Star,
+  Info,
 } from 'lucide-react';
 import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { flushSync } from 'react-dom';
@@ -562,6 +563,7 @@ function App() {
 
   const closeLightbox = () => {
     if (document.fullscreenElement) { document.exitFullscreen(); } // leave OS fullscreen before closing
+    setShowLightboxInfo(false); // next open always starts with info hidden
     const start = (document as DocumentWithViewTransition).startViewTransition;
     if (!start) {
       setLightboxUrl(null);
@@ -618,12 +620,25 @@ function App() {
   const [morphSourceKey, setMorphSourceKey] = useState<string | null>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Bottom overlay panel of image detail info. Hidden by default each time
+  // the lightbox opens; toggled by the Info button in the top toolbar; kept
+  // across left/right navigation within the same open lightbox session.
+  const [showLightboxInfo, setShowLightboxInfo] = useState(false);
 
   // Index of the lightbox image within the displayed gallery order (-1 if not listed),
   // used to disable the prev/next buttons at the ends.
   const lightboxIndex = lightboxUrl
     ? displayedHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl)
     : -1;
+
+  // Metadata source for whichever image the lightbox currently shows. Gallery
+  // images resolve via displayedHistory[lightboxIndex]; the preview tab's
+  // current image (lightboxIndex === -1 with morphSourceKey === '__preview__')
+  // resolves via currentGeneration. Null in any other unexpected case, which
+  // hides the Info button and panel defensively.
+  const lightboxMeta = lightboxIndex >= 0
+    ? displayedHistory[lightboxIndex]
+    : (morphSourceKey === '__preview__' ? currentGeneration : null);
 
   // Track the last valid lightboxIndex so we can recover the "next" item if
   // the currently-shown image drops out of displayedHistory (e.g. unfavorited
@@ -2870,6 +2885,33 @@ function App() {
             onClick={(e) => e.stopPropagation()}
             style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
           />
+          {lightboxMeta && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowLightboxInfo((v) => !v); }}
+              title={showLightboxInfo ? '詳細情報を隠す' : '詳細情報を表示'}
+              aria-pressed={showLightboxInfo}
+              className="scale-hover"
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '332px',
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                border: 'none',
+                background: showLightboxInfo ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.15)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: showLightboxInfo ? '0 0 0 2px rgba(255, 255, 255, 0.35)' : 'none'
+              }}
+            >
+              <Info size={22} />
+            </button>
+          )}
           {/* Selection toggle: only available when the lightbox shows a gallery item
               (not the preview tab's current generation, whose key is '__preview__' and
               not present in displayedHistory). Mirrors the click-to-select behavior on
