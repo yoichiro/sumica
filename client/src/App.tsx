@@ -1041,6 +1041,19 @@ function App() {
     if (arch) setModelTypeFilter(arch);
     setWidth(item.width);
     setHeight(item.height);
+    // Also sync the SDXL ratio/orientation/size chips directly from the loaded
+    // dimensions. The modelTypeFilter useEffect does this when the architecture
+    // toggle actually flips, but same-architecture reloads (e.g. clicking load
+    // on another SDXL image while already on SDXL) don't retrigger that effect,
+    // and the picker chips would otherwise stay on the previous selection.
+    if (arch === 'sdxl') {
+      const found = findSdxlSelection(item.width, item.height);
+      if (found) {
+        setSelectedRatio(found.ratio);
+        setSelectedOrientation(found.orientation);
+        setSelectedSize(found.size);
+      }
+    }
     setSteps(item.steps);
     setCfgScale(item.cfgScale);
     setSelectedModel(item.model || '');
