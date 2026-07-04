@@ -983,11 +983,28 @@ function App() {
   const setLoraWeight = (name: string, weight: number) =>
     setSelectedLoras((prev) => prev.map((l) => (l.name === name ? { ...l, weight } : l)));
 
+  // Infer SDXL vs SD1.5 from a checkpoint title. Prefer sdModels (authoritative —
+  // populated by the safetensors header analysis in [[adr-0009]]); fall back to
+  // the "xl"-in-name heuristic ([[adr-0003]]) when the model isn't in the current
+  // list (e.g. deleted or unloaded since generation). Returns null for empty title.
+  const inferSdArchitectureFromTitle = (title: string): 'sd15' | 'sdxl' | null => {
+    if (!title) return null;
+    const known = sdModels.find(m => m.title === title);
+    if (known) return known.type;
+    return /xl/i.test(title) ? 'sdxl' : 'sd15';
+  };
+
   // Populate the left-panel form fields from a history item so the user can
   // tweak and regenerate. If the item carries a seed, lock the seed field to
   // that value so the same image can be reproduced; otherwise unlock it.
   const loadIntoForm = (item: GenerationData) => {
     setPrompt(item.originalPrompt);
+    // Flip the SD/SDXL toggle to match the loaded image's architecture BEFORE
+    // setting width/height/model, so the modelTypeFilter useEffect resolves the
+    // SDXL picker (ratio/orientation/size) from the loaded dimensions rather than
+    // defaulting to 1:1 M when the toggle stays on the wrong architecture.
+    const arch = inferSdArchitectureFromTitle(item.model || '');
+    if (arch) setModelTypeFilter(arch);
     setWidth(item.width);
     setHeight(item.height);
     setSteps(item.steps);
