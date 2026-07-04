@@ -2711,6 +2711,35 @@ function App() {
                 <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
                   {selectedIds.size}件選択
                 </span>
+              {(() => {
+                // "全選択" selects every item currently visible under the active
+                // date/favorite filter — i.e. displayedHistory, not the raw
+                // history buffer. Disabled when the gallery is empty or already
+                // fully selected.
+                const allDisplayedSelected = displayedHistory.length > 0
+                  && displayedHistory.every((it) => selectedIds.has(itemKey(it)));
+                const selectAllDisabled = displayedHistory.length === 0 || allDisplayedSelected;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set(displayedHistory.map(itemKey)))}
+                    disabled={selectAllDisabled}
+                    className={selectAllDisabled ? '' : 'scale-hover'}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--pop-blue)',
+                      padding: '4px 8px',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: selectAllDisabled ? 'not-allowed' : 'pointer',
+                      opacity: selectAllDisabled ? 0.6 : 1
+                    }}
+                  >
+                    全選択
+                  </button>
+                );
+              })()}
               <button
                 type="button"
                 onClick={() => setSelectedIds(new Set())}
