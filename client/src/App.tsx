@@ -329,11 +329,6 @@ function findSdxlSelection(
   return null;
 }
 
-// Defensive cap on batch cross products. SDXL's 7 ratios × 2 orientations ×
-// 3 sizes = 39 potential combinations; SD1.5's 3×3 = 9. This cap protects
-// against a stray "select all" queuing dozens of jobs with a single click.
-const MAX_SIZE_COMBINATIONS = 16;
-
 function App() {
   // Form input states
   const [prompt, setPrompt] = useState('');
@@ -3417,9 +3412,12 @@ function App() {
                 const sizeModeJobCount = modelTypeFilter === 'sdxl'
                   ? sdxlSizeJobs.length
                   : selectedWidths.length * selectedHeights.length;
+                // No upper cap on the cross product — the button is disabled only
+                // when the selection is empty. Users are trusted to pick a batch
+                // size they're willing to wait through.
                 const sizeModeInvalid = modelTypeFilter === 'sdxl'
-                  ? (sdxlSizeJobs.length === 0 || sdxlSizeJobs.length > MAX_SIZE_COMBINATIONS)
-                  : (selectedWidths.length === 0 || selectedHeights.length === 0 || sizeModeJobCount > MAX_SIZE_COMBINATIONS);
+                  ? sdxlSizeJobs.length === 0
+                  : (selectedWidths.length === 0 || selectedHeights.length === 0);
                 return (
                   <button
                     type="button"
