@@ -3074,6 +3074,70 @@ function App() {
           >
             <X size={22} />
           </button>
+          {lightboxMeta && (() => {
+            const m = lightboxMeta;
+            const hasHr = m.enableHr === true;
+            const hasLoras = Array.isArray(m.loras) && m.loras.length > 0;
+            const hasRefiner = typeof m.refiner === 'string' && m.refiner.length > 0;
+            const hasVae = typeof m.vae === 'string' && m.vae.length > 0 && m.vae !== 'Automatic';
+            return (
+              <div
+                role="region"
+                aria-label="画像の詳細情報"
+                aria-hidden={!showLightboxInfo}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  padding: '16px 24px',
+                  background: 'rgba(0, 0, 0, 0.55)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  color: '#f1f3f5',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                  maxHeight: '40vh',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px 20px',
+                  fontSize: '13px',
+                  lineHeight: 1.5,
+                  transform: showLightboxInfo ? 'translateY(0)' : 'translateY(100%)',
+                  opacity: showLightboxInfo ? 1 : 0,
+                  pointerEvents: showLightboxInfo ? 'auto' : 'none',
+                  transition: 'transform 0.2s ease, opacity 0.2s ease'
+                }}
+              >
+                <span><span style={{ opacity: 0.7 }}>寸法:</span> <strong>{m.width}×{m.height}</strong></span>
+                {m.model && <span><span style={{ opacity: 0.7 }}>モデル:</span> <strong>{m.model}</strong></span>}
+                {m.seed !== undefined && <span><span style={{ opacity: 0.7 }}>Seed:</span> <strong style={{ fontFamily: 'monospace' }}>{m.seed}</strong></span>}
+                {m.sampler && <span><span style={{ opacity: 0.7 }}>Sampler:</span> <strong>{m.sampler}</strong></span>}
+                <span><span style={{ opacity: 0.7 }}>Steps:</span> <strong>{m.steps}</strong></span>
+                <span><span style={{ opacity: 0.7 }}>CFG:</span> <strong>{m.cfgScale}</strong></span>
+                {hasHr && (
+                  <span>
+                    <span style={{ opacity: 0.7 }}>ハイレス:</span>{' '}
+                    <strong>ON ({(m.hrScale ?? 2).toFixed(1)}×{m.hrUpscaler ? `, ${m.hrUpscaler}` : ''})</strong>
+                  </span>
+                )}
+                {hasLoras && (
+                  <span>
+                    <span style={{ opacity: 0.7 }}>LoRA:</span>{' '}
+                    <strong>{(m.loras || []).map((l) => `${l.name} (${l.weight})`).join(', ')}</strong>
+                  </span>
+                )}
+                {hasRefiner && (
+                  <span>
+                    <span style={{ opacity: 0.7 }}>Refiner:</span>{' '}
+                    <strong>{m.refiner} (switch @ {(m.refinerSwitchAt ?? 0.8).toFixed(2)})</strong>
+                  </span>
+                )}
+                {hasVae && <span><span style={{ opacity: 0.7 }}>VAE:</span> <strong>{m.vae}</strong></span>}
+              </div>
+            );
+          })()}
         </div>
       )}
 
