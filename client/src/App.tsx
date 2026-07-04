@@ -190,13 +190,143 @@ function FavoriteButton({
 type SdModel = { title: string; type: 'sd15' | 'sdxl' };
 type SdLora = { name: string; type: 'sd15' | 'sdxl' | 'unknown' };
 
-// Resolution options differ by architecture: SDXL was trained around 1024×1024
-// and looks poor well below it, while SD1.5's native range is lower.
-const SIZE_OPTIONS_BY_TYPE: Record<'sd15' | 'sdxl', number[]> = {
-  sd15: [512, 768, 1024],
-  sdxl: [1024, 1152, 1280],
-};
-// Defensive cap on the width×height cross product (3×3 = 9 today, room to grow).
+// SD1.5 wasn't trained with aspect-ratio buckets, so users pick width and height
+// independently from a small list around its 512×512 native range. (SDXL uses
+// SDXL_PRESETS below instead of this list — see the ratio/orientation/size UI.)
+const SD15_SIZE_OPTIONS: readonly number[] = [512, 768, 1024];
+
+// SDXL is trained on aspect-ratio buckets at ~1MP total, so its picker exposes
+// "aspect ratio + orientation + size" instead of raw width/height. Each M size
+// is a SDXL training bucket (isSdxlBucket=true → ⭐ badge on the chip); the ratio
+// itself gets ⭐ (ratioIsBucket) only when SDXL trained on that exact ratio
+// (1:1, 9:7, 3:1 — the others are close approximations, e.g. 4:3 M is 18:13).
+type SdxlRatio = '1:1' | '4:3' | '9:7' | '3:2' | '16:9' | '21:9' | '3:1';
+type SdxlSize = 'S' | 'M' | 'L';
+type SdxlOrientation = 'landscape' | 'portrait' | 'square';
+
+interface SdxlSizeSpec {
+  width: number;   // landscape width (or square side length)
+  height: number;  // landscape height (or square side length)
+  isSdxlBucket: boolean;
+}
+
+interface SdxlPreset {
+  ratio: SdxlRatio;
+  label: string;
+  isSquare: boolean;
+  ratioIsBucket: boolean;
+  sizes: Record<SdxlSize, SdxlSizeSpec>;
+}
+
+const SDXL_SIZES: readonly SdxlSize[] = ['S', 'M', 'L'];
+
+const SDXL_PRESETS: readonly SdxlPreset[] = [
+  {
+    ratio: '1:1', label: '1:1', isSquare: true, ratioIsBucket: true,
+    sizes: {
+      S: { width: 768,  height: 768,  isSdxlBucket: false },
+      M: { width: 1024, height: 1024, isSdxlBucket: true  },
+      L: { width: 1216, height: 1216, isSdxlBucket: false },
+    },
+  },
+  {
+    ratio: '4:3', label: '4:3', isSquare: false, ratioIsBucket: false,
+    sizes: {
+      S: { width: 768,  height: 576,  isSdxlBucket: false },
+      M: { width: 1152, height: 832,  isSdxlBucket: true  }, // SDXL 18:13 bucket
+      L: { width: 1344, height: 1024, isSdxlBucket: false },
+    },
+  },
+  {
+    ratio: '9:7', label: '9:7', isSquare: false, ratioIsBucket: true,
+    sizes: {
+      S: { width: 896,  height: 768,  isSdxlBucket: false },
+      M: { width: 1152, height: 896,  isSdxlBucket: true  },
+      // 1408×1088 ≈ 9:7 (1.294 vs 1.286), ÷64 friendly, distinct from 4:3 L
+      // (1344×1024). Keeps the SDXL-native 9:7 flavor at L instead of collapsing
+      // onto the 4:3 approximation.
+      L: { width: 1408, height: 1088, isSdxlBucket: false },
+    },
+  },
+  {
+    ratio: '3:2', label: '3:2', isSquare: false, ratioIsBucket: false,
+    sizes: {
+      S: { width: 1152, height: 768,  isSdxlBucket: false },
+      M: { width: 1216, height: 832,  isSdxlBucket: true  }, // SDXL 19:13 bucket
+      L: { width: 1344, height: 896,  isSdxlBucket: false },
+    },
+  },
+  {
+    ratio: '16:9', label: '16:9', isSquare: false, ratioIsBucket: false,
+    sizes: {
+      S: { width: 1024, height: 576,  isSdxlBucket: false },
+      M: { width: 1344, height: 768,  isSdxlBucket: true  }, // SDXL 7:4 bucket
+      L: { width: 1600, height: 896,  isSdxlBucket: false },
+    },
+  },
+  {
+    ratio: '21:9', label: '21:9', isSquare: false, ratioIsBucket: false,
+    sizes: {
+      S: { width: 1344, height: 576,  isSdxlBucket: false },
+      M: { width: 1536, height: 640,  isSdxlBucket: true  }, // SDXL 12:5 bucket
+      L: { width: 1792, height: 768,  isSdxlBucket: false },
+    },
+  },
+  {
+    ratio: '3:1', label: '3:1', isSquare: false, ratioIsBucket: true,
+    sizes: {
+      S: { width: 1344, height: 448,  isSdxlBucket: false },
+      M: { width: 1728, height: 576,  isSdxlBucket: true  },
+      L: { width: 1920, height: 640,  isSdxlBucket: false },
+    },
+  },
+];
+
+// (ratio, orientation, size) → concrete (width, height). Portrait swaps landscape's
+// width/height; square ignores orientation and returns the stored equal-sided pair.
+function resolveSdxlDimensions(
+  preset: SdxlPreset,
+  orientation: SdxlOrientation,
+  size: SdxlSize,
+): { width: number; height: number; isSdxlBucket: boolean } {
+  const spec = preset.sizes[size];
+  if (preset.isSquare || orientation !== 'portrait') {
+    return { width: spec.width, height: spec.height, isSdxlBucket: spec.isSdxlBucket };
+  }
+  return { width: spec.height, height: spec.width, isSdxlBucket: spec.isSdxlBucket };
+}
+
+// Reverse-map a raw (width, height) back to preset coordinates. Used to seed the
+// SDXL picker from the currently-held width/height state (e.g. after switching
+// architectures). Returns null when no preset matches — the caller then falls back
+// to a default (1:1 / square / M).
+function findSdxlSelection(
+  width: number,
+  height: number,
+): { ratio: SdxlRatio; orientation: SdxlOrientation; size: SdxlSize } | null {
+  for (const preset of SDXL_PRESETS) {
+    for (const size of SDXL_SIZES) {
+      const spec = preset.sizes[size];
+      if (preset.isSquare) {
+        if (spec.width === width && spec.height === height) {
+          return { ratio: preset.ratio, orientation: 'square', size };
+        }
+      } else {
+        if (spec.width === width && spec.height === height) {
+          return { ratio: preset.ratio, orientation: 'landscape', size };
+        }
+        if (spec.height === width && spec.width === height) {
+          return { ratio: preset.ratio, orientation: 'portrait', size };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Defensive cap on batch cross products. SDXL's 7 ratios × 2 orientations ×
+// 3 sizes = 39 potential combinations; SD1.5's 3×3 = 9. This cap protects
+// against a stray "select all" queuing dozens of jobs with a single click.
 const MAX_SIZE_COMBINATIONS = 16;
 
 function App() {
@@ -527,8 +657,19 @@ function App() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchCount, setBatchCount] = useState(5);
   const [batchMode, setBatchMode] = useState<'count' | 'size' | 'model'>('count');
-  const [selectedWidths, setSelectedWidths] = useState<number[]>([...SIZE_OPTIONS_BY_TYPE.sd15]);
-  const [selectedHeights, setSelectedHeights] = useState<number[]>([...SIZE_OPTIONS_BY_TYPE.sd15]);
+  const [selectedWidths, setSelectedWidths] = useState<number[]>([...SD15_SIZE_OPTIONS]);
+  const [selectedHeights, setSelectedHeights] = useState<number[]>([...SD15_SIZE_OPTIONS]);
+  // SDXL picker state (aspect ratio + orientation + size). Only used when
+  // modelTypeFilter === 'sdxl' — SD1.5 keeps the width/height selects above.
+  const [selectedRatio, setSelectedRatio] = useState<SdxlRatio>('1:1');
+  const [selectedOrientation, setSelectedOrientation] = useState<SdxlOrientation>('square');
+  const [selectedSize, setSelectedSize] = useState<SdxlSize>('M');
+  // SDXL batch dialog: three multi-select axes whose cross product forms BatchJob[].
+  const [selectedBatchRatios, setSelectedBatchRatios] = useState<Set<SdxlRatio>>(new Set(SDXL_PRESETS.map(p => p.ratio)));
+  // 'square' is implicit for 1:1 ratio and never appears in the UI toggle here;
+  // the batch dialog only exposes landscape/portrait as user-toggleable orientations.
+  const [selectedBatchOrientations, setSelectedBatchOrientations] = useState<Set<'landscape' | 'portrait'>>(new Set(['landscape', 'portrait']));
+  const [selectedBatchSizes, setSelectedBatchSizes] = useState<Set<SdxlSize>>(new Set(SDXL_SIZES));
   // Models picked for model-cycling batch. Reset to "all selected" each time the
   // modal opens (via openBatchModal) so the default is always the full available
   // list — the user opts OUT of specific models for that one batch.
@@ -584,17 +725,62 @@ function App() {
   // Re-validate everything that depends on the active architecture whenever the
   // toggle flips. sdModels is intentionally not a dependency here — this should
   // only run on an explicit toggle flip, not every time the model list happens
-  // to refresh with the same toggle value still selected.
+  // to refresh with the same toggle value still selected. width/height are read
+  // via closure at the moment of the flip; they must not be dependencies or the
+  // effect would fire on every dimension change and clobber the picker state.
   useEffect(() => {
-    const options = SIZE_OPTIONS_BY_TYPE[modelTypeFilter];
-    const fallback = modelTypeFilter === 'sdxl' ? 1024 : 512;
-
     setSelectedModel((prev) => (sdModels.some((m) => m.type === modelTypeFilter && m.title === prev) ? prev : (sdModels.find((m) => m.type === modelTypeFilter)?.title ?? '')));
-    setWidth((prev) => (options.includes(prev) ? prev : fallback));
-    setHeight((prev) => (options.includes(prev) ? prev : fallback));
-    setSelectedWidths((prev) => { const kept = prev.filter((w) => options.includes(w)); return kept.length ? kept : [...options]; });
-    setSelectedHeights((prev) => { const kept = prev.filter((h) => options.includes(h)); return kept.length ? kept : [...options]; });
+
+    if (modelTypeFilter === 'sdxl') {
+      // Seed the SDXL picker from the current width/height if they map to a preset;
+      // otherwise fall back to 1:1 M (1024×1024 — SDXL's central training bucket).
+      const found = findSdxlSelection(width, height);
+      if (found) {
+        setSelectedRatio(found.ratio);
+        setSelectedOrientation(found.orientation);
+        setSelectedSize(found.size);
+      } else {
+        setSelectedRatio('1:1');
+        setSelectedOrientation('square');
+        setSelectedSize('M');
+        setWidth(1024);
+        setHeight(1024);
+      }
+      return;
+    }
+
+    // SD1.5 branch: constrain width/height to the SD1.5 list; reset batch chip
+    // selections to the SD1.5 defaults when the previous selection is invalid.
+    setWidth((prev) => (SD15_SIZE_OPTIONS.includes(prev) ? prev : 512));
+    setHeight((prev) => (SD15_SIZE_OPTIONS.includes(prev) ? prev : 512));
+    setSelectedWidths((prev) => { const kept = prev.filter((w) => SD15_SIZE_OPTIONS.includes(w)); return kept.length ? kept : [...SD15_SIZE_OPTIONS]; });
+    setSelectedHeights((prev) => { const kept = prev.filter((h) => SD15_SIZE_OPTIONS.includes(h)); return kept.length ? kept : [...SD15_SIZE_OPTIONS]; });
   }, [modelTypeFilter]);
+
+  // SDXL picker → width/height projection. Whenever the ratio/orientation/size
+  // selection changes (while SDXL is active), recompute the concrete pixel
+  // dimensions that flow into the generation request.
+  useEffect(() => {
+    if (modelTypeFilter !== 'sdxl') return;
+    const preset = SDXL_PRESETS.find(p => p.ratio === selectedRatio);
+    if (!preset) return;
+    const dims = resolveSdxlDimensions(preset, selectedOrientation, selectedSize);
+    setWidth(dims.width);
+    setHeight(dims.height);
+  }, [modelTypeFilter, selectedRatio, selectedOrientation, selectedSize]);
+
+  // Handler for the SDXL ratio chip. Clicking 1:1 forces orientation to 'square';
+  // clicking any other ratio from a square state defaults orientation to
+  // 'landscape' so there's always a valid pair.
+  const handleRatioChange = (ratio: SdxlRatio) => {
+    setSelectedRatio(ratio);
+    const preset = SDXL_PRESETS.find(p => p.ratio === ratio);
+    if (preset?.isSquare) {
+      setSelectedOrientation('square');
+    } else if (selectedOrientation === 'square') {
+      setSelectedOrientation('landscape');
+    }
+  };
 
   // Lightbox keyboard control: Escape closes (unless in OS fullscreen — let the
   // browser exit fullscreen first); ArrowLeft/Right step through the gallery order;
@@ -1192,6 +1378,50 @@ function App() {
     setter(prev => (prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]));
   };
 
+  const toggleInSet = <T,>(
+    setter: React.Dispatch<React.SetStateAction<Set<T>>>,
+    value: T
+  ) => {
+    setter(prev => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value); else next.add(value);
+      return next;
+    });
+  };
+
+  // Build the SDXL batch job list from the current (ratios × orientations × sizes)
+  // multi-selection. 1:1 collapses orientation (always 'square', one job per size);
+  // non-square ratios cross-product landscape/portrait with each selected size.
+  // Dedupes by (width, height) — if two ratios happen to land on the same pixel
+  // dimensions at the same size (SDXL_PRESETS is designed to avoid this, but the
+  // dedupe is here so a future preset edit can't silently double-charge a slot).
+  const buildSdxlBatchJobs = (): BatchJob[] => {
+    const jobs: BatchJob[] = [];
+    const seen = new Set<string>();
+    const push = (dims: { width: number; height: number }) => {
+      const key = `${dims.width}x${dims.height}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      jobs.push({ width: dims.width, height: dims.height });
+    };
+    for (const ratio of selectedBatchRatios) {
+      const preset = SDXL_PRESETS.find(p => p.ratio === ratio);
+      if (!preset) continue;
+      if (preset.isSquare) {
+        for (const size of selectedBatchSizes) {
+          push(resolveSdxlDimensions(preset, 'square', size));
+        }
+        continue;
+      }
+      for (const orient of selectedBatchOrientations) {
+        for (const size of selectedBatchSizes) {
+          push(resolveSdxlDimensions(preset, orient, size));
+        }
+      }
+    }
+    return jobs;
+  };
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* HEADER */}
@@ -1438,60 +1668,173 @@ function App() {
                   )}
                 </div>
 
-                {/* Size Select with Swap Button */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.2fr', gap: '8px', alignItems: 'end', textAlign: 'left' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>解像度 (幅)</label>
-                    <select 
-                      className="input-field" 
-                      value={width} 
-                      onChange={(e) => setWidth(parseInt(e.target.value))}
-                      disabled={loading}
-                      style={{ borderRadius: '8px' }}
-                    >
-                      {SIZE_OPTIONS_BY_TYPE[modelTypeFilter].map((size) => (
-                        <option key={size} value={size}>{size} px</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <button
-                    type="button"
-                    onClick={handleSwapDimensions}
-                    disabled={loading}
-                    className="scale-hover"
-                    style={{
-                      background: 'rgba(51, 154, 240, 0.08)',
-                      border: '2px solid rgba(51, 154, 240, 0.2)',
-                      color: 'var(--pop-blue)',
-                      borderRadius: '8px',
-                      height: '42px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      marginBottom: '2px'
-                    }}
-                    title="幅と高さを入れ替える"
-                  >
-                    <ArrowLeftRight size={16} />
-                  </button>
+                {/* Size Picker — SDXL uses ratio+orientation+size (bucket-aligned);
+                    SD1.5 keeps the free width/height selects since it wasn't trained
+                    with aspect-ratio buckets. */}
+                {modelTypeFilter === 'sdxl' ? (() => {
+                  const currentPreset = SDXL_PRESETS.find(p => p.ratio === selectedRatio) ?? SDXL_PRESETS[0];
+                  const isSquare = currentPreset.isSquare;
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>アスペクト比</label>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {SDXL_PRESETS.map((preset) => {
+                            const active = selectedRatio === preset.ratio;
+                            return (
+                              <button
+                                key={preset.ratio}
+                                type="button"
+                                onClick={() => handleRatioChange(preset.ratio)}
+                                disabled={loading}
+                                className="scale-hover"
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: '8px',
+                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                                  color: active ? '#fff' : 'var(--text-secondary)',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                }}
+                                title={preset.ratioIsBucket ? 'SDXL純正の学習比率' : ''}
+                              >
+                                {preset.label}{preset.ratioIsBucket ? ' ⭐' : ''}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>解像度 (高さ)</label>
-                    <select 
-                      className="input-field" 
-                      value={height} 
-                      onChange={(e) => setHeight(parseInt(e.target.value))}
+                      <div style={{ display: 'grid', gridTemplateColumns: isSquare ? '1fr' : '1fr 1fr', gap: '8px' }}>
+                        {!isSquare && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>向き</label>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              {(['landscape', 'portrait'] as const).map((o) => {
+                                const active = selectedOrientation === o;
+                                return (
+                                  <button
+                                    key={o}
+                                    type="button"
+                                    onClick={() => setSelectedOrientation(o)}
+                                    disabled={loading}
+                                    className="scale-hover"
+                                    style={{
+                                      flex: 1,
+                                      padding: '8px',
+                                      borderRadius: '8px',
+                                      border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                                      background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                                      color: active ? '#fff' : 'var(--text-secondary)',
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      fontSize: '13px',
+                                    }}
+                                  >
+                                    {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サイズ</label>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {SDXL_SIZES.map((s) => {
+                              const active = selectedSize === s;
+                              const spec = currentPreset.sizes[s];
+                              return (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  onClick={() => setSelectedSize(s)}
+                                  disabled={loading}
+                                  className="scale-hover"
+                                  style={{
+                                    flex: 1,
+                                    padding: '8px',
+                                    borderRadius: '8px',
+                                    border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                                    background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                                    color: active ? '#fff' : 'var(--text-secondary)',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                  }}
+                                  title={spec.isSdxlBucket ? 'SDXL純正の学習バケットサイズ' : ''}
+                                >
+                                  {s}{spec.isSdxlBucket ? ' ⭐' : ''}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>
+                        → {width} × {height} px ({((width * height) / 1_000_000).toFixed(2)} MP)
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.2fr', gap: '8px', alignItems: 'end', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>解像度 (幅)</label>
+                      <select
+                        className="input-field"
+                        value={width}
+                        onChange={(e) => setWidth(parseInt(e.target.value))}
+                        disabled={loading}
+                        style={{ borderRadius: '8px' }}
+                      >
+                        {SD15_SIZE_OPTIONS.map((size) => (
+                          <option key={size} value={size}>{size} px</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSwapDimensions}
                       disabled={loading}
-                      style={{ borderRadius: '8px' }}
+                      className="scale-hover"
+                      style={{
+                        background: 'rgba(51, 154, 240, 0.08)',
+                        border: '2px solid rgba(51, 154, 240, 0.2)',
+                        color: 'var(--pop-blue)',
+                        borderRadius: '8px',
+                        height: '42px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        marginBottom: '2px'
+                      }}
+                      title="幅と高さを入れ替える"
                     >
-                      {SIZE_OPTIONS_BY_TYPE[modelTypeFilter].map((size) => (
-                        <option key={size} value={size}>{size} px</option>
-                      ))}
-                    </select>
+                      <ArrowLeftRight size={16} />
+                    </button>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>解像度 (高さ)</label>
+                      <select
+                        className="input-field"
+                        value={height}
+                        onChange={(e) => setHeight(parseInt(e.target.value))}
+                        disabled={loading}
+                        style={{ borderRadius: '8px' }}
+                      >
+                        {SD15_SIZE_OPTIONS.map((size) => (
+                          <option key={size} value={size}>{size} px</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Steps */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
@@ -2697,46 +3040,147 @@ function App() {
                 </div>
               </>
             ) : batchMode === 'size' ? (
-              <>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                  選んだ横幅と縦幅の組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {([['横幅', selectedWidths, setSelectedWidths], ['縦幅', selectedHeights, setSelectedHeights]] as const).map(([label, selected, setter]) => (
-                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}:</span>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        {SIZE_OPTIONS_BY_TYPE[modelTypeFilter].map(size => {
-                          const active = selected.includes(size);
-                          return (
-                            <button
-                              key={size}
-                              type="button"
-                              onClick={() => toggleSize(setter, size)}
-                              className="scale-hover"
-                              style={{
-                                flex: 1,
-                                padding: '10px',
-                                borderRadius: '10px',
-                                border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                color: active ? '#fff' : 'var(--text-secondary)',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {size}
-                            </button>
-                          );
-                        })}
+              modelTypeFilter === 'sdxl' ? (() => {
+                const sdxlJobs = buildSdxlBatchJobs();
+                return (
+                  <>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                      選んだアスペクト比・向き・サイズの組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。1:1 は向き選択に関わらず1枚扱いです。
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>アスペクト比:</span>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {SDXL_PRESETS.map((preset) => {
+                            const active = selectedBatchRatios.has(preset.ratio);
+                            return (
+                              <button
+                                key={preset.ratio}
+                                type="button"
+                                onClick={() => toggleInSet(setSelectedBatchRatios, preset.ratio)}
+                                className="scale-hover"
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: '10px',
+                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                                  color: active ? '#fff' : 'var(--text-secondary)',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                }}
+                                title={preset.ratioIsBucket ? 'SDXL純正の学習比率' : ''}
+                              >
+                                {preset.label}{preset.ratioIsBucket ? ' ⭐' : ''}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>向き:</span>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {(['landscape', 'portrait'] as const).map((o) => {
+                            const active = selectedBatchOrientations.has(o);
+                            return (
+                              <button
+                                key={o}
+                                type="button"
+                                onClick={() => toggleInSet(setSelectedBatchOrientations, o)}
+                                className="scale-hover"
+                                style={{
+                                  flex: 1,
+                                  padding: '10px',
+                                  borderRadius: '10px',
+                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                                  color: active ? '#fff' : 'var(--text-secondary)',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>サイズ:</span>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {SDXL_SIZES.map((s) => {
+                            const active = selectedBatchSizes.has(s);
+                            return (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => toggleInSet(setSelectedBatchSizes, s)}
+                                className="scale-hover"
+                                style={{
+                                  flex: 1,
+                                  padding: '10px',
+                                  borderRadius: '10px',
+                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                                  color: active ? '#fff' : 'var(--text-secondary)',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {s}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
+                        {sdxlJobs.length}通り生成
                       </div>
                     </div>
-                  ))}
-                  <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
-                    横{selectedWidths.length} × 縦{selectedHeights.length} = {selectedWidths.length * selectedHeights.length}通りを生成
+                  </>
+                );
+              })() : (
+                <>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                    選んだ横幅と縦幅の組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {([['横幅', selectedWidths, setSelectedWidths], ['縦幅', selectedHeights, setSelectedHeights]] as const).map(([label, selected, setter]) => (
+                      <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}:</span>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {SD15_SIZE_OPTIONS.map(size => {
+                            const active = selected.includes(size);
+                            return (
+                              <button
+                                key={size}
+                                type="button"
+                                onClick={() => toggleSize(setter, size)}
+                                className="scale-hover"
+                                style={{
+                                  flex: 1,
+                                  padding: '10px',
+                                  borderRadius: '10px',
+                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                                  color: active ? '#fff' : 'var(--text-secondary)',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {size}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
+                      横{selectedWidths.length} × 縦{selectedHeights.length} = {selectedWidths.length * selectedHeights.length}通りを生成
+                    </div>
                   </div>
-                </div>
-              </>
+                </>
+              )
             ) : (
               <>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
@@ -2817,38 +3261,51 @@ function App() {
               >
                 キャンセル
               </button>
-              <button
-                type="button"
-                disabled={
-                  (batchMode === 'size' && (selectedWidths.length === 0 || selectedHeights.length === 0 || selectedWidths.length * selectedHeights.length > MAX_SIZE_COMBINATIONS)) ||
-                  (batchMode === 'model' && (sdModels.filter((m) => m.type === modelTypeFilter).length === 0 || selectedBatchModels.size === 0))
-                }
-                onClick={() => {
-                  // Give the user an immediate, unmistakable acknowledgement that
-                  // their click registered — enhanceOnce()'s LM Studio round trip
-                  // that handleBatchGenerate kicks off next can take several
-                  // seconds with no other visible feedback, which otherwise reads
-                  // as the screen having frozen.
-                  addToast('バッチ生成を開始しました⚡️', 'success');
-                  setShowBatchModal(false);
-                  // Preserve sdModels' order when filtering so the cycling order matches
-                  // the list the user sees (rather than Set iteration order).
-                  const jobs: BatchJob[] = batchMode === 'count'
-                    ? Array(batchCount).fill({ width, height })
-                    : batchMode === 'size'
-                      ? selectedWidths.flatMap(w => selectedHeights.map(h => ({ width: w, height: h })))
-                      : sdModels.filter(m => selectedBatchModels.has(m.title)).map(m => ({ width, height, model: m.title }));
-                  handleBatchGenerate(jobs);
-                }}
-                className="btn-neon"
-                style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
-              >
-                {batchMode === 'count'
-                  ? `${batchCount}枚生成する`
-                  : batchMode === 'size'
-                    ? `${selectedWidths.length * selectedHeights.length}通り生成する`
-                    : `${selectedBatchModels.size}モデルで生成する`}
-              </button>
+              {(() => {
+                const sdxlSizeJobs = modelTypeFilter === 'sdxl' && batchMode === 'size' ? buildSdxlBatchJobs() : [];
+                const sizeModeJobCount = modelTypeFilter === 'sdxl'
+                  ? sdxlSizeJobs.length
+                  : selectedWidths.length * selectedHeights.length;
+                const sizeModeInvalid = modelTypeFilter === 'sdxl'
+                  ? (sdxlSizeJobs.length === 0 || sdxlSizeJobs.length > MAX_SIZE_COMBINATIONS)
+                  : (selectedWidths.length === 0 || selectedHeights.length === 0 || sizeModeJobCount > MAX_SIZE_COMBINATIONS);
+                return (
+                  <button
+                    type="button"
+                    disabled={
+                      (batchMode === 'size' && sizeModeInvalid) ||
+                      (batchMode === 'model' && (sdModels.filter((m) => m.type === modelTypeFilter).length === 0 || selectedBatchModels.size === 0))
+                    }
+                    onClick={() => {
+                      // Give the user an immediate, unmistakable acknowledgement that
+                      // their click registered — enhanceOnce()'s LM Studio round trip
+                      // that handleBatchGenerate kicks off next can take several
+                      // seconds with no other visible feedback, which otherwise reads
+                      // as the screen having frozen.
+                      addToast('バッチ生成を開始しました⚡️', 'success');
+                      setShowBatchModal(false);
+                      // Preserve sdModels' order when filtering so the cycling order matches
+                      // the list the user sees (rather than Set iteration order).
+                      const jobs: BatchJob[] = batchMode === 'count'
+                        ? Array(batchCount).fill({ width, height })
+                        : batchMode === 'size'
+                          ? (modelTypeFilter === 'sdxl'
+                              ? sdxlSizeJobs
+                              : selectedWidths.flatMap(w => selectedHeights.map(h => ({ width: w, height: h }))))
+                          : sdModels.filter(m => selectedBatchModels.has(m.title)).map(m => ({ width, height, model: m.title }));
+                      handleBatchGenerate(jobs);
+                    }}
+                    className="btn-neon"
+                    style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
+                  >
+                    {batchMode === 'count'
+                      ? `${batchCount}枚生成する`
+                      : batchMode === 'size'
+                        ? `${sizeModeJobCount}通り生成する`
+                        : `${selectedBatchModels.size}モデルで生成する`}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
