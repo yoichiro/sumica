@@ -1,17 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles,
-  Image as ImageIcon,
   RotateCw,
-  Cloud,
-  Folder,
   X,
-  AlertTriangle,
-  CheckCircle2,
-  Circle,
-  Trash2,
   Layers,
-  Star,
 } from 'lucide-react';
 import { isFirebaseConfigured, onAuth, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { ToastContainer, type Toast } from './components/ToastContainer';
@@ -19,6 +11,8 @@ import { AppHeader, type HealthStatus } from './components/AppHeader';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { Lightbox } from './components/Lightbox';
 import { BatchGenerationModal, type BatchJob } from './components/BatchGenerationModal';
+import { PreviewPanel } from './components/PreviewPanel';
+import { HistoryGallery } from './components/HistoryGallery';
 import {
   SDXL_PRESETS,
   SDXL_SIZES,
@@ -41,7 +35,7 @@ type DocumentWithViewTransition = Document & {
   startViewTransition?: (callback: () => void) => { finished: Promise<void>; ready: Promise<void> };
 };
 
-interface GenerationData {
+export interface GenerationData {
   id?: string;
   originalPrompt: string;
   enhancedPrompt: string;
@@ -78,95 +72,6 @@ interface GenerationData {
 }
 
 
-// Bottom-right selection toggle overlaid on a gallery tile. Mirrors the
-// lightbox's select-button design (CheckCircle2/Circle icons, blue when
-// selected with white border + blue glow) so the two controls read as the
-// same affordance. Uses a dark translucent unselected background instead of
-// the lightbox's light one, since gallery tiles sit over arbitrary image
-// content rather than the lightbox's dark backdrop.
-function SelectButton({
-  isSelected,
-  onClick,
-  size = 30,
-}: {
-  isSelected: boolean;
-  onClick: (e: React.MouseEvent) => void;
-  size?: number;
-}) {
-  const iconSize = Math.round(size * 0.5);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={isSelected ? '選択を解除' : '選択'}
-      className="scale-hover"
-      style={{
-        position: 'absolute',
-        bottom: '8px',
-        right: '8px',
-        width: `${size}px`,
-        height: `${size}px`,
-        borderRadius: '50%',
-        border: isSelected ? '2px solid #fff' : 'none',
-        background: isSelected ? 'var(--pop-blue)' : 'rgba(0, 0, 0, 0.55)',
-        color: '#fff',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        boxShadow: isSelected ? '0 0 0 3px rgba(51, 154, 240, 0.35)' : '0 2px 6px rgba(0,0,0,0.25)'
-      }}
-    >
-      {isSelected ? <CheckCircle2 size={iconSize} /> : <Circle size={iconSize} />}
-    </button>
-  );
-}
-
-// Bottom-right "favorite" button overlaid on an image. Alone (stackedAbove=0)
-// it sits at the baseline bottom:8px; when a sibling button of height N is
-// pinned below, pass stackedAbove={N} to stack this one N+8px above it.
-// OFF state shows an outline Star; ON state fills it yellow.
-function FavoriteButton({
-  isFavorite,
-  onClick,
-  size = 30,
-  stackedAbove = 0,
-}: {
-  isFavorite: boolean;
-  onClick: (e: React.MouseEvent) => void;
-  size?: number;
-  stackedAbove?: number;
-}) {
-  const iconSize = Math.round(size * 0.5);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={isFavorite ? 'お気に入りを解除' : 'お気に入りに追加'}
-      className="scale-hover"
-      style={{
-        position: 'absolute',
-        bottom: stackedAbove > 0 ? `${8 + stackedAbove + 8}px` : '8px',
-        right: '8px',
-        width: `${size}px`,
-        height: `${size}px`,
-        borderRadius: '50%',
-        border: 'none',
-        background: 'rgba(0, 0, 0, 0.55)',
-        color: '#fff',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
-      }}
-    >
-      {isFavorite
-        ? <Star size={iconSize} fill="#ffd43b" stroke="#ffd43b" />
-        : <Star size={iconSize} />}
-    </button>
-  );
-}
 
 
 function App() {
@@ -2062,626 +1967,49 @@ function App() {
 
           {/* TAB CONTENT (scrollable) */}
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {rightTab === 'preview' && (<>
-          {/* GENERATION PREVIEW STAGE */}
-          <div className="glass-panel" style={{
-            padding: '24px',
-            borderRadius: '20px',
-            minHeight: '380px',
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            {currentGeneration ? (
-              <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
-                {/* Image Frame — hugs the image and centers within its grid track */}
-                <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid var(--panel-border-hover)', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', justifySelf: 'center', maxWidth: '100%', minHeight: 0 }}>
-                  <img
-                    src={currentGeneration.imageUrl}
-                    alt="Generated output"
-                    onClick={() => openLightbox(currentGeneration.imageUrl, '__preview__')}
-                    style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', cursor: 'pointer', viewTransitionName: (morphSourceKey === '__preview__' && !lightboxUrl) ? 'lightbox-morph' : undefined }}
-                  />
-                  <FavoriteButton
-                    size={34}
-                    stackedAbove={0}
-                    isFavorite={!!currentGeneration.isFavorite}
-                    onClick={(e) => { e.stopPropagation(); toggleFavorite(currentGeneration); }}
-                  />
-                  <div style={{ 
-                    position: 'absolute', 
-                    top: '12px', 
-                    left: '12px', 
-                    background: 'rgba(255,255,255,0.92)', 
-                    backdropFilter: 'blur(4px)', 
-                    padding: '4px 12px', 
-                    borderRadius: '20px', 
-                    fontSize: '12px', 
-                    fontWeight: '700', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '4px',
-                    border: '1.5px solid var(--panel-border-hover)',
-                    color: 'var(--text-primary)'
-                  }}>
-                    {currentGeneration.backendMode === 'firebase' ? (
-                      <>
-                        <Cloud size={12} color="var(--pop-blue)" />
-                        <span style={{ color: 'var(--pop-blue)' }}>クラウド保存 ☁️</span>
-                      </>
-                    ) : (
-                      <>
-                        <Folder size={12} color="var(--pop-orange)" />
-                        <span style={{ color: 'var(--pop-orange)' }}>ローカル保存 📁</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Prompt Info column: fixed toolbar on top, scrollable detail below */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left', maxHeight: '48vh', minHeight: 0 }}>
-                  {/* Toolbar — always visible */}
-                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() => loadIntoForm(currentGeneration)}
-                      className="scale-hover"
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-                    >
-                      ♻️ フォームにロード
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => requestDelete([itemKey(currentGeneration)])}
-                      className="scale-hover"
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-                    >
-                      <Trash2 size={15} /> 削除
-                    </button>
-                  </div>
-                  {/* Scrollable detail */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', minHeight: 0, paddingRight: '4px' }}>
-                  <div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>元プロンプト</span>
-                    <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{currentGeneration.originalPrompt}</p>
-                  </div>
-                  
-                  <div style={{ borderTop: '2px solid var(--panel-border)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
-                    <div>
-                      <span>解像度: </span>
-                      <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.width}x{currentGeneration.height}</strong>
-                    </div>
-                    <div>
-                      <span>ステップ: </span>
-                      <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.steps}</strong>
-                    </div>
-                    <div>
-                      <span>CFG: </span>
-                      <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.cfgScale}</strong>
-                    </div>
-                    {currentGeneration.model && (
-                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                        <span>モデル: </span>
-                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.model}</strong>
-                      </div>
-                    )}
-                    {currentGeneration.seed !== undefined && (
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <span>Seed: </span>
-                        <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{currentGeneration.seed}</strong>
-                      </div>
-                    )}
-                    {currentGeneration.sampler && (
-                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                        <span>サンプラー: </span>
-                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.sampler}</strong>
-                      </div>
-                    )}
-                    {currentGeneration.scheduler && (
-                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                        <span>スケジュール: </span>
-                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.scheduler}</strong>
-                      </div>
-                    )}
-                    {currentGeneration.loras && currentGeneration.loras.length > 0 && (
-                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                        <span>LoRA: </span>
-                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.loras.map((l) => `${l.name} (${l.weight})`).join(', ')}</strong>
-                      </div>
-                    )}
-                    {currentGeneration.enableHr && (
-                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                        <span>Hires.fix: </span>
-                        <strong style={{ color: 'var(--text-primary)' }}>
-                          ON ({(currentGeneration.hrScale ?? 2).toFixed(1)}x{currentGeneration.hrUpscaler ? `, ${currentGeneration.hrUpscaler}` : ''})
-                        </strong>
-                      </div>
-                    )}
-                    {currentGeneration.refiner && (
-                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                        <span>Refiner: </span>
-                        <strong style={{ color: 'var(--text-primary)' }}>
-                          {currentGeneration.refiner} (switch at {(currentGeneration.refinerSwitchAt ?? 0.8).toFixed(2)})
-                        </strong>
-                      </div>
-                    )}
-                    {currentGeneration.vae && (
-                      <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                        <span>VAE: </span>
-                        <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.vae}</strong>
-                      </div>
-                    )}
-                  </div>
-
-                  {currentGeneration.enhancedPrompt !== currentGeneration.originalPrompt && (
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                        <Sparkles size={11} /> 拡張プロンプト (ポジティブ)
-                      </span>
-                      <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: 'var(--info-bg)', padding: '10px', borderRadius: '8px', border: '2px solid var(--info-border)', wordBreak: 'break-all' }}>
-                        {currentGeneration.enhancedPrompt}
-                      </p>
-                    </div>
-                  )}
-
-                  {currentGeneration.negativePrompt && (
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                        ❌ ネガティブプロンプト
-                      </span>
-                      <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'var(--negative-bg)', padding: '10px', borderRadius: '8px', border: '2px solid var(--negative-border)', wordBreak: 'break-all' }}>
-                        {currentGeneration.negativePrompt}
-                      </p>
-                    </div>
-                  )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', padding: '30px 0' }}>
-                <div style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  background: 'rgba(51, 154, 240, 0.05)',
-                  border: '2px dashed rgba(51, 154, 240, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--pop-blue)'
-                }}>
-                  <ImageIcon size={28} />
-                </div>
-                <div>
-                  <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', marginBottom: '4px', fontWeight: '800' }}>生成された画像のプレビュー 🖼️</h3>
-                  <p style={{ fontSize: '13px', maxWidth: '300px', margin: '0 auto', lineHeight: '1.4' }}>
-                    画像を生成すると、ここにプレビューが表示されます。
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* PROCESS TRACKER STAGE */}
-          {genStatus !== 'idle' && (
-            <div className="glass-panel" style={{
-              padding: '20px 24px',
-              borderRadius: '20px',
-              flexShrink: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              border: genStatus === 'error' ? '2.5px solid var(--danger)' : '2px solid var(--panel-border)',
-              boxShadow: genStatus === 'error' ? '0 8px 20px rgba(255, 107, 107, 0.08)' : 'var(--shadow-soft)',
-              background: genStatus === 'error' ? 'var(--danger-panel-bg)' : 'var(--panel-bg)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '24px' }}>
-                {/* Spinner/Status Icon */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <div style={{ position: 'relative', width: '48px', height: '48px', flexShrink: 0 }}>
-                    <div style={{ 
-                      position: 'absolute', 
-                      inset: 0, 
-                      border: '3px solid rgba(51, 154, 240, 0.15)', 
-                      borderRadius: '50%' 
-                    }}></div>
-                    {genStatus !== 'error' && genStatus !== 'success' ? (
-                      <div style={{ 
-                        position: 'absolute', 
-                        inset: 0, 
-                        border: '3px solid transparent', 
-                        borderTopColor: 'var(--pop-blue)', 
-                        borderRightColor: 'var(--pop-teal)',
-                        borderRadius: '50%',
-                      }} className="animate-spin-custom"></div>
-                    ) : genStatus === 'error' ? (
-                      <div style={{ 
-                        position: 'absolute', 
-                        inset: 0, 
-                        border: '3px solid var(--danger)', 
-                        borderRadius: '50%',
-                      }}></div>
-                    ) : (
-                      <div style={{ 
-                        position: 'absolute', 
-                        inset: 0, 
-                        border: '3px solid var(--success)', 
-                        borderRadius: '50%',
-                      }}></div>
-                    )}
-                    {genStatus === 'success' ? (
-                      <CheckCircle2 style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--success)' }} size={18} />
-                    ) : genStatus === 'error' ? (
-                      <AlertTriangle style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--danger)' }} size={18} />
-                    ) : (
-                      <Sparkles style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--pop-blue)' }} className="animate-bounce-custom" size={18} />
-                    )}
-                  </div>
-                  
-                  <div style={{ textAlign: 'left' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '800', display: 'block', color: genStatus === 'error' ? 'var(--danger)' : genStatus === 'success' ? 'var(--success)' : 'var(--text-primary)' }}>
-                      {genStatus === 'error' ? '生成処理エラー ❌' : genStatus === 'success' ? '生成完了！ 🎉' : '画像生成パイプライン進行中... ⚡️'}
-                    </span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {genStatus === 'error' ? '処理の途中でエラーが発生しました' : genStatus === 'success' ? 'すべての処理が正常に完了しました' : 'バックエンドでタスクを実行しています'}
-                    </span>
-                  </div>
-
-                  {/* Stop button — sits right next to the "画像生成パイプライン進行中" status text. */}
-                  {genStatus === 'generating' && (
-                    <button
-                      type="button"
-                      onClick={requestCancel}
-                      disabled={cancelling}
-                      className="scale-hover"
-                      style={{ padding: '8px 16px', borderRadius: '10px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', fontSize: '12px', cursor: cancelling ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      {cancelling ? '生成を止めています...' : '生成を止める'}
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  {/* Elapsed/remaining time — sits right next to (to the left of) the
-                      steps sequence. Both this row and the stop button above render
-                      only during 'generating', so the steps row's own height never
-                      changes when a generation starts/stops (it did when these lived
-                      in separate rows below, which visibly shifted
-                      "プロンプト拡張→画像生成→保存完了"). */}
-                  {genStatus === 'generating' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                      <span>
-                        経過{formatDuration(elapsedSeconds)}
-                        {sdProgress && sdProgress.etaRelative > 0 ? ` / 残り約${formatDuration(sdProgress.etaRelative)}` : ''}
-                      </span>
-                      {sdProgress && (
-                        <div style={{ width: '80px', height: '4px', borderRadius: '2px', background: 'var(--panel-border)', overflow: 'hidden' }}>
-                          <div style={{
-                            width: `${Math.min(100, Math.max(0, sdProgress.progress * 100))}%`,
-                            height: '100%',
-                            background: 'var(--pop-blue)',
-                            transition: 'width 0.3s ease',
-                          }} />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                {/* Steps Horizontally */}
-                <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ 
-                      width: '18px', 
-                      height: '18px', 
-                      borderRadius: '50%', 
-                      background: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep > 1 || genStatus === 'success' ? 'var(--success)' : loadingStep === 1 ? 'var(--pop-blue)' : 'none', 
-                      border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'), 
-                      color: (loadingStep >= 1 || genStatus === 'success' || (genStatus === 'error' && errorStep === 1)) ? '#fff' : 'var(--text-muted)', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      fontSize: '9px', 
-                      fontWeight: 'bold' 
-                    }}>
-                      {(genStatus === 'error' && errorStep === 1) ? '✗' : loadingStep > 1 || genStatus === 'success' ? '✓' : '1'}
-                    </div>
-                    <span className={genStatus === 'enhancing' ? 'processing-shimmer' : undefined}>プロンプト拡張</span>
-                  </div>
-
-                  <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ 
-                      width: '18px', 
-                      height: '18px', 
-                      borderRadius: '50%', 
-                      background: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep > 2 || genStatus === 'success' ? 'var(--success)' : loadingStep === 2 ? 'var(--pop-teal)' : 'none', 
-                      border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'), 
-                      color: (loadingStep >= 2 || genStatus === 'success' || (genStatus === 'error' && errorStep === 2)) ? '#fff' : 'var(--text-muted)', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      fontSize: '9px', 
-                      fontWeight: 'bold' 
-                    }}>
-                      {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 || genStatus === 'success' ? '✓' : '2'}
-                    </div>
-                    <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>画像生成{batchProgress ? ` (${batchProgress.current}/${batchProgress.total})` : ''}</span>
-                  </div>
-
-                  <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : (loadingStep >= 3 || genStatus === 'success') ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                    <div style={{ 
-                      width: '18px', 
-                      height: '18px', 
-                      borderRadius: '50%', 
-                      background: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : genStatus === 'success' ? 'var(--success)' : loadingStep === 3 ? 'var(--pop-orange)' : 'none', 
-                      border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep === 3 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'), 
-                      color: (loadingStep === 3 || genStatus === 'success' || (genStatus === 'error' && errorStep === 3)) ? '#fff' : 'var(--text-muted)', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      fontSize: '9px', 
-                      fontWeight: 'bold' 
-                    }}>
-                      {(genStatus === 'error' && errorStep === 3) ? '✗' : genStatus === 'success' ? '✓' : '3'}
-                    </div>
-                    <span>保存完了</span>
-                  </div>
-                </div>
-                </div>
-              </div>
-            </div>
+          {rightTab === 'preview' && (
+            <PreviewPanel
+              currentGeneration={currentGeneration}
+              morphSourceKey={morphSourceKey}
+              lightboxUrl={lightboxUrl}
+              genStatus={genStatus}
+              loadingStep={loadingStep}
+              errorStep={errorStep}
+              sdProgress={sdProgress}
+              elapsedSeconds={elapsedSeconds}
+              batchProgress={batchProgress}
+              cancelling={cancelling}
+              formatDuration={formatDuration}
+              onOpenLightbox={openLightbox}
+              onToggleFavorite={toggleFavorite}
+              onLoadIntoForm={loadIntoForm}
+              onRequestDelete={requestDelete}
+              itemKey={itemKey}
+              onCancel={requestCancel}
+            />
           )}
-          </>)}
 
-          {/* HISTORY GALLERY */}
           {rightTab === 'gallery' && (
-          <div style={{ flexShrink: 0 }}>
-            {/* Toolbar: date filter + result count (left) / selection + delete (right).
-                Sticks to the top of the surrounding scroll container so it stays
-                visible while the image grid below scrolls — `top: 0` pins it at
-                the TAB CONTENT scroll edge, and the opaque white background keeps
-                the image grid from showing through. */}
-            <div style={{
-              position: 'sticky',
-              top: 0,
-              zIndex: 1,
-              marginBottom: '16px',
-              padding: '8px 16px',
-              background: 'var(--panel-bg)',
-              border: '2px solid var(--panel-border)',
-              borderRadius: 'var(--radius-md)',
-              boxShadow: 'var(--shadow-soft)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexDirection: 'row-reverse',
-              gap: '12px',
-              flexWrap: 'wrap',
-              minHeight: '40px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', opacity: favoritesOnly ? 0.4 : 1 }}>
-                  📅
-                  <input
-                    type="date"
-                    className="input-field"
-                    value={filterDate}
-                    onChange={(e) => { if (e.target.value) setFilterDate(e.target.value); }}
-                    disabled={favoritesOnly}
-                    style={{ borderRadius: '8px', padding: '5px 8px', fontSize: '13px', width: 'auto' }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setFavoritesOnly((v) => !v)}
-                  title={favoritesOnly ? 'お気に入りのみの表示を解除' : 'お気に入りのみ表示'}
-                  className="scale-hover"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '5px 10px',
-                    borderRadius: '8px',
-                    border: favoritesOnly ? 'none' : '1.5px solid var(--panel-border)',
-                    background: favoritesOnly ? 'var(--pop-blue)' : 'transparent',
-                    color: favoritesOnly ? '#fff' : 'var(--text-secondary)',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {favoritesOnly
-                    ? <Star size={14} fill="#ffd43b" stroke="#ffd43b" />
-                    : <Star size={14} />}
-                  お気に入りのみ
-                </button>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{displayedHistory.length}件</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
-                  {selectedIds.size}件選択
-                </span>
-              {(() => {
-                // "全選択" selects every item currently visible under the active
-                // date/favorite filter — i.e. displayedHistory, not the raw
-                // history buffer. Disabled when the gallery is empty or already
-                // fully selected.
-                const allDisplayedSelected = displayedHistory.length > 0
-                  && displayedHistory.every((it) => selectedIds.has(itemKey(it)));
-                const selectAllDisabled = displayedHistory.length === 0 || allDisplayedSelected;
-                return (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedIds(new Set(displayedHistory.map(itemKey)))}
-                    disabled={selectAllDisabled}
-                    className={selectAllDisabled ? '' : 'scale-hover'}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--pop-blue)',
-                      padding: '4px 8px',
-                      fontSize: '13px',
-                      fontWeight: 800,
-                      cursor: selectAllDisabled ? 'not-allowed' : 'pointer',
-                      opacity: selectAllDisabled ? 0.6 : 1
-                    }}
-                  >
-                    全選択
-                  </button>
-                );
-              })()}
-              <button
-                type="button"
-                onClick={() => setSelectedIds(new Set())}
-                disabled={selectedIds.size === 0}
-                className={selectedIds.size === 0 ? '' : 'scale-hover'}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
-                  padding: '4px 8px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  cursor: selectedIds.size === 0 ? 'not-allowed' : 'pointer',
-                  opacity: selectedIds.size === 0 ? 0.6 : 1
-                }}
-              >
-                全解除
-              </button>
-              <button
-                type="button"
-                onClick={() => requestDelete([...selectedIds])}
-                disabled={selectedIds.size === 0}
-                className={selectedIds.size === 0 ? '' : 'scale-hover'}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: selectedIds.size === 0 ? 'var(--text-muted)' : 'var(--danger)',
-                  padding: '4px 8px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  cursor: selectedIds.size === 0 ? 'not-allowed' : 'pointer',
-                  opacity: selectedIds.size === 0 ? 0.6 : 1
-                }}
-              >
-                削除
-              </button>
-              </div>
-            </div>
-            {displayedHistory.length > 0 ? (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
-                gap: '18px'
-              }}>
-                {displayedHistory.map((item) => (
-                  <div
-                    key={itemKey(item)}
-                    className="glass-panel scale-hover"
-                    style={{
-                      borderRadius: '12px',
-                      overflow: 'hidden',
-                      border: selectedIds.has(itemKey(item)) ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                      boxShadow: selectedIds.has(itemKey(item)) ? '0 0 0 3px rgba(51, 154, 240, 0.25)' : 'none',
-                      position: 'relative'
-                    }}
-                  >
-                    <div style={{ position: 'relative' }}>
-                      <img
-                        src={item.thumbnailUrl ?? item.imageUrl}
-                        alt={item.originalPrompt}
-                        onClick={() => {
-                          if (galleryClickTimerRef.current !== null) {
-                            clearTimeout(galleryClickTimerRef.current);
-                          }
-                          // Lightbox always shows the full-resolution imageUrl,
-                          // even when the tile displayed a thumbnail — click →
-                          // zoom to the real thing.
-                          const url = item.imageUrl;
-                          const key = itemKey(item);
-                          galleryClickTimerRef.current = setTimeout(() => {
-                            galleryClickTimerRef.current = null;
-                            openLightbox(url, key);
-                          }, GALLERY_CLICK_DELAY_MS);
-                        }}
-                        onDoubleClick={() => {
-                          if (galleryClickTimerRef.current !== null) {
-                            clearTimeout(galleryClickTimerRef.current);
-                            galleryClickTimerRef.current = null;
-                          }
-                          openInPreview(item);
-                        }}
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
-                        loading="lazy"
-                        decoding="async"
-                        fetchPriority="low"
-                      />
-                      <SelectButton
-                        size={26}
-                        isSelected={selectedIds.has(itemKey(item))}
-                        onClick={(e) => { e.stopPropagation(); toggleSelected(itemKey(item)); }}
-                      />
-                      <FavoriteButton
-                        size={26}
-                        stackedAbove={26}
-                        isFavorite={!!item.isFavorite}
-                        onClick={(e) => { e.stopPropagation(); toggleFavorite(item); }}
-                      />
-                    </div>
-
-                    {/* Badge indicator */}
-                    <div style={{ 
-                      position: 'absolute', 
-                      top: '6px', 
-                      right: '6px', 
-                      background: 'rgba(255,255,255,0.92)', 
-                      padding: '4px', 
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
-                    }}>
-                      {item.backendMode === 'firebase' ? (
-                        <Cloud size={11} color="var(--pop-blue)" />
-                      ) : (
-                        <Folder size={11} color="var(--pop-orange)" />
-                      )}
-                    </div>
-
-                    <div style={{ padding: '10px', textAlign: 'left', background: 'var(--panel-bg)' }}>
-                      <p style={{ 
-                        fontSize: '12px', 
-                        fontWeight: '700', 
-                        whiteSpace: 'nowrap', 
-                        overflow: 'hidden', 
-                        textOverflow: 'ellipsis',
-                        margin: 0,
-                        color: 'var(--text-primary)'
-                      }}>
-                        {item.originalPrompt}
-                      </p>
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                        {new Date(item.timestamp).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="glass-panel" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', borderRadius: '16px', background: 'var(--panel-bg)' }}>
-                {history.length === 0
-                  ? '生成履歴はありません。最初の画像を生成してみましょう！🎨⚡️'
-                  : '指定した日付の画像はありません 📅'}
-              </div>
-            )}
-          </div>
+            <HistoryGallery
+              historyLength={history.length}
+              displayedHistory={displayedHistory}
+              filterDate={filterDate}
+              onSetFilterDate={setFilterDate}
+              favoritesOnly={favoritesOnly}
+              onSetFavoritesOnly={setFavoritesOnly}
+              selectedIds={selectedIds}
+              onSetSelectedIds={setSelectedIds}
+              itemKey={itemKey}
+              onToggleSelected={toggleSelected}
+              onToggleFavorite={toggleFavorite}
+              onRequestDelete={requestDelete}
+              onOpenLightbox={openLightbox}
+              onOpenInPreview={openInPreview}
+              morphSourceKey={morphSourceKey}
+              lightboxUrl={lightboxUrl}
+              galleryClickTimerRef={galleryClickTimerRef}
+              galleryClickDelayMs={GALLERY_CLICK_DELAY_MS}
+            />
           )}
           </div>
         </section>
