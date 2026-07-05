@@ -42,16 +42,35 @@ export interface LoadIntoFormState {
   } | null;
 }
 
+// Strip the trailing ` [xxxxxxxxxx]` short-hash suffix from a checkpoint title
+// so equality tests survive hash changes. SD attaches a short model hash to
+// the title (typically 10 hex chars, e.g. `foo.safetensors [ce745cd67c]`), and
+// history records saved at different points in time can carry different hash
+// values — or none at all — for the *same* underlying file. Normalizing to the
+// base filename lets a stored `foo.safetensors [OLDHASH]` still find the
+// currently-loaded `foo.safetensors [NEWHASH]` entry. The bracketed content is
+// matched permissively (any non-`]` chars) rather than strict hex, since we
+// only need to strip trailing bracketed suffixes — anchoring at end-of-string
+// guarantees we don't accidentally clip brackets that live inside the name.
+function stripHashSuffix(title: string): string {
+  return title.replace(/\s*\[[^\]]+\]\s*$/, '').trim();
+}
+
 // Infer SDXL vs SD1.5 from a checkpoint title. Prefers the known-models list
 // (populated by the safetensors header analysis in ADR 9); falls back to the
 // "xl"-in-name heuristic (ADR 3) when the model isn't currently loaded.
 // Returns null for empty title.
+//
+// The known-list match compares the base filename (stripping `[hash]`) so
+// history records saved with a different or missing short-hash still resolve
+// to the correct architecture — see ADR 16 for the failure mode this dodges.
 export function inferSdArchitectureFromTitle(
   title: string,
   knownModels: SdModel[],
 ): 'sd15' | 'sdxl' | null {
   if (!title) return null;
-  const known = knownModels.find(m => m.title === title);
+  const base = stripHashSuffix(title);
+  const known = knownModels.find(m => stripHashSuffix(m.title) === base);
   if (known) return known.type;
   return /xl/i.test(title) ? 'sdxl' : 'sd15';
 }

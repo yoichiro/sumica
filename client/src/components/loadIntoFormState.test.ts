@@ -17,7 +17,7 @@ describe('inferSdArchitectureFromTitle', () => {
     expect(inferSdArchitectureFromTitle('', KNOWN)).toBeNull();
   });
 
-  it('prefers the known-models list', () => {
+  it('prefers the known-models list on exact-title match', () => {
     expect(inferSdArchitectureFromTitle('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]', KNOWN)).toBe('sd15');
     expect(inferSdArchitectureFromTitle('juggernautXL_version6Rundiffusion.safetensors [1fe6c7ec54]', KNOWN)).toBe('sdxl');
   });
@@ -25,6 +25,46 @@ describe('inferSdArchitectureFromTitle', () => {
   it('falls back to the "xl"-in-name heuristic when unknown', () => {
     expect(inferSdArchitectureFromTitle('some_random_xl_model.safetensors', KNOWN)).toBe('sdxl');
     expect(inferSdArchitectureFromTitle('some_random_sd_model.safetensors', KNOWN)).toBe('sd15');
+  });
+
+  // Reproduces the specific bug behind ADR 16's deferred fix. A history record
+  // saved with a *different* hash suffix (or with no suffix at all) than the
+  // one the currently-loaded SD returns must still match the known entry so
+  // arch=sdxl is inferred, not the /xl/i fallback that would misfire on names
+  // without "xl" like tsubaki_mix or fuduki_mix.
+  const KNOWN_WITH_TSUBAKI: SdModel[] = [
+    ...KNOWN,
+    { title: 'tsubaki_mix_v15_fp16.safetensors [09990824e3]', type: 'sdxl' },
+    { title: 'fuduki_mix_v20.safetensors [ce745cd67c]',        type: 'sdxl' },
+  ];
+
+  it('matches known SDXL models even when the stored title has a different [hash] suffix', () => {
+    // Historical record was saved with an older hash — the base filename is the
+    // same, so we should still find the known SDXL entry and NOT fall through
+    // to /xl/i (which returns false because the name lacks "xl").
+    expect(
+      inferSdArchitectureFromTitle('tsubaki_mix_v15_fp16.safetensors [DIFFERENTHASH]', KNOWN_WITH_TSUBAKI),
+    ).toBe('sdxl');
+    expect(
+      inferSdArchitectureFromTitle('fuduki_mix_v20.safetensors [OTHERHASH12]', KNOWN_WITH_TSUBAKI),
+    ).toBe('sdxl');
+  });
+
+  it('matches known SDXL models even when the stored title has no [hash] suffix', () => {
+    expect(
+      inferSdArchitectureFromTitle('tsubaki_mix_v15_fp16.safetensors', KNOWN_WITH_TSUBAKI),
+    ).toBe('sdxl');
+    expect(
+      inferSdArchitectureFromTitle('fuduki_mix_v20.safetensors', KNOWN_WITH_TSUBAKI),
+    ).toBe('sdxl');
+  });
+
+  it('still falls back to /xl/i for names without a known base match', () => {
+    // Simulated legacy record with an entirely unknown filename — no known
+    // base, so we correctly land on the name heuristic. Neither "tsubaki" nor
+    // "fuduki" is in KNOWN here, so both go through the /xl/i test.
+    expect(inferSdArchitectureFromTitle('tsubaki_mix_v15_fp16.safetensors', KNOWN)).toBe('sd15');
+    expect(inferSdArchitectureFromTitle('random_model_xl.safetensors [somehash]', KNOWN)).toBe('sdxl');
   });
 });
 
