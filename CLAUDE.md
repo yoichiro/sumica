@@ -26,7 +26,8 @@ npm run dev:client # client only — http://localhost:5173
 
 Two packages, each collapsed into a small number of source files:
 - **`server/index.ts`** — Express 5 (TypeScript, ESM) API, all routes + the LLM/SD pipeline. Firebase-free at runtime; run on the fly with tsx. Uses `sharp` to produce a 256px WebP thumbnail alongside each locally-saved PNG.
-- **`client/src/App.tsx`** — the entire React 19 UI (~3300 lines, one component tree).
+- **`client/src/App.tsx`** — orchestrator: all state, useEffects, generation pipeline, and top-level composition (~1470 lines).
+- **`client/src/components/`** — extracted UI components, flat layout (see ADR 15). `AppHeader`, `ControlPanel` (the left-column form), `PreviewPanel`, `HistoryGallery`, `Lightbox`, `BatchGenerationModal`, `DeleteConfirmModal`, `ToastContainer`. Plus `presets.ts` with `SDXL_PRESETS`/`SD15_PRESETS`/resolver+finder helpers shared between App and BatchGenerationModal. All state lives in App.tsx; components receive props (hybrid strategy: prop drilling by default, Context reserved for future need).
 - **`client/src/firebase.ts`** — Firebase SDK initialization (Auth, Firestore, Storage) and helper types (`AuthUser`, `GenerationRecord`, `GenerationParams`).
 
 ### The generation pipeline (the key flow)
