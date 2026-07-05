@@ -23,6 +23,7 @@ import {
   type SdModel,
   type SdLora,
 } from './components/presets';
+import { computeLoadIntoFormState } from './components/loadIntoFormState';
 import { flushSync } from 'react-dom';
 
 // View Transitions API (Baseline 2025-10); typed locally so it works regardless of lib.dom version.
@@ -793,49 +794,37 @@ function App() {
   const setLoraWeight = (name: string, weight: number) =>
     setSelectedLoras((prev) => prev.map((l) => (l.name === name ? { ...l, weight } : l)));
 
-  // Infer SDXL vs SD1.5 from a checkpoint title. Prefer sdModels (authoritative —
-  // populated by the safetensors header analysis in [[adr-0009]]); fall back to
-  // the "xl"-in-name heuristic ([[adr-0003]]) when the model isn't in the current
-  // list (e.g. deleted or unloaded since generation). Returns null for empty title.
-  const inferSdArchitectureFromTitle = (title: string): 'sd15' | 'sdxl' | null => {
-    if (!title) return null;
-    const known = sdModels.find(m => m.title === title);
-    if (known) return known.type;
-    return /xl/i.test(title) ? 'sdxl' : 'sd15';
-  };
-
   // Populate the left-panel form fields from a history item so the user can
   // tweak and regenerate. If the item carries a seed, lock the seed field to
   // that value so the same image can be reproduced; otherwise unlock it.
+  //
+  // The picker/dimension part of the transition is computed by the pure helper
+  // in loadIntoFormState.ts (which has full unit-test coverage). This function
+  // only wires the resulting state into the React setState calls.
   const loadIntoForm = (item: GenerationData) => {
     setPrompt(item.originalPrompt);
+    const s = computeLoadIntoFormState(item, sdModels);
     // Flip the SD/SDXL toggle to match the loaded image's architecture BEFORE
     // setting width/height/model, so the modelTypeFilter useEffect resolves the
-    // SDXL picker (ratio/orientation/size) from the loaded dimensions rather than
-    // defaulting to 1:1 M when the toggle stays on the wrong architecture.
-    const arch = inferSdArchitectureFromTitle(item.model || '');
-    if (arch) setModelTypeFilter(arch);
-    setWidth(item.width);
-    setHeight(item.height);
-    // Also sync the SDXL ratio/orientation/size chips directly from the loaded
-    // dimensions. The modelTypeFilter useEffect does this when the architecture
-    // toggle actually flips, but same-architecture reloads (e.g. clicking load
-    // on another SDXL image while already on SDXL) don't retrigger that effect,
-    // and the picker chips would otherwise stay on the previous selection.
-    if (arch === 'sdxl') {
-      const found = findSdxlSelection(item.width, item.height);
-      if (found) {
-        setSelectedRatio(found.ratio);
-        setSelectedOrientation(found.orientation);
-        setSelectedSize(found.size);
-      }
-    } else if (arch === 'sd15') {
-      const found = findSd15Selection(item.width, item.height);
-      if (found) {
-        setSelectedSd15Ratio(found.ratio);
-        setSelectedSd15Orientation(found.orientation);
-        setSelectedSd15Size(found.size);
-      }
+    // picker (ratio/orientation/size) from the loaded dimensions rather than
+    // defaulting when the toggle stays on the wrong architecture.
+    if (s.archToSet) setModelTypeFilter(s.archToSet);
+    setWidth(s.width);
+    setHeight(s.height);
+    // Also sync the picker chips directly. The modelTypeFilter useEffect does
+    // this when the architecture toggle actually flips, but same-architecture
+    // reloads (e.g. clicking load on another SDXL image while already on SDXL)
+    // don't retrigger that effect — the chips would stay on the previous
+    // selection without this explicit sync.
+    if (s.sdxlPicker) {
+      setSelectedRatio(s.sdxlPicker.ratio);
+      setSelectedOrientation(s.sdxlPicker.orientation);
+      setSelectedSize(s.sdxlPicker.size);
+    }
+    if (s.sd15Picker) {
+      setSelectedSd15Ratio(s.sd15Picker.ratio);
+      setSelectedSd15Orientation(s.sd15Picker.orientation);
+      setSelectedSd15Size(s.sd15Picker.size);
     }
     setSteps(item.steps);
     setCfgScale(item.cfgScale);

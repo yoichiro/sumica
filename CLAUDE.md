@@ -20,7 +20,7 @@ npm run dev:client # client only — http://localhost:5173
 - **Lint** (client): `npm run lint --prefix client` (uses **oxlint**, not ESLint; config in `client/.oxlintrc.json`).
 - **Type-check / build** (client): `npm run build --prefix client` (`tsc -b && vite build`).
 - **Type-check** (server): `npm run typecheck --prefix server` (`tsc --noEmit`). The server runs `.ts` directly via **tsx** — there is no build step and no `dist/`; `tsc` is type-checking only.
-- **Tests**: none exist. `npm test` is a placeholder that exits 1 at every level.
+- **Tests** (client): `npm run test:run --prefix client` for a one-shot Vitest run, or `npm run test --prefix client` for watch mode. Vitest config lives in `client/vite.config.ts` (jsdom env, `client/src/test-setup.ts` for `@testing-library/jest-dom`). Current coverage: `components/presets.test.ts` (aspect-ratio resolver/finder round-trips for both SDXL and SD1.5) and `components/loadIntoFormState.test.ts` (pure state transition triggered by "フォームにロード", covering same-arch and cross-arch loads plus fallback heuristics). Server has no tests yet.
 
 ## Architecture
 
