@@ -8,6 +8,7 @@ import { BatchGenerationModal, type BatchJob } from './components/BatchGeneratio
 import { PreviewPanel } from './components/PreviewPanel';
 import { HistoryGallery } from './components/HistoryGallery';
 import { ControlPanel } from './components/ControlPanel';
+import { GenerationBadge } from './components/GenerationBadge';
 import {
   SDXL_PRESETS,
   SDXL_SIZES,
@@ -1325,6 +1326,7 @@ function App() {
                 }}
               >
                 {label}
+                {key === 'preview' && <GenerationBadge genStatus={genStatus} batchProgress={batchProgress} />}
               </button>
             ))}
           </div>
