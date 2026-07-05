@@ -10,16 +10,30 @@ import {
   CheckCircle2,
   Circle,
   Trash2,
-  Maximize,
-  Minimize,
-  ChevronLeft,
-  ChevronRight,
-  LogIn,
   Layers,
   Star,
-  Info,
 } from 'lucide-react';
-import { isFirebaseConfigured, onAuth, signInWithGoogle, signOutUser, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
+import { isFirebaseConfigured, onAuth, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
+import { ToastContainer, type Toast } from './components/ToastContainer';
+import { AppHeader, type HealthStatus } from './components/AppHeader';
+import { DeleteConfirmModal } from './components/DeleteConfirmModal';
+import { Lightbox } from './components/Lightbox';
+import { BatchGenerationModal, type BatchJob } from './components/BatchGenerationModal';
+import {
+  SDXL_PRESETS,
+  SDXL_SIZES,
+  SD15_PRESETS,
+  resolveSdxlDimensions,
+  resolveSd15Dimensions,
+  findSdxlSelection,
+  findSd15Selection,
+  type SdxlRatio,
+  type SdxlSize,
+  type SdxlOrientation,
+  type Sd15Ratio,
+  type SdModel,
+  type SdLora,
+} from './components/presets';
 import { flushSync } from 'react-dom';
 
 // View Transitions API (Baseline 2025-10); typed locally so it works regardless of lib.dom version.
@@ -63,42 +77,6 @@ interface GenerationData {
   isFavorite?: boolean;
 }
 
-interface HealthStatus {
-  lmStudio: { connected: boolean; model: string | null; error: string | null };
-  stableDiffusion: { connected: boolean; error: string | null };
-}
-
-// Top-right connection indicator for a single upstream service.
-// checking → muted pulsing dot, connected → green (with optional model name), else → red.
-function ServiceStatusBadge({ label, checking, connected, detail }: {
-  label: string;
-  checking: boolean;
-  connected: boolean;
-  detail?: string | null;
-}) {
-  const color = checking ? 'var(--text-muted)' : connected ? 'var(--pop-green)' : 'var(--danger)';
-  // Long model names (e.g. "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF") would
-  // blow out the status bar, so cap the shown detail at ~20 chars; full value stays on hover.
-  const shownDetail = detail && detail.length > 20 ? `${detail.slice(0, 20)}...` : detail;
-  const text = checking
-    ? `${label} 確認中…`
-    : connected
-      ? `${label} 接続中${shownDetail ? ` (${shownDetail})` : ''}`
-      : `${label} 未接続`;
-  return (
-    <div
-      style={{ display: 'flex', alignItems: 'center', gap: '6px', color, fontWeight: '700' }}
-      title={connected && detail ? detail : undefined}
-    >
-      <span style={{
-        width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color,
-        boxShadow: connected && !checking ? `0 0 6px ${color}` : 'none',
-        animation: checking ? 'pulse 1.2s ease-in-out infinite' : 'none',
-      }}></span>
-      <span>{text}</span>
-    </div>
-  );
-}
 
 // Bottom-right selection toggle overlaid on a gallery tile. Mirrors the
 // lightbox's select-button design (CheckCircle2/Circle icons, blue when
@@ -190,253 +168,6 @@ function FavoriteButton({
   );
 }
 
-// Candidate sizes offered as toggle chips in the batch dialog's size mode
-// (covers common SD1.5 / SDXL resolutions). Same set for width and height.
-type SdModel = { title: string; type: 'sd15' | 'sdxl' };
-type SdLora = { name: string; type: 'sd15' | 'sdxl' | 'unknown' };
-
-// SD1.5 uses the same "aspect ratio + orientation + size" picker shape as SDXL,
-// but with a smaller set of ratios and — importantly — the size (S/M/L) axis is
-// only meaningful for 1:1. Non-square SD1.5 ratios each carry a single M spec
-// (S and L are absent), because SD1.5 doesn't tolerate S/L variations off 512²
-// as gracefully as SDXL's bucket-trained ratios do. Reuses SdxlSize/SdxlOrientation
-// literal types (defined below) since they're arch-neutral.
-type Sd15Ratio = '1:1' | '5:4' | '4:3' | '3:2' | '5:3' | '16:9' | '2:1';
-
-interface Sd15SizeSpec {
-  width: number;
-  height: number;
-}
-
-interface Sd15Preset {
-  ratio: Sd15Ratio;
-  label: string;
-  isSquare: boolean;
-  // For 1:1: S, M, L all defined. For non-square: only M — S/L absent so the
-  // size toggle can hide itself when the picker is on a non-square ratio.
-  sizes: {
-    S?: Sd15SizeSpec;
-    M: Sd15SizeSpec;
-    L?: Sd15SizeSpec;
-  };
-}
-
-// SDXL is trained on aspect-ratio buckets at ~1MP total, so its picker exposes
-// "aspect ratio + orientation + size" instead of raw width/height. Each M size
-// is a SDXL training bucket (isSdxlBucket=true → ⭐ badge on the chip); the ratio
-// itself gets ⭐ (ratioIsBucket) only when SDXL trained on that exact ratio
-// (1:1, 9:7, 3:1 — the others are close approximations, e.g. 4:3 M is 18:13).
-type SdxlRatio = '1:1' | '4:3' | '9:7' | '3:2' | '16:9' | '21:9' | '3:1';
-type SdxlSize = 'S' | 'M' | 'L';
-type SdxlOrientation = 'landscape' | 'portrait' | 'square';
-
-interface SdxlSizeSpec {
-  width: number;   // landscape width (or square side length)
-  height: number;  // landscape height (or square side length)
-  isSdxlBucket: boolean;
-}
-
-interface SdxlPreset {
-  ratio: SdxlRatio;
-  label: string;
-  isSquare: boolean;
-  ratioIsBucket: boolean;
-  sizes: Record<SdxlSize, SdxlSizeSpec>;
-}
-
-const SDXL_SIZES: readonly SdxlSize[] = ['S', 'M', 'L'];
-
-const SDXL_PRESETS: readonly SdxlPreset[] = [
-  {
-    ratio: '1:1', label: '1:1', isSquare: true, ratioIsBucket: true,
-    sizes: {
-      S: { width: 768,  height: 768,  isSdxlBucket: false },
-      M: { width: 1024, height: 1024, isSdxlBucket: true  },
-      L: { width: 1216, height: 1216, isSdxlBucket: false },
-    },
-  },
-  {
-    ratio: '4:3', label: '4:3', isSquare: false, ratioIsBucket: false,
-    sizes: {
-      S: { width: 768,  height: 576,  isSdxlBucket: false },
-      M: { width: 1152, height: 832,  isSdxlBucket: true  }, // SDXL 18:13 bucket
-      L: { width: 1344, height: 1024, isSdxlBucket: false },
-    },
-  },
-  {
-    ratio: '9:7', label: '9:7', isSquare: false, ratioIsBucket: true,
-    sizes: {
-      S: { width: 896,  height: 768,  isSdxlBucket: false },
-      M: { width: 1152, height: 896,  isSdxlBucket: true  },
-      // 1408×1088 ≈ 9:7 (1.294 vs 1.286), ÷64 friendly, distinct from 4:3 L
-      // (1344×1024). Keeps the SDXL-native 9:7 flavor at L instead of collapsing
-      // onto the 4:3 approximation.
-      L: { width: 1408, height: 1088, isSdxlBucket: false },
-    },
-  },
-  {
-    ratio: '3:2', label: '3:2', isSquare: false, ratioIsBucket: false,
-    sizes: {
-      S: { width: 1152, height: 768,  isSdxlBucket: false },
-      M: { width: 1216, height: 832,  isSdxlBucket: true  }, // SDXL 19:13 bucket
-      L: { width: 1344, height: 896,  isSdxlBucket: false },
-    },
-  },
-  {
-    ratio: '16:9', label: '16:9', isSquare: false, ratioIsBucket: false,
-    sizes: {
-      S: { width: 1024, height: 576,  isSdxlBucket: false },
-      M: { width: 1344, height: 768,  isSdxlBucket: true  }, // SDXL 7:4 bucket
-      L: { width: 1600, height: 896,  isSdxlBucket: false },
-    },
-  },
-  {
-    ratio: '21:9', label: '21:9', isSquare: false, ratioIsBucket: false,
-    sizes: {
-      S: { width: 1344, height: 576,  isSdxlBucket: false },
-      M: { width: 1536, height: 640,  isSdxlBucket: true  }, // SDXL 12:5 bucket
-      L: { width: 1792, height: 768,  isSdxlBucket: false },
-    },
-  },
-  {
-    ratio: '3:1', label: '3:1', isSquare: false, ratioIsBucket: true,
-    sizes: {
-      S: { width: 1344, height: 448,  isSdxlBucket: false },
-      M: { width: 1728, height: 576,  isSdxlBucket: true  },
-      L: { width: 1920, height: 640,  isSdxlBucket: false },
-    },
-  },
-];
-
-// (ratio, orientation, size) → concrete (width, height). Portrait swaps landscape's
-// width/height; square ignores orientation and returns the stored equal-sided pair.
-function resolveSdxlDimensions(
-  preset: SdxlPreset,
-  orientation: SdxlOrientation,
-  size: SdxlSize,
-): { width: number; height: number; isSdxlBucket: boolean } {
-  const spec = preset.sizes[size];
-  if (preset.isSquare || orientation !== 'portrait') {
-    return { width: spec.width, height: spec.height, isSdxlBucket: spec.isSdxlBucket };
-  }
-  return { width: spec.height, height: spec.width, isSdxlBucket: spec.isSdxlBucket };
-}
-
-// Reverse-map a raw (width, height) back to preset coordinates. Used to seed the
-// SDXL picker from the currently-held width/height state (e.g. after switching
-// architectures). Returns null when no preset matches — the caller then falls back
-// to a default (1:1 / square / M).
-function findSdxlSelection(
-  width: number,
-  height: number,
-): { ratio: SdxlRatio; orientation: SdxlOrientation; size: SdxlSize } | null {
-  for (const preset of SDXL_PRESETS) {
-    for (const size of SDXL_SIZES) {
-      const spec = preset.sizes[size];
-      if (preset.isSquare) {
-        if (spec.width === width && spec.height === height) {
-          return { ratio: preset.ratio, orientation: 'square', size };
-        }
-      } else {
-        if (spec.width === width && spec.height === height) {
-          return { ratio: preset.ratio, orientation: 'landscape', size };
-        }
-        if (spec.height === width && spec.width === height) {
-          return { ratio: preset.ratio, orientation: 'portrait', size };
-        }
-      }
-    }
-  }
-  return null;
-}
-
-// SD1.5 presets: 7 aspect ratios keeping the legacy 512/768/1024 pixel palette
-// reachable while adding 5:4, 5:3, 16:9 for extra aspect coverage. Only 1:1 has
-// S/M/L variants; the others only expose their M dimensions since SD1.5's quality
-// falls off quickly outside the ~0.25-0.5MP band, so a "size" ladder off M wouldn't
-// buy much except artifacts. Non-square landscape dimensions are stored; portrait
-// is derived by swapping W↔H at resolve-time.
-const SD15_PRESETS: readonly Sd15Preset[] = [
-  {
-    ratio: '1:1', label: '1:1', isSquare: true,
-    sizes: {
-      S: { width: 512,  height: 512  },
-      M: { width: 768,  height: 768  },
-      L: { width: 1024, height: 1024 },
-    },
-  },
-  {
-    ratio: '5:4', label: '5:4', isSquare: false,
-    sizes: { M: { width: 640,  height: 512 } },
-  },
-  {
-    ratio: '4:3', label: '4:3', isSquare: false,
-    sizes: { M: { width: 1024, height: 768 } },
-  },
-  {
-    ratio: '3:2', label: '3:2', isSquare: false,
-    sizes: { M: { width: 768,  height: 512 } },
-  },
-  {
-    ratio: '5:3', label: '5:3', isSquare: false,
-    sizes: { M: { width: 640,  height: 384 } },
-  },
-  {
-    ratio: '16:9', label: '16:9', isSquare: false,
-    sizes: { M: { width: 1024, height: 576 } },
-  },
-  {
-    ratio: '2:1', label: '2:1', isSquare: false,
-    sizes: { M: { width: 1024, height: 512 } },
-  },
-];
-
-// (ratio, orientation, size) → concrete (width, height) for SD1.5. Non-square
-// ratios only have an M size regardless of what `size` is passed. Portrait
-// orientation swaps landscape's W↔H.
-function resolveSd15Dimensions(
-  preset: Sd15Preset,
-  orientation: SdxlOrientation,
-  size: SdxlSize,
-): { width: number; height: number } {
-  if (preset.isSquare) {
-    const spec = preset.sizes[size] ?? preset.sizes.M;
-    return { width: spec.width, height: spec.height };
-  }
-  const M = preset.sizes.M;
-  if (orientation === 'portrait') {
-    return { width: M.height, height: M.width };
-  }
-  return { width: M.width, height: M.height };
-}
-
-// Reverse-map a raw (width, height) back to SD1.5 picker coordinates. Used to
-// seed the picker on architecture switches and loadIntoForm. Returns null when
-// the dimensions don't match any preset (e.g. legacy freeform-picker records).
-function findSd15Selection(
-  width: number,
-  height: number,
-): { ratio: Sd15Ratio; orientation: SdxlOrientation; size: SdxlSize } | null {
-  for (const preset of SD15_PRESETS) {
-    if (preset.isSquare) {
-      for (const size of SDXL_SIZES) {
-        const spec = preset.sizes[size];
-        if (spec && spec.width === width && spec.height === height) {
-          return { ratio: preset.ratio, orientation: 'square', size };
-        }
-      }
-    } else {
-      const M = preset.sizes.M;
-      if (M.width === width && M.height === height) {
-        return { ratio: preset.ratio, orientation: 'landscape', size: 'M' };
-      }
-      if (M.height === width && M.width === height) {
-        return { ratio: preset.ratio, orientation: 'portrait', size: 'M' };
-      }
-    }
-  }
-  return null;
-}
 
 function App() {
   // Form input states
@@ -449,11 +180,6 @@ function App() {
   const [seedValue, setSeedValue] = useState(0);
 
   // Toast notifications state
-  interface Toast {
-    id: string;
-    message: string;
-    type: 'error' | 'success';
-  }
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = (message: string, type: 'error' | 'success' = 'error') => {
@@ -1271,12 +997,6 @@ function App() {
   // generation was cancelled, so callers can distinguish it from a real failure.
   class GenerationCancelledError extends Error {}
 
-  // One image's parameters in a batch run. All batch modes (count, size cross-product,
-  // model-cycling) build a BatchJob[] and feed it to the single sequential loop in
-  // handleBatchGenerate. `model` overrides the form's selectedModel for that one job
-  // (used by model-cycling mode); when absent, the job uses selectedModel as usual.
-  type BatchJob = { width: number; height: number; model?: string };
-
   // Step 1: enhance a prompt via LM Studio. Throws on HTTP failure.
   const enhanceOnce = async (promptText: string): Promise<{ positive: string; negative: string }> => {
     const enhanceRes = await fetch(`${API_BASE}/enhance`, {
@@ -1602,167 +1322,16 @@ function App() {
     }
   };
 
-  const toggleInSet = <T,>(
-    setter: React.Dispatch<React.SetStateAction<Set<T>>>,
-    value: T
-  ) => {
-    setter(prev => {
-      const next = new Set(prev);
-      if (next.has(value)) next.delete(value); else next.add(value);
-      return next;
-    });
-  };
-
-  // Build the SDXL batch job list from the current (ratios × orientations × sizes)
-  // multi-selection. 1:1 collapses orientation (always 'square', one job per size);
-  // non-square ratios cross-product landscape/portrait with each selected size.
-  // Dedupes by (width, height) — if two ratios happen to land on the same pixel
-  // dimensions at the same size (SDXL_PRESETS is designed to avoid this, but the
-  // dedupe is here so a future preset edit can't silently double-charge a slot).
-  const buildSdxlBatchJobs = (): BatchJob[] => {
-    const jobs: BatchJob[] = [];
-    const seen = new Set<string>();
-    const push = (dims: { width: number; height: number }) => {
-      const key = `${dims.width}x${dims.height}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      jobs.push({ width: dims.width, height: dims.height });
-    };
-    for (const ratio of selectedBatchRatios) {
-      const preset = SDXL_PRESETS.find(p => p.ratio === ratio);
-      if (!preset) continue;
-      if (preset.isSquare) {
-        for (const size of selectedBatchSizes) {
-          push(resolveSdxlDimensions(preset, 'square', size));
-        }
-        continue;
-      }
-      for (const orient of selectedBatchOrientations) {
-        for (const size of selectedBatchSizes) {
-          push(resolveSdxlDimensions(preset, orient, size));
-        }
-      }
-    }
-    return jobs;
-  };
-
-  // SD1.5 counterpart. 1:1 emits 1 job per selected size (S/M/L). Non-square
-  // ratios only have an M spec, so they emit 1 job per selected orientation
-  // regardless of what sizes are checked. Dedupes on (width, height).
-  const buildSd15BatchJobs = (): BatchJob[] => {
-    const jobs: BatchJob[] = [];
-    const seen = new Set<string>();
-    const push = (dims: { width: number; height: number }) => {
-      const key = `${dims.width}x${dims.height}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      jobs.push({ width: dims.width, height: dims.height });
-    };
-    for (const ratio of selectedSd15BatchRatios) {
-      const preset = SD15_PRESETS.find(p => p.ratio === ratio);
-      if (!preset) continue;
-      if (preset.isSquare) {
-        for (const size of selectedSd15BatchSizes) {
-          if (preset.sizes[size]) {
-            push(resolveSd15Dimensions(preset, 'square', size));
-          }
-        }
-        continue;
-      }
-      for (const orient of selectedSd15BatchOrientations) {
-        push(resolveSd15Dimensions(preset, orient, 'M'));
-      }
-    }
-    return jobs;
-  };
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* HEADER */}
-      <header className="glass-panel" style={{ 
-        margin: '20px', 
-        padding: '16px 24px', 
-        borderRadius: '18px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        background: 'var(--panel-bg)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, var(--pop-blue) 0%, var(--pop-teal) 100%)',
-            width: '42px',
-            height: '42px',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(51, 154, 240, 0.25)'
-          }}>
-            <Sparkles size={22} color="#fff" />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '0.2px', margin: 0, background: 'linear-gradient(135deg, var(--pop-blue) 30%, var(--pop-teal) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Sumica AI Studio 🎨⚡️
-            </h1>
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', letterSpacing: '1.5px', marginTop: '1px', fontWeight: '700' }}>
-              Creative Image Lab
-            </span>
-          </div>
-        </div>
-
-        {/* STATUS BAR & SETTINGS BUTTON */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', background: 'var(--panel-bg-sunk)', padding: '8px 16px', borderRadius: '30px', border: '2px solid var(--panel-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.01)' }}>
-            {/* Storage mode + account */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: cloudActive ? 'var(--pop-green)' : 'var(--text-secondary)', fontWeight: '700' }}>
-              {cloudActive ? (<><Cloud size={14} /><span>クラウド保存 ☁️</span></>) : (<><Folder size={14} /><span>ローカル保存 📁</span></>)}
-            </div>
-
-            {isFirebaseConfigured && (
-              <>
-                <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
-                {user ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {user.photoURL && (
-                      <img src={user.photoURL} alt="" referrerPolicy="no-referrer" style={{ width: 22, height: 22, borderRadius: '50%' }} />
-                    )}
-                    <span style={{ fontWeight: 700, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.displayName ?? 'ユーザー'}</span>
-                    <button onClick={() => { signOutUser(); }} className="scale-hover" style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>ログアウト</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { signInWithGoogle().catch((e) => addToast(`サインインに失敗しました: ${e.message}`, 'error')); }}
-                    className="scale-hover"
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', borderRadius: '20px', padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}
-                  >
-                    <LogIn size={14} /> Googleでログイン
-                  </button>
-                )}
-              </>
-            )}
-
-            <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
-            
-            {/* LM Studio Status (live health check) */}
-            <ServiceStatusBadge
-              label="LM Studio"
-              checking={healthChecking && !health}
-              connected={!!health?.lmStudio.connected}
-              detail={health?.lmStudio.model}
-            />
-
-            <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
-
-            {/* Stable Diffusion Status (live health check) */}
-            <ServiceStatusBadge
-              label="SD"
-              checking={healthChecking && !health}
-              connected={!!health?.stableDiffusion.connected}
-            />
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        user={user}
+        cloudActive={cloudActive}
+        health={health}
+        healthChecking={healthChecking}
+        onSignInError={(msg) => addToast(msg, 'error')}
+      />
 
       {/* MAIN CONTAINER */}
       <main style={{ 
@@ -3119,785 +2688,71 @@ function App() {
       </main>
 
       {/* LIGHTBOX: enlarged image */}
-      {lightboxUrl && (
-        <div
-          ref={lightboxRef}
-          onClick={() => closeLightbox()}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 200,
-            padding: '24px'
-          }}
-        >
-          <img
-            src={lightboxUrl}
-            alt="拡大表示"
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
-          />
-          {lightboxMeta && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setShowLightboxInfo((v) => !v); }}
-              title={showLightboxInfo ? '詳細情報を隠す' : '詳細情報を表示'}
-              aria-pressed={showLightboxInfo}
-              className="scale-hover"
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '332px',
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                border: 'none',
-                background: showLightboxInfo ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.15)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                boxShadow: showLightboxInfo ? '0 0 0 2px rgba(255, 255, 255, 0.35)' : 'none'
-              }}
-            >
-              <Info size={22} />
-            </button>
-          )}
-          {/* Selection toggle: only available when the lightbox shows a gallery item
-              (not the preview tab's current generation, whose key is '__preview__' and
-              not present in displayedHistory). Mirrors the click-to-select behavior on
-              the gallery tile so a user can flip through images and mark deletion
-              candidates without leaving the lightbox. */}
-          {lightboxIndex >= 0 && (() => {
-            const k = itemKey(displayedHistory[lightboxIndex]);
-            const isSelected = selectedIds.has(k);
-            return (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); toggleSelected(k); }}
-                title={isSelected ? '選択を解除 (Space)' : '選択 (Space)'}
-                className="scale-hover"
-                style={{
-                  position: 'absolute',
-                  top: '20px',
-                  right: '228px',
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '50%',
-                  border: isSelected ? '2px solid #fff' : 'none',
-                  background: isSelected ? 'var(--pop-blue)' : 'rgba(255, 255, 255, 0.15)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  boxShadow: isSelected ? '0 0 0 3px rgba(51, 154, 240, 0.35)' : 'none'
-                }}
-              >
-                {isSelected ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-              </button>
-            );
-          })()}
-          {lightboxIndex >= 0 && (() => {
-            const fav = !!displayedHistory[lightboxIndex].isFavorite;
-            return (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); toggleFavorite(displayedHistory[lightboxIndex]); }}
-                title={fav ? 'お気に入りを解除 (F)' : 'お気に入りに追加 (F)'}
-                className="scale-hover"
-                style={{
-                  position: 'absolute',
-                  top: '20px',
-                  right: '280px',
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '50%',
-                  border: fav ? '2px solid #fff' : 'none',
-                  background: fav ? '#ffd43b' : 'rgba(255, 255, 255, 0.15)',
-                  color: fav ? '#1a1a1a' : '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  boxShadow: fav ? '0 0 0 3px rgba(255, 212, 59, 0.35)' : 'none'
-                }}
-              >
-                {fav
-                  ? <Star size={22} fill="#1a1a1a" stroke="#1a1a1a" />
-                  : <Star size={22} />}
-              </button>
-            );
-          })()}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); navigateLightbox(-1); }}
-            disabled={lightboxIndex <= 0}
-            title="前の画像 (←)"
-            className={lightboxIndex <= 0 ? '' : 'scale-hover'}
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '176px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: 'none',
-              background: 'rgba(255, 255, 255, 0.15)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: lightboxIndex <= 0 ? 'not-allowed' : 'pointer',
-              opacity: lightboxIndex <= 0 ? 0.35 : 1
-            }}
-          >
-            <ChevronLeft size={22} />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); navigateLightbox(1); }}
-            disabled={lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1}
-            title="次の画像 (→)"
-            className={(lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? '' : 'scale-hover'}
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '124px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: 'none',
-              background: 'rgba(255, 255, 255, 0.15)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 'not-allowed' : 'pointer',
-              opacity: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 0.35 : 1
-            }}
-          >
-            <ChevronRight size={22} />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
-            title={isFullscreen ? '全画面を解除' : '全画面表示'}
-            className="scale-hover"
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '72px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: 'none',
-              background: 'rgba(255, 255, 255, 0.15)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
-            title="閉じる (Esc)"
-            className="scale-hover"
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: 'none',
-              background: 'rgba(255, 255, 255, 0.15)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <X size={22} />
-          </button>
-          {lightboxMeta && (() => {
-            const m = lightboxMeta;
-            const hasHr = m.enableHr === true;
-            const hasLoras = Array.isArray(m.loras) && m.loras.length > 0;
-            const hasRefiner = typeof m.refiner === 'string' && m.refiner.length > 0;
-            const hasVae = typeof m.vae === 'string' && m.vae.length > 0 && m.vae !== 'Automatic';
-            return (
-              <div
-                role="region"
-                aria-label="画像の詳細情報"
-                aria-hidden={!showLightboxInfo}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  padding: '16px 24px',
-                  background: 'rgba(0, 0, 0, 0.55)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                  color: '#f1f3f5',
-                  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-                  maxHeight: '40vh',
-                  overflowY: 'auto',
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '8px 20px',
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                  transform: showLightboxInfo ? 'translateY(0)' : 'translateY(100%)',
-                  opacity: showLightboxInfo ? 1 : 0,
-                  pointerEvents: showLightboxInfo ? 'auto' : 'none',
-                  transition: 'transform 0.2s ease, opacity 0.2s ease'
-                }}
-              >
-                <span><span style={{ opacity: 0.7 }}>寸法:</span> <strong>{m.width}×{m.height}</strong></span>
-                {m.model && <span><span style={{ opacity: 0.7 }}>モデル:</span> <strong>{m.model}</strong></span>}
-                {m.seed !== undefined && <span><span style={{ opacity: 0.7 }}>Seed:</span> <strong style={{ fontFamily: 'monospace' }}>{m.seed}</strong></span>}
-                {m.sampler && <span><span style={{ opacity: 0.7 }}>Sampler:</span> <strong>{m.sampler}</strong></span>}
-                <span><span style={{ opacity: 0.7 }}>Steps:</span> <strong>{m.steps}</strong></span>
-                <span><span style={{ opacity: 0.7 }}>CFG:</span> <strong>{m.cfgScale}</strong></span>
-                {hasHr && (
-                  <span>
-                    <span style={{ opacity: 0.7 }}>ハイレス:</span>{' '}
-                    <strong>ON ({(m.hrScale ?? 2).toFixed(1)}×{m.hrUpscaler ? `, ${m.hrUpscaler}` : ''})</strong>
-                  </span>
-                )}
-                {hasLoras && (
-                  <span>
-                    <span style={{ opacity: 0.7 }}>LoRA:</span>{' '}
-                    <strong>{(m.loras || []).map((l) => `${l.name} (${l.weight})`).join(', ')}</strong>
-                  </span>
-                )}
-                {hasRefiner && (
-                  <span>
-                    <span style={{ opacity: 0.7 }}>Refiner:</span>{' '}
-                    <strong>{m.refiner} (switch @ {(m.refinerSwitchAt ?? 0.8).toFixed(2)})</strong>
-                  </span>
-                )}
-                {hasVae && <span><span style={{ opacity: 0.7 }}>VAE:</span> <strong>{m.vae}</strong></span>}
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      <Lightbox
+        url={lightboxUrl}
+        containerRef={lightboxRef}
+        meta={lightboxMeta}
+        showInfo={showLightboxInfo}
+        onToggleInfo={() => setShowLightboxInfo((v) => !v)}
+        lightboxIndex={lightboxIndex}
+        displayedHistory={displayedHistory}
+        isItemSelected={(idx) => selectedIds.has(itemKey(displayedHistory[idx]))}
+        onToggleSelect={(idx) => toggleSelected(itemKey(displayedHistory[idx]))}
+        onToggleFavorite={(idx) => toggleFavorite(displayedHistory[idx])}
+        onNavigate={navigateLightbox}
+        onClose={closeLightbox}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+      />
 
-      {/* MODAL: DELETE CONFIRMATION */}
-      {showDeleteConfirm && (
-        <div className={`dialog-overlay${confirmExiting ? ' exiting' : ''}`} style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.4)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 120,
-          padding: '20px'
-        }}>
-          <div className={`glass-panel dialog-panel${confirmExiting ? ' exiting' : ''}`} style={{
-            width: '100%',
-            maxWidth: '420px',
-            borderRadius: '20px',
-            padding: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            textAlign: 'center',
-            border: '2px solid var(--danger)',
-            background: 'var(--panel-bg)'
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255, 107, 107, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Trash2 size={26} color="var(--danger)" />
-              </div>
-              <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
-                {deleteTargetIds.length}件の画像を削除しますか？
-              </h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                選択した画像とその生成情報が完全に削除されます。<br />この操作は取り消せません。
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                type="button"
-                onClick={closeConfirm}
-                disabled={deleting}
-                className="scale-hover"
-                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
-              >
-                キャンセル
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteSelected}
-                disabled={deleting}
-                className="scale-hover"
-                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: 'var(--danger)', color: '#fff', fontWeight: '800', cursor: deleting ? 'wait' : 'pointer', opacity: deleting ? 0.7 : 1 }}
-              >
-                {deleting ? '削除中...' : '削除する'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmModal
+        open={showDeleteConfirm}
+        targetCount={deleteTargetIds.length}
+        deleting={deleting}
+        exiting={confirmExiting}
+        onCancel={closeConfirm}
+        onConfirm={handleDeleteSelected}
+      />
 
-      {/* MODAL: BATCH GENERATION COUNT */}
-      {showBatchModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.4)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 110,
-          padding: '20px'
-        }}>
-          <div
-            className="glass-panel"
-            style={{
-              width: '100%',
-              maxWidth: '420px',
-              borderRadius: '20px',
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px',
-              textAlign: 'left',
-              border: '2px solid var(--pop-blue)',
-              background: 'var(--panel-bg)'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <Layers color="var(--pop-blue)" size={20} />
-                <span>まとめて生成 🖼️</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowBatchModal(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
+      <BatchGenerationModal
+        open={showBatchModal}
+        onClose={() => setShowBatchModal(false)}
+        modelTypeFilter={modelTypeFilter}
+        sdModels={sdModels}
+        width={width}
+        height={height}
+        batchMode={batchMode}
+        setBatchMode={setBatchMode}
+        batchCount={batchCount}
+        setBatchCount={setBatchCount}
+        selectedBatchRatios={selectedBatchRatios}
+        setSelectedBatchRatios={setSelectedBatchRatios}
+        selectedBatchOrientations={selectedBatchOrientations}
+        setSelectedBatchOrientations={setSelectedBatchOrientations}
+        selectedBatchSizes={selectedBatchSizes}
+        setSelectedBatchSizes={setSelectedBatchSizes}
+        selectedSd15BatchRatios={selectedSd15BatchRatios}
+        setSelectedSd15BatchRatios={setSelectedSd15BatchRatios}
+        selectedSd15BatchOrientations={selectedSd15BatchOrientations}
+        setSelectedSd15BatchOrientations={setSelectedSd15BatchOrientations}
+        selectedSd15BatchSizes={selectedSd15BatchSizes}
+        setSelectedSd15BatchSizes={setSelectedSd15BatchSizes}
+        selectedBatchModels={selectedBatchModels}
+        setSelectedBatchModels={setSelectedBatchModels}
+        toggleBatchModel={toggleBatchModel}
+        onStartBatch={(jobs) => {
+          // Give the user an immediate, unmistakable acknowledgement that
+          // their click registered — enhanceOnce()'s LM Studio round trip
+          // that handleBatchGenerate kicks off next can take several
+          // seconds with no other visible feedback, which otherwise reads
+          // as the screen having frozen.
+          addToast('バッチ生成を開始しました⚡️', 'success');
+          setShowBatchModal(false);
+          handleBatchGenerate(jobs);
+        }}
+      />
 
-            {/* Segmented mode tabs */}
-            <div style={{ display: 'flex', gap: '8px', background: 'var(--panel-bg-sunk)', borderRadius: '12px', padding: '4px' }}>
-              {([['count', '枚数'], ['size', 'サイズの組合せ'], ['model', 'モデル切替']] as const).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setBatchMode(mode)}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: '9px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontWeight: 800,
-                    fontSize: '13px',
-                    background: batchMode === mode ? 'var(--pop-blue)' : 'transparent',
-                    color: batchMode === mode ? '#fff' : 'var(--text-secondary)',
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {batchMode === 'count' ? (
-              <>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                  同じプロンプトで複数枚を1枚ずつ順番に生成します。生成する枚数を選んでください。
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
-                    {batchCount}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>枚</span>
-                  </span>
-                  <input
-                    type="range"
-                    min={2}
-                    max={10}
-                    step={1}
-                    value={batchCount}
-                    onChange={(e) => setBatchCount(Number(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    <span>2枚</span>
-                    <span>10枚</span>
-                  </div>
-                </div>
-              </>
-            ) : batchMode === 'size' ? (
-              modelTypeFilter === 'sdxl' ? (() => {
-                const sdxlJobs = buildSdxlBatchJobs();
-                return (
-                  <>
-                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                      選んだアスペクト比・向き・サイズの組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。1:1 は向き選択に関わらず1枚扱いです。
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>アスペクト比:</span>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {SDXL_PRESETS.map((preset) => {
-                            const active = selectedBatchRatios.has(preset.ratio);
-                            return (
-                              <button
-                                key={preset.ratio}
-                                type="button"
-                                onClick={() => toggleInSet(setSelectedBatchRatios, preset.ratio)}
-                                className="scale-hover"
-                                style={{
-                                  padding: '8px 12px',
-                                  borderRadius: '10px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                }}
-                                title={preset.ratioIsBucket ? 'SDXL純正の学習比率' : ''}
-                              >
-                                {preset.label}{preset.ratioIsBucket ? ' ⭐' : ''}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>向き:</span>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          {(['landscape', 'portrait'] as const).map((o) => {
-                            const active = selectedBatchOrientations.has(o);
-                            return (
-                              <button
-                                key={o}
-                                type="button"
-                                onClick={() => toggleInSet(setSelectedBatchOrientations, o)}
-                                className="scale-hover"
-                                style={{
-                                  flex: 1,
-                                  padding: '10px',
-                                  borderRadius: '10px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>サイズ:</span>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          {SDXL_SIZES.map((s) => {
-                            const active = selectedBatchSizes.has(s);
-                            return (
-                              <button
-                                key={s}
-                                type="button"
-                                onClick={() => toggleInSet(setSelectedBatchSizes, s)}
-                                className="scale-hover"
-                                style={{
-                                  flex: 1,
-                                  padding: '10px',
-                                  borderRadius: '10px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {s}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
-                        {sdxlJobs.length}通り生成
-                      </div>
-                    </div>
-                  </>
-                );
-              })() : (() => {
-                const sd15Jobs = buildSd15BatchJobs();
-                return (
-                  <>
-                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                      選んだアスペクト比・向き・サイズの組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。1:1 のみサイズ違いを生成し、他の比率は M 固定・向きだけ選べます。
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>アスペクト比:</span>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {SD15_PRESETS.map((preset) => {
-                            const active = selectedSd15BatchRatios.has(preset.ratio);
-                            return (
-                              <button
-                                key={preset.ratio}
-                                type="button"
-                                onClick={() => toggleInSet(setSelectedSd15BatchRatios, preset.ratio)}
-                                className="scale-hover"
-                                style={{
-                                  padding: '8px 12px',
-                                  borderRadius: '10px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                }}
-                              >
-                                {preset.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>向き:</span>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          {(['landscape', 'portrait'] as const).map((o) => {
-                            const active = selectedSd15BatchOrientations.has(o);
-                            return (
-                              <button
-                                key={o}
-                                type="button"
-                                onClick={() => toggleInSet(setSelectedSd15BatchOrientations, o)}
-                                className="scale-hover"
-                                style={{
-                                  flex: 1,
-                                  padding: '10px',
-                                  borderRadius: '10px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>サイズ (1:1 のみ有効):</span>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          {SDXL_SIZES.map((s) => {
-                            const active = selectedSd15BatchSizes.has(s);
-                            return (
-                              <button
-                                key={s}
-                                type="button"
-                                onClick={() => toggleInSet(setSelectedSd15BatchSizes, s)}
-                                className="scale-hover"
-                                style={{
-                                  flex: 1,
-                                  padding: '10px',
-                                  borderRadius: '10px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {s}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
-                        {sd15Jobs.length}通り生成
-                      </div>
-                    </div>
-                  </>
-                );
-              })()
-            ) : (
-              <>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                  利用可能なモデルを順番に切り替えながら、1モデルにつき1枚ずつ生成します。サイズは現在のフォーム設定（{width}×{height}）を使用します。
-                </p>
-                {(() => { const modelsInBatchScope = sdModels.filter((m) => m.type === modelTypeFilter); return modelsInBatchScope.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
-                        {selectedBatchModels.size}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>/ {modelsInBatchScope.length}モデル</span>
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBatchModels(new Set(modelsInBatchScope.map((m) => m.title)))}
-                        className="scale-hover"
-                        style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--pop-blue)', background: 'var(--panel-bg)', color: 'var(--pop-blue)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                      >
-                        全選択
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBatchModels(new Set())}
-                        className="scale-hover"
-                        style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                      >
-                        全解除
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '8px' }}>
-                      {modelsInBatchScope.map((m, i) => {
-                        const isSelected = selectedBatchModels.has(m.title);
-                        return (
-                          <button
-                            key={m.title}
-                            type="button"
-                            onClick={() => toggleBatchModel(m.title)}
-                            className="scale-hover"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              padding: '6px 8px',
-                              borderRadius: '8px',
-                              border: 'none',
-                              background: isSelected ? 'rgba(51, 154, 240, 0.12)' : 'transparent',
-                              color: isSelected ? 'var(--pop-blue)' : 'var(--text-secondary)',
-                              fontSize: '12px',
-                              fontWeight: isSelected ? 700 : 500,
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                              width: '100%',
-                            }}
-                          >
-                            {isSelected ? <CheckCircle2 size={16} /> : <Circle size={16} />}
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 700, minWidth: '20px', flexShrink: 0 }}>{i + 1}.</span>
-                            <span style={{ wordBreak: 'break-all', flex: 1 }}>{m.title}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-orange)', background: 'var(--warning-bg)', borderRadius: '10px', padding: '14px' }}>
-                    {sdModels.length === 0 ? 'モデルが取得できていません。Stable Diffusion が起動しているか確認してください。' : `${modelTypeFilter === 'sdxl' ? 'SDXL' : 'SD'}モデルが見つかりません。`}
-                  </div>
-                ); })()}
-              </>
-            )}
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                type="button"
-                onClick={() => setShowBatchModal(false)}
-                className="scale-hover"
-                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
-              >
-                キャンセル
-              </button>
-              {(() => {
-                const sizeJobs = batchMode === 'size'
-                  ? (modelTypeFilter === 'sdxl' ? buildSdxlBatchJobs() : buildSd15BatchJobs())
-                  : [];
-                // No upper cap on the cross product — the button is disabled only
-                // when the selection is empty. Users are trusted to pick a batch
-                // size they're willing to wait through.
-                const sizeModeInvalid = sizeJobs.length === 0;
-                return (
-                  <button
-                    type="button"
-                    disabled={
-                      (batchMode === 'size' && sizeModeInvalid) ||
-                      (batchMode === 'model' && (sdModels.filter((m) => m.type === modelTypeFilter).length === 0 || selectedBatchModels.size === 0))
-                    }
-                    onClick={() => {
-                      // Give the user an immediate, unmistakable acknowledgement that
-                      // their click registered — enhanceOnce()'s LM Studio round trip
-                      // that handleBatchGenerate kicks off next can take several
-                      // seconds with no other visible feedback, which otherwise reads
-                      // as the screen having frozen.
-                      addToast('バッチ生成を開始しました⚡️', 'success');
-                      setShowBatchModal(false);
-                      // Preserve sdModels' order when filtering so the cycling order matches
-                      // the list the user sees (rather than Set iteration order).
-                      const jobs: BatchJob[] = batchMode === 'count'
-                        ? Array(batchCount).fill({ width, height })
-                        : batchMode === 'size'
-                          ? sizeJobs
-                          : sdModels.filter(m => selectedBatchModels.has(m.title)).map(m => ({ width, height, model: m.title }));
-                      handleBatchGenerate(jobs);
-                    }}
-                    className="btn-neon"
-                    style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
-                  >
-                    {batchMode === 'count'
-                      ? `${batchCount}枚生成する`
-                      : batchMode === 'size'
-                        ? `${sizeJobs.length}通り生成する`
-                        : `${selectedBatchModels.size}モデルで生成する`}
-                  </button>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TOAST CONTAINER */}
-      <div className="toast-container">
-        {toasts.map(toast => (
-          <div key={toast.id} className={`toast-item ${toast.type}`}>
-            <div style={{
-              color: toast.type === 'error' ? 'var(--danger)' : 'var(--success)',
-              display: 'flex',
-              alignItems: 'center',
-              marginTop: '2px',
-              flexShrink: 0
-            }}>
-              {toast.type === 'error' ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
-            </div>
-            <div className="toast-message">{toast.message}</div>
-            <button 
-              onClick={() => removeToast(toast.id)}
-              className="toast-close-btn"
-              title="閉じる"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
-      </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* SVG Gradient helper for icons */}
       <svg style={{ width: 0, height: 0, position: 'absolute' }}>
