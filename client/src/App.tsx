@@ -1,10 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  Sparkles,
-  RotateCw,
-  X,
-  Layers,
-} from 'lucide-react';
 import { isFirebaseConfigured, onAuth, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
 import { ToastContainer, type Toast } from './components/ToastContainer';
 import { AppHeader, type HealthStatus } from './components/AppHeader';
@@ -13,6 +7,7 @@ import { Lightbox } from './components/Lightbox';
 import { BatchGenerationModal, type BatchJob } from './components/BatchGenerationModal';
 import { PreviewPanel } from './components/PreviewPanel';
 import { HistoryGallery } from './components/HistoryGallery';
+import { ControlPanel } from './components/ControlPanel';
 import {
   SDXL_PRESETS,
   SDXL_SIZES,
@@ -1248,689 +1243,69 @@ function App() {
         overflow: 'hidden',
         minHeight: 0
       }}>
-        {/* LEFT COLUMN: CONTROL PANEL */}
-        <section className="glass-panel" style={{ 
-          padding: '24px', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          borderRadius: '20px',
-          overflow: 'hidden',
-          height: '100%'
-        }}>
-
-          <form onSubmit={handleGenerate} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            {/* Container splitting prompt input and advanced settings into equal halves.
-                minmax(0, 1fr) rows force exactly-equal tracks regardless of content height. */}
-            <div style={{
-              flex: 1,
-              minHeight: 0,
-              overflow: 'hidden',
-              display: 'grid',
-              gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)',
-              gap: '20px',
-              paddingRight: '6px',
-              marginBottom: '16px'
-            }}>
-              {/* PROMPT AREA */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', flex: 1, minHeight: 0 }}>
-                <label style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-                  生成プロンプト (日本語または英語)
-                </label>
-                <textarea
-                  className="input-field"
-                  placeholder="生成したい画像の内容を入力してください... (例: 'サイバーパンクな都市、雨に濡れたネオン、未来的、シネマティック照明')"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  style={{ flex: 1, minHeight: 0, resize: 'none', lineHeight: '1.4', borderRadius: '12px' }}
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              {/* AI ENHANCEMENT IS ALWAYS ACTIVE */}
-
-              {/* ADVANCED PARAMETERS (ALWAYS OPEN) */}
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-                padding: '18px',
-                background: 'var(--panel-bg-sunk)',
-                borderRadius: '14px',
-                border: '2px solid var(--panel-border)',
-                flex: 1,
-                minHeight: 0,
-                overflowY: 'auto'
-              }}>
-                {/* Negative Prompt auto-applied by backend */}
-
-                {/* Stable Diffusion Model Selector */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>モデル (Stable Diffusion)</label>
-                  <div style={{ display: 'flex', gap: '6px', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '3px' }}>
-                    {(['sd15', 'sdxl'] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setModelTypeFilter(t)}
-                        disabled={loading}
-                        style={{
-                          flex: 1,
-                          padding: '6px',
-                          borderRadius: '7px',
-                          border: 'none',
-                          cursor: loading ? 'default' : 'pointer',
-                          fontWeight: 800,
-                          fontSize: '12px',
-                          background: modelTypeFilter === t ? 'var(--pop-blue)' : 'transparent',
-                          color: modelTypeFilter === t ? '#fff' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {t === 'sd15' ? 'SD' : 'SDXL'}
-                      </button>
-                    ))}
-                  </div>
-                  {(() => {
-                    const modelsInScope = sdModels.filter((m) => m.type === modelTypeFilter);
-                    return modelsInScope.length > 0 ? (
-                      <select
-                        className="input-field"
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
-                        disabled={loading}
-                        style={{ borderRadius: '8px' }}
-                      >
-                        {modelsInScope.map((m) => (
-                          <option key={m.title} value={m.title}>{m.title}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                        <option>{sdModels.length === 0 ? 'モデル一覧を取得できません（SD未接続）' : modelTypeFilter === 'sdxl' ? 'SDXLモデルが見つかりません' : 'SD1.5モデルが見つかりません'}</option>
-                      </select>
-                    );
-                  })()}
-                </div>
-
-                {/* Sampler + Schedule Type — paired side-by-side when SD exposes a
-                    scheduler list (AUTOMATIC1111 ≥1.9 / recent Forge). On older SD
-                    builds the scheduler picker is hidden and the sampler stretches
-                    to fill the row via `gridColumn: '1 / -1'`. */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left', gridColumn: sdSchedulers.length > 0 ? 'auto' : '1 / -1' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サンプラー (Sampler)</label>
-                    {sdSamplers.length > 0 ? (
-                      <select
-                        className="input-field"
-                        value={selectedSampler}
-                        onChange={(e) => setSelectedSampler(e.target.value)}
-                        disabled={loading}
-                        style={{ borderRadius: '8px' }}
-                      >
-                        {sdSamplers.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                        <option>サンプラー一覧を取得できません（SD未接続）</option>
-                      </select>
-                    )}
-                  </div>
-
-                  {sdSchedulers.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>スケジュール (Schedule Type)</label>
-                      <select
-                        className="input-field"
-                        value={selectedScheduler}
-                        onChange={(e) => setSelectedScheduler(e.target.value)}
-                        disabled={loading}
-                        style={{ borderRadius: '8px' }}
-                      >
-                        {sdSchedulers.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                {/* Size Picker — SDXL uses ratio+orientation+size (bucket-aligned);
-                    SD1.5 keeps the free width/height selects since it wasn't trained
-                    with aspect-ratio buckets. */}
-                {modelTypeFilter === 'sdxl' ? (() => {
-                  const currentPreset = SDXL_PRESETS.find(p => p.ratio === selectedRatio) ?? SDXL_PRESETS[0];
-                  const isSquare = currentPreset.isSquare;
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>アスペクト比</label>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {SDXL_PRESETS.map((preset) => {
-                            const active = selectedRatio === preset.ratio;
-                            return (
-                              <button
-                                key={preset.ratio}
-                                type="button"
-                                onClick={() => handleRatioChange(preset.ratio)}
-                                disabled={loading}
-                                className="scale-hover"
-                                style={{
-                                  padding: '8px 12px',
-                                  borderRadius: '8px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                }}
-                                title={preset.ratioIsBucket ? 'SDXL純正の学習比率' : ''}
-                              >
-                                {preset.label}{preset.ratioIsBucket ? ' ⭐' : ''}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: isSquare ? '1fr' : '1fr 1fr', gap: '8px' }}>
-                        {!isSquare && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>向き</label>
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                              {(['landscape', 'portrait'] as const).map((o) => {
-                                const active = selectedOrientation === o;
-                                return (
-                                  <button
-                                    key={o}
-                                    type="button"
-                                    onClick={() => setSelectedOrientation(o)}
-                                    disabled={loading}
-                                    className="scale-hover"
-                                    style={{
-                                      flex: 1,
-                                      padding: '8px',
-                                      borderRadius: '8px',
-                                      border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                      background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                      color: active ? '#fff' : 'var(--text-secondary)',
-                                      fontWeight: 800,
-                                      cursor: 'pointer',
-                                      fontSize: '13px',
-                                    }}
-                                  >
-                                    {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サイズ</label>
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            {SDXL_SIZES.map((s) => {
-                              const active = selectedSize === s;
-                              const spec = currentPreset.sizes[s];
-                              return (
-                                <button
-                                  key={s}
-                                  type="button"
-                                  onClick={() => setSelectedSize(s)}
-                                  disabled={loading}
-                                  className="scale-hover"
-                                  style={{
-                                    flex: 1,
-                                    padding: '8px',
-                                    borderRadius: '8px',
-                                    border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                    background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                    color: active ? '#fff' : 'var(--text-secondary)',
-                                    fontWeight: 800,
-                                    cursor: 'pointer',
-                                    fontSize: '13px',
-                                  }}
-                                  title={spec.isSdxlBucket ? 'SDXL純正の学習バケットサイズ' : ''}
-                                >
-                                  {s}{spec.isSdxlBucket ? ' ⭐' : ''}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>
-                        → {width} × {height} px ({((width * height) / 1_000_000).toFixed(2)} MP)
-                      </div>
-                    </div>
-                  );
-                })() : (() => {
-                  const currentSd15Preset = SD15_PRESETS.find(p => p.ratio === selectedSd15Ratio) ?? SD15_PRESETS[0];
-                  const isSquare = currentSd15Preset.isSquare;
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>アスペクト比</label>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {SD15_PRESETS.map((preset) => {
-                            const active = selectedSd15Ratio === preset.ratio;
-                            return (
-                              <button
-                                key={preset.ratio}
-                                type="button"
-                                onClick={() => handleSd15RatioChange(preset.ratio)}
-                                disabled={loading}
-                                className="scale-hover"
-                                style={{
-                                  padding: '8px 12px',
-                                  borderRadius: '8px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                }}
-                              >
-                                {preset.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Orientation shown only for non-square; Size shown only
-                          for 1:1 (SD1.5 non-square ratios carry a single M spec). */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-                          {!isSquare && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>向き</label>
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                {(['landscape', 'portrait'] as const).map((o) => {
-                                  const active = selectedSd15Orientation === o;
-                                  return (
-                                    <button
-                                      key={o}
-                                      type="button"
-                                      onClick={() => setSelectedSd15Orientation(o)}
-                                      disabled={loading}
-                                      className="scale-hover"
-                                      style={{
-                                        flex: 1,
-                                        padding: '8px',
-                                        borderRadius: '8px',
-                                        border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                        background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                        color: active ? '#fff' : 'var(--text-secondary)',
-                                        fontWeight: 800,
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                      }}
-                                    >
-                                      {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                          {isSquare && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サイズ</label>
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                {SDXL_SIZES.map((s) => {
-                                  const active = selectedSd15Size === s;
-                                  const spec = currentSd15Preset.sizes[s];
-                                  if (!spec) return null;
-                                  return (
-                                    <button
-                                      key={s}
-                                      type="button"
-                                      onClick={() => setSelectedSd15Size(s)}
-                                      disabled={loading}
-                                      className="scale-hover"
-                                      style={{
-                                        flex: 1,
-                                        padding: '8px',
-                                        borderRadius: '8px',
-                                        border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                        background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                        color: active ? '#fff' : 'var(--text-secondary)',
-                                        fontWeight: 800,
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                      }}
-                                    >
-                                      {s}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                      </div>
-
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>
-                        → {width} × {height} px ({((width * height) / 1_000_000).toFixed(2)} MP)
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Steps */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                    <span>サンプリングステップ数 (Steps)</span>
-                    <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{steps}</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="10" 
-                    max="50" 
-                    value={steps} 
-                    onChange={(e) => setSteps(parseInt(e.target.value))}
-                    disabled={loading}
-                  />
-                </div>
-
-                {/* CFG Scale */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                    <span>プロンプト追従性 (CFG Scale)</span>
-                    <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{cfgScale}</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max="20" 
-                    step="0.5"
-                    value={cfgScale} 
-                    onChange={(e) => setCfgScale(parseFloat(e.target.value))}
-                    disabled={loading}
-                  />
-                </div>
-                {/* Hires.fix */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: loading ? 'default' : 'pointer', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                    <input
-                      type="checkbox"
-                      checked={hiresFixEnabled}
-                      onChange={(e) => setHiresFixEnabled(e.target.checked)}
-                      disabled={loading}
-                    />
-                    Hires.fixを有効にする
-                  </label>
-                  {hiresFixEnabled && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '4px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>アップスケーラー (Upscaler)</label>
-                        {sdUpscalers.length > 0 ? (
-                          <select
-                            className="input-field"
-                            value={selectedUpscaler}
-                            onChange={(e) => setSelectedUpscaler(e.target.value)}
-                            disabled={loading}
-                            style={{ borderRadius: '8px' }}
-                          >
-                            <option value="">SDのデフォルトを使用</option>
-                            {sdUpscalers.map((u) => (
-                              <option key={u} value={u}>{u}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                            <option>アップスケーラー一覧を取得できません（SD未接続）</option>
-                          </select>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                          <span>アップスケール倍率</span>
-                          <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{hiresScale.toFixed(1)}x</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="1"
-                          max="2"
-                          step="0.1"
-                          value={hiresScale}
-                          onChange={(e) => setHiresScale(parseFloat(e.target.value))}
-                          disabled={loading}
-                        />
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                          <span>Hires用ステップ数 (0 = Stepsと同じ)</span>
-                          <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{hiresSteps === 0 ? 'Stepsと同じ' : hiresSteps}</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="50"
-                          value={hiresSteps}
-                          onChange={(e) => setHiresSteps(parseInt(e.target.value))}
-                          disabled={loading}
-                        />
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                          <span>Denoising strength</span>
-                          <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{hiresDenoising.toFixed(2)}</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={hiresDenoising}
-                          onChange={(e) => setHiresDenoising(parseFloat(e.target.value))}
-                          disabled={loading}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {/* LoRA (multiple, each with a weight) */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>LoRA (複数適用可)</label>
-                  {sdLoras.length > 0 ? (
-                    <select
-                      className="input-field"
-                      value=""
-                      onChange={(e) => addLora(e.target.value)}
-                      disabled={loading}
-                      style={{ borderRadius: '8px' }}
-                    >
-                      <option value="">＋ LoRAを追加…</option>
-                      {sdLoras.filter((l) => !selectedLoras.some((sl) => sl.name === l.name)).map((l) => {
-                        const mismatched = l.type !== 'unknown' && l.type !== modelTypeFilter;
-                        return (
-                          <option key={l.name} value={l.name}>
-                            {l.name}{mismatched ? ` ⚠${l.type === 'sdxl' ? 'SDXL' : 'SD1.5'}用` : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  ) : (
-                    <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                      <option>LoRA一覧を取得できません（SD未接続）</option>
-                    </select>
-                  )}
-                  {selectedLoras.map((l) => (
-                    <div key={l.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
-                      <span style={{ flex: 1, fontSize: '11px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.name}>{l.name}</span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1.5"
-                        step="0.05"
-                        value={l.weight}
-                        onChange={(e) => setLoraWeight(l.name, parseFloat(e.target.value))}
-                        disabled={loading}
-                        style={{ width: '90px' }}
-                      />
-                      <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--pop-blue)', width: '30px', textAlign: 'right' }}>{l.weight.toFixed(2)}</span>
-                      <button type="button" onClick={() => removeLora(l.name)} disabled={loading} title="このLoRAを外す" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* SDXL-only extras: Refiner (second-pass checkpoint) and VAE.
-                    Rendered only when SDXL is the active architecture — SD1.5
-                    users don't need this complexity for now. */}
-                {modelTypeFilter === 'sdxl' && (
-                  <>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                        Refiner (仕上げモデル) <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— 任意</span>
-                      </label>
-                      <select
-                        className="input-field"
-                        value={selectedRefiner}
-                        onChange={(e) => setSelectedRefiner(e.target.value)}
-                        disabled={loading}
-                        style={{ borderRadius: '8px' }}
-                      >
-                        <option value="">（使わない）</option>
-                        {sdModels.filter((m) => m.type === 'sdxl').map((m) => (
-                          <option key={m.title} value={m.title}>{m.title}</option>
-                        ))}
-                      </select>
-                      {selectedRefiner && (
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                            <span>切替タイミング (Switch at)</span>
-                            <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{refinerSwitchAt.toFixed(2)}</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={refinerSwitchAt}
-                            onChange={(e) => setRefinerSwitchAt(parseFloat(e.target.value))}
-                            disabled={loading}
-                          />
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            全体の {Math.round(refinerSwitchAt * 100)}% までベースモデル、以降Refinerで仕上げ
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                        VAE <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— 任意</span>
-                      </label>
-                      <select
-                        className="input-field"
-                        value={selectedVae}
-                        onChange={(e) => setSelectedVae(e.target.value)}
-                        disabled={loading}
-                        style={{ borderRadius: '8px' }}
-                      >
-                        <option value="">Automatic（自動）</option>
-                        {sdVaes.map((v) => (
-                          <option key={v} value={v}>{v}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
-                )}
-
-                {/* Seed */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: loading ? 'default' : 'pointer', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                    <input
-                      type="checkbox"
-                      checked={seedLocked}
-                      onChange={(e) => setSeedLocked(e.target.checked)}
-                      disabled={loading}
-                    />
-                    Seedを固定する
-                  </label>
-                  {seedLocked && (
-                    <input
-                      type="number"
-                      className="input-field"
-                      min={0}
-                      step={1}
-                      value={seedValue}
-                      onChange={(e) => setSeedValue(parseInt(e.target.value) || 0)}
-                      disabled={loading}
-                      style={{ borderRadius: '8px' }}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* GENERATE BUTTONS - Always visible and pinned at bottom */}
-            <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
-              <button
-                type="submit"
-                className="btn-neon"
-                disabled={loading || !prompt.trim()}
-                style={{
-                  flex: 1,
-                  padding: '16px',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  fontSize: '17px',
-                  whiteSpace: 'nowrap',
-                  minWidth: 0
-                }}
-              >
-                {loading ? (
-                  <>
-                    <RotateCw size={20} className="animate-spin-custom" />
-                    <span>生成リクエストを実行中... ⚡️</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={20} />
-                    <span>画像を生成する 🎨⚡️</span>
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={openBatchModal}
-                disabled={loading || !prompt.trim()}
-                className="scale-hover"
-                title="複数枚をまとめて生成"
-                aria-label="複数枚をまとめて生成"
-                style={{
-                  flexShrink: 0,
-                  padding: '16px',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'var(--panel-bg)',
-                  color: 'var(--pop-blue)',
-                  border: '2px solid var(--pop-blue)',
-                  cursor: (loading || !prompt.trim()) ? 'not-allowed' : 'pointer',
-                  opacity: (loading || !prompt.trim()) ? 0.5 : 1
-                }}
-              >
-                <Layers size={22} />
-              </button>
-            </div>
-          </form>
-        </section>
+        <ControlPanel
+          prompt={prompt}
+          setPrompt={setPrompt}
+          loading={loading}
+          modelTypeFilter={modelTypeFilter}
+          setModelTypeFilter={setModelTypeFilter}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+          sdModels={sdModels}
+          selectedSampler={selectedSampler}
+          setSelectedSampler={setSelectedSampler}
+          sdSamplers={sdSamplers}
+          selectedScheduler={selectedScheduler}
+          setSelectedScheduler={setSelectedScheduler}
+          sdSchedulers={sdSchedulers}
+          selectedRatio={selectedRatio}
+          handleRatioChange={handleRatioChange}
+          selectedOrientation={selectedOrientation}
+          setSelectedOrientation={setSelectedOrientation}
+          selectedSize={selectedSize}
+          setSelectedSize={setSelectedSize}
+          selectedSd15Ratio={selectedSd15Ratio}
+          handleSd15RatioChange={handleSd15RatioChange}
+          selectedSd15Orientation={selectedSd15Orientation}
+          setSelectedSd15Orientation={setSelectedSd15Orientation}
+          selectedSd15Size={selectedSd15Size}
+          setSelectedSd15Size={setSelectedSd15Size}
+          width={width}
+          height={height}
+          steps={steps}
+          setSteps={setSteps}
+          cfgScale={cfgScale}
+          setCfgScale={setCfgScale}
+          hiresFixEnabled={hiresFixEnabled}
+          setHiresFixEnabled={setHiresFixEnabled}
+          selectedUpscaler={selectedUpscaler}
+          setSelectedUpscaler={setSelectedUpscaler}
+          sdUpscalers={sdUpscalers}
+          hiresScale={hiresScale}
+          setHiresScale={setHiresScale}
+          hiresSteps={hiresSteps}
+          setHiresSteps={setHiresSteps}
+          hiresDenoising={hiresDenoising}
+          setHiresDenoising={setHiresDenoising}
+          sdLoras={sdLoras}
+          selectedLoras={selectedLoras}
+          addLora={addLora}
+          removeLora={removeLora}
+          setLoraWeight={setLoraWeight}
+          selectedRefiner={selectedRefiner}
+          setSelectedRefiner={setSelectedRefiner}
+          refinerSwitchAt={refinerSwitchAt}
+          setRefinerSwitchAt={setRefinerSwitchAt}
+          selectedVae={selectedVae}
+          setSelectedVae={setSelectedVae}
+          sdVaes={sdVaes}
+          seedLocked={seedLocked}
+          setSeedLocked={setSeedLocked}
+          seedValue={seedValue}
+          setSeedValue={setSeedValue}
+          onGenerate={handleGenerate}
+          onOpenBatchModal={openBatchModal}
+        />
 
         {/* RIGHT COLUMN: PREVIEW & HISTORY GRID (tabbed) */}
         <section style={{
