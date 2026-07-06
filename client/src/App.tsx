@@ -294,7 +294,7 @@ function App() {
 
   const closeLightbox = () => {
     if (document.fullscreenElement) { document.exitFullscreen(); } // leave OS fullscreen before closing
-    setShowLightboxInfo(false); // next open always starts with info hidden
+    setShowLightboxInfo(true); // next open always starts with info visible
     const start = (document as DocumentWithViewTransition).startViewTransition;
     if (!start) {
       setLightboxUrl(null);
@@ -351,10 +351,12 @@ function App() {
   const [morphSourceKey, setMorphSourceKey] = useState<string | null>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Bottom overlay panel of image detail info. Hidden by default each time
-  // the lightbox opens; toggled by the Info button in the top toolbar; kept
-  // across left/right navigation within the same open lightbox session.
-  const [showLightboxInfo, setShowLightboxInfo] = useState(false);
+  // Bottom overlay panel of image detail info. Shown by default each time the
+  // lightbox opens (the info is the whole point of the ライトボックス拡大表示 —
+  // hiding it every time forces an extra click); toggled by the Info button in
+  // the top toolbar; kept across left/right navigation within the same open
+  // lightbox session.
+  const [showLightboxInfo, setShowLightboxInfo] = useState(true);
 
   // Index of the lightbox image within the displayed gallery order (-1 if not listed),
   // used to disable the prev/next buttons at the ends.
