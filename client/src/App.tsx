@@ -381,6 +381,13 @@ function App() {
     if (lightboxIndex >= 0) prevLightboxIndexRef.current = lightboxIndex;
   }, [lightboxIndex]);
 
+  // Batch-level cancellation signal. Set by requestCancel(), checked at the
+  // top of each batch iteration. Needed because the server's cancelRequested
+  // flag is defensively reset at the start of every /api/generate call, so
+  // a cancel that arrives during the inter-iteration gap (e.g. while the
+  // client is uploading to Firebase and SD is idle) would otherwise be lost.
+  const batchCancelledRef = useRef(false);
+
   // When the lightbox image is removed from displayedHistory (e.g. due to
   // unfavoriting in favoritesOnly mode), auto-advance to the item at the
   // previous index (clamped to the new list length), or close the lightbox
@@ -982,6 +989,11 @@ function App() {
   // /api/generate request (still pending) resolves on its own once SD stops —
   // no AbortController is used here.
   const requestCancel = async () => {
+    // Set the batch-level flag first so a cancel during the inter-iteration
+    // gap (SD idle, client mid-persist) is still caught by handleBatchGenerate's
+    // per-iteration check even if the server-side flag is later cleared by the
+    // next /api/generate's defensive reset.
+    batchCancelledRef.current = true;
     setCancelling(true);
     try {
       await fetch(`${API_BASE}/generate/interrupt`, { method: 'POST' });
@@ -1137,6 +1149,7 @@ function App() {
   const handleBatchGenerate = async (jobs: BatchJob[]) => {
     if (!prompt.trim() || loading || jobs.length === 0) return;
 
+    batchCancelledRef.current = false; // fresh batch — clear any stale cancel from a previous run
     setLoading(true);
     setErrorStep(null);
     setRightTab('preview');
@@ -1160,6 +1173,14 @@ function App() {
       let cancelledInLoop = false;
 
       for (let i = 0; i < jobs.length; i++) {
+        // Check the batch-level flag before starting each job so a cancel that
+        // arrived during the inter-iteration gap (SD idle, Firebase persist in
+        // flight) still stops the batch — the server's per-request defensive
+        // reset would otherwise swallow that signal.
+        if (batchCancelledRef.current) {
+          cancelledInLoop = true;
+          break;
+        }
         const job = jobs[i];
         setBatchProgress({ current: i + 1, total: jobs.length });
         const seed = seedLocked ? seedValue : -1;
