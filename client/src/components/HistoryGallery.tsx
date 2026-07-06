@@ -1,4 +1,3 @@
-import type { MutableRefObject } from 'react';
 import { Star, Cloud, Folder, CheckCircle2, Circle } from 'lucide-react';
 import type { GenerationData } from '../App';
 
@@ -101,8 +100,6 @@ interface HistoryGalleryProps {
   onOpenInPreview: (item: GenerationData) => void;
   morphSourceKey: string | null;
   lightboxUrl: string | null;
-  galleryClickTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
-  galleryClickDelayMs: number;
 }
 
 export function HistoryGallery({
@@ -122,8 +119,6 @@ export function HistoryGallery({
   onOpenInPreview,
   morphSourceKey,
   lightboxUrl,
-  galleryClickTimerRef,
-  galleryClickDelayMs,
 }: HistoryGalleryProps) {
   return (
     <div style={{ flexShrink: 0 }}>
@@ -275,24 +270,7 @@ export function HistoryGallery({
                 <img
                   src={item.thumbnailUrl ?? item.imageUrl}
                   alt={item.originalPrompt}
-                  onClick={() => {
-                    if (galleryClickTimerRef.current !== null) {
-                      clearTimeout(galleryClickTimerRef.current);
-                    }
-                    const url = item.imageUrl;
-                    const key = itemKey(item);
-                    galleryClickTimerRef.current = setTimeout(() => {
-                      galleryClickTimerRef.current = null;
-                      onOpenLightbox(url, key);
-                    }, galleryClickDelayMs);
-                  }}
-                  onDoubleClick={() => {
-                    if (galleryClickTimerRef.current !== null) {
-                      clearTimeout(galleryClickTimerRef.current);
-                      galleryClickTimerRef.current = null;
-                    }
-                    onOpenInPreview(item);
-                  }}
+                  onClick={() => onOpenLightbox(item.imageUrl, itemKey(item))}
                   style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
                   loading="lazy"
                   decoding="async"
@@ -331,7 +309,15 @@ export function HistoryGallery({
                 )}
               </div>
 
-              <div style={{ padding: '10px', textAlign: 'left', background: 'var(--panel-bg)' }}>
+              {/* Caption strip below the thumbnail — clicking here recalls the
+                  image into the preview tab (the same action that used to be
+                  triggered by double-clicking the thumbnail itself). Separating
+                  it from the image gives the two actions distinct hit targets. */}
+              <div
+                onClick={() => onOpenInPreview(item)}
+                title="プレビューに表示"
+                style={{ padding: '10px', textAlign: 'left', background: 'var(--panel-bg)', cursor: 'pointer' }}
+              >
                 <p style={{
                   fontSize: '12px',
                   fontWeight: '700',

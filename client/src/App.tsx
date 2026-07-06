@@ -169,8 +169,9 @@ function App() {
   // Cloud storage is active only when Firebase is configured AND the user is signed in.
   const cloudActive = isFirebaseConfigured && !!user;
 
-  // Single-click toggles selection. (A double-click fires onClick twice — toggling
-  // back to the original state — then onDoubleClick recalls the image into preview.)
+  // Single-click toggles selection. Gallery thumbnails split their click surface:
+  // clicking the image opens the lightbox; clicking the caption strip below recalls
+  // the image into the preview tab (see HistoryGallery.tsx).
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -862,15 +863,6 @@ function App() {
     setRightTab('preview');
   };
 
-  // Pending single-click timer for gallery images. Single-click and double-click
-  // on the same element are ambiguous: React fires onClick twice AND onDoubleClick
-  // on a double-click. To keep both behaviors — click → lightbox, double-click →
-  // recall into preview — we defer the lightbox open by GALLERY_CLICK_DELAY_MS,
-  // and cancel the pending timer if a double-click (or a second click) arrives
-  // within that window. The tradeoff is a small perceived lag on single-click.
-  const galleryClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const GALLERY_CLICK_DELAY_MS = 250;
-
   // Raw result of POST /api/generate, before client-side persistence.
   // Signed in → server returns { success, image(base64), params }.
   // Signed out → server already saved locally and returns { success, data }.
@@ -1373,8 +1365,6 @@ function App() {
               onOpenInPreview={openInPreview}
               morphSourceKey={morphSourceKey}
               lightboxUrl={lightboxUrl}
-              galleryClickTimerRef={galleryClickTimerRef}
-              galleryClickDelayMs={GALLERY_CLICK_DELAY_MS}
             />
           )}
           </div>
