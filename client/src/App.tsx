@@ -844,12 +844,15 @@ function App() {
     setSelectedRefiner(item.refiner || '');
     setRefinerSwitchAt(item.refinerSwitchAt ?? 0.8);
     setSelectedVae(item.vae || '');
+    // Copy the seed value (if present) so it's ready in the input field, but
+    // leave the "Seedを固定する" checkbox unchecked — reloading a past image
+    // usually means "regenerate with a fresh seed", so applying the old seed
+    // by default would surprise users. They can flip the checkbox on if they
+    // actually want to reproduce the exact same image.
     if (item.seed !== undefined) {
-      setSeedLocked(true);
       setSeedValue(item.seed);
-    } else {
-      setSeedLocked(false);
     }
+    setSeedLocked(false);
     addToast('設定をフォームに読み込みました 📥', 'success');
   };
 
