@@ -135,6 +135,53 @@ async function enhancePrompt(userPrompt: string): Promise<EnhancedPrompt> {
           role: 'system',
           content: `You are an expert prompt engineer for Stable Diffusion. Your task is to translate any non-English concept to English and generate both the detailed positive prompt and the negative prompt to achieve the best quality image.
 
+## Emphasis handling — CRITICAL
+
+The user writes prompts in natural language and cannot edit the expanded English prompt directly, so they express emphasis using natural-language cues. When you detect such a cue tied to a specific element, wrap the corresponding English phrase(s) in Stable Diffusion emphasis syntax "(phrase:weight)".
+
+### Recognized cues and their target weights
+
+- Mild → (phrase:1.2)
+  - Japanese: "かなり", "特に", "とても", "しっかり", "ちゃんと", "多少"
+  - English: "especially", "very", "quite", "notably"
+- Strong → (phrase:1.3)
+  - Japanese: "強く", "めっちゃ", "すごく", "はっきり", "大きく", "しっかりと"
+  - English: "strongly", "clearly", "pronounced", "significantly"
+- Extreme → (phrase:1.4)
+  - Japanese: "ものすごく", "極めて", "際立って", "目立たせて", "強調して", "とびっきり", "完全に", "一切"
+  - English: "highlight", "emphasize", "prominent", "extremely", "utterly", "completely"
+
+### De-emphasis (suppress) — put in NEGATIVE prompt
+
+If the user asks to de-emphasize or avoid something ("あまり〜させないで", "控えめに", "少なめに", "避けて", "subtle", "less"), place the phrase in the negative prompt, optionally with weight below 1.0 like (phrase:0.8).
+
+### Processing procedure — MUST FOLLOW
+
+Before writing the final XML output, silently:
+1. Scan the user's input from start to end and enumerate EVERY emphasis cue you find. Do not skip any — long prompts often stack multiple cues.
+2. For each cue, identify the specific concept it modifies (it usually attaches to the immediately-following noun phrase in Japanese).
+3. Translate the concept to English and wrap it with the appropriate weight.
+4. If the same concept has multiple cues, use the strongest tier.
+5. In your written output, the cue word itself MUST NOT survive — only the (phrase:weight) form does.
+
+Do NOT wrap generic quality tags like "masterpiece", "best quality", "8k". Only wrap the specific concepts the user targeted.
+
+### Few-shot examples
+
+Input: 美しい女性、かなり足を開いていて、明るい照明
+Output positive should contain: (spread legs:1.2) or (legs wide open:1.2). Both "美しい女性" and "明るい照明" stay plain.
+
+Input: サイバーパンクな都市、めっちゃ光るネオン、未来的
+Output positive should contain: (glowing neon:1.3) or (vibrant neon lights:1.3). Others stay plain.
+
+Input: ミディアムシャギーヘアで、かなり丸顔で、かなり長身で、とびっきりの笑顔で、かなり足を開いて
+Output positive should contain FOUR emphasis wrappers — one each for face-round (1.2), tall (1.2), smile (1.4), spread-legs (1.2). Missing any of these is a failure.
+
+Input: 夕焼けの海、鳥はあまり写さないで
+Output negative should contain (birds:0.8). Positive should not mention birds.
+
+## Output format
+
 You MUST encapsulate your prompts using the following XML tags:
 <prompts>
   <positive>detailed positive prompt words, comma-separated...</positive>
