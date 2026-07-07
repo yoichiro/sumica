@@ -87,45 +87,26 @@ function FavoriteButton({
 function CaptionInfo({ info }: { info: CaptionInfoData }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <div style={{
-        fontSize: '13px',
-        fontWeight: 700,
-        color: 'var(--text-primary)',
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-      }}>
-        {info.model}
-      </div>
+      {/* Row 1: model (ellipsis) + date (right, small muted). Date moved here
+          from Row 2 so Row 2 can give the size string full width and stop
+          truncating on narrow tiles. */}
       <div style={{
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'baseline',
         justifyContent: 'space-between',
         gap: '6px',
       }}>
         <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
+          fontSize: '13px',
+          fontWeight: 700,
+          color: 'var(--text-primary)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
           minWidth: 0,
           flex: 1,
         }}>
-          <span style={{
-            fontSize: '11px',
-            fontWeight: 500,
-            color: 'var(--text-primary)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
-            {info.size}
-          </span>
-          {info.hasHires && (
-            <span title="Hires.fix 適用" style={{ fontSize: '12px', flexShrink: 0 }}>⚡</span>
-          )}
-          {info.hasLora && (
-            <span title="LoRA 適用" style={{ fontSize: '12px', flexShrink: 0 }}>🎭</span>
-          )}
+          {info.model}
         </div>
         <span style={{
           fontSize: '10px',
@@ -134,6 +115,30 @@ function CaptionInfo({ info }: { info: CaptionInfoData }) {
         }}>
           {info.date}
         </span>
+      </div>
+      {/* Row 2: size + Hires/LoRA presence badges, full width. */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        minWidth: 0,
+      }}>
+        <span style={{
+          fontSize: '11px',
+          fontWeight: 500,
+          color: 'var(--text-primary)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}>
+          {info.size}
+        </span>
+        {info.hasHires && (
+          <span title="Hires.fix 適用" style={{ fontSize: '12px', flexShrink: 0 }}>⚡</span>
+        )}
+        {info.hasLora && (
+          <span title="LoRA 適用" style={{ fontSize: '12px', flexShrink: 0 }}>🎭</span>
+        )}
       </div>
     </div>
   );
