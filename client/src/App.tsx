@@ -26,6 +26,13 @@ import {
 } from './components/presets';
 import { computeLoadIntoFormState } from './components/loadIntoFormState';
 import { flushSync } from 'react-dom';
+import {
+  getNotificationSupport,
+  requestNotificationPermission,
+  loadNotificationPreference,
+  saveNotificationPreference,
+  sendNotification,
+} from './utils/notifications';
 
 // View Transitions API (Baseline 2025-10); typed locally so it works regardless of lib.dom version.
 type DocumentWithViewTransition = Document & {
@@ -398,6 +405,40 @@ function App() {
   // a cancel that arrives during the inter-iteration gap (e.g. while the
   // client is uploading to Firebase and SD is idle) would otherwise be lost.
   const batchCancelledRef = useRef(false);
+
+  // OS notification opt-in. Loaded from localStorage on mount; the toggle in
+  // the header updates both state and storage. `notify` is the fire-and-forget
+  // helper used at generation-complete points below.
+  const [notificationsEnabled, setNotificationsEnabled] = useState(loadNotificationPreference());
+  const notify = (body: string) => {
+    if (notificationsEnabled) sendNotification('Sumica AI Studio', body);
+  };
+  const toggleNotifications = async () => {
+    if (notificationsEnabled) {
+      setNotificationsEnabled(false);
+      saveNotificationPreference(false);
+      return;
+    }
+    const support = getNotificationSupport();
+    if (!support.supported) {
+      addToast('このブラウザは通知に対応していません。', 'error');
+      return;
+    }
+    if (support.permission === 'denied') {
+      addToast('通知はブロックされています。ブラウザ設定から許可してください。', 'error');
+      return;
+    }
+    if (support.permission === 'default') {
+      const result = await requestNotificationPermission();
+      if (result !== 'granted') {
+        addToast('通知は許可されませんでした。', 'error');
+        return;
+      }
+    }
+    setNotificationsEnabled(true);
+    saveNotificationPreference(true);
+    addToast('通知を有効にしました 🔔', 'success');
+  };
 
   // When the lightbox image is removed from displayedHistory (e.g. due to
   // unfavoriting in favoritesOnly mode), auto-advance to the item at the
@@ -1117,6 +1158,7 @@ function App() {
           } as GenerationData);
           setGenStatus('success');
           addToast(`クラウド保存に失敗しました（画像は表示中）。\n\n詳細: ${saveErr.message}`, 'error');
+          notify('画像生成が完了しました（クラウド保存失敗）');
           return;
         }
 
@@ -1124,6 +1166,7 @@ function App() {
         setGenStatus('success');
         if (!user) fetchHistory(); // signed-in history updates via onSnapshot (Task 5)
         addToast('画像を生成しました！🎨⚡️', 'success');
+        notify('画像生成が完了しました 🎨');
       }
     } catch (error: any) {
       if (error instanceof GenerationCancelledError) {
@@ -1145,6 +1188,7 @@ function App() {
       setGenStatus('error');
 
       addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+      notify('画像生成に失敗しました');
     } finally {
       setLoading(false);
       setCancelling(false);
@@ -1220,12 +1264,15 @@ function App() {
         setErrorStep(2);
         setGenStatus('error');
         addToast(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+        notify(`${jobs.length}枚中1枚も生成できませんでした`);
       } else {
         setGenStatus('success');
         if (failed === 0) {
           addToast(`${succeeded}枚の画像を生成しました！🎨⚡️`, 'success');
+          notify(`${succeeded}枚の画像を生成しました 🎨✨`);
         } else {
           addToast(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+          notify(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）`);
         }
       }
     } catch (error: any) {
@@ -1234,6 +1281,7 @@ function App() {
       setErrorStep(currentStep);
       setGenStatus('error');
       addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
+      notify('画像生成に失敗しました');
     } finally {
       setLoading(false);
       setBatchProgress(null);
@@ -1250,6 +1298,8 @@ function App() {
         health={health}
         healthChecking={healthChecking}
         onSignInError={(msg) => addToast(msg, 'error')}
+        notificationsEnabled={notificationsEnabled}
+        onToggleNotifications={toggleNotifications}
       />
 
       {/* MAIN CONTAINER */}

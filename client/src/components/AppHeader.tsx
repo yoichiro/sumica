@@ -1,4 +1,4 @@
-import { Sparkles, Cloud, Folder, LogIn } from 'lucide-react';
+import { Sparkles, Cloud, Folder, LogIn, Bell, BellOff } from 'lucide-react';
 import { isFirebaseConfigured, signInWithGoogle, signOutUser, type AuthUser } from '../firebase';
 
 export interface HealthStatus {
@@ -44,9 +44,11 @@ interface AppHeaderProps {
   health: HealthStatus | null;
   healthChecking: boolean;
   onSignInError: (message: string) => void;
+  notificationsEnabled: boolean;
+  onToggleNotifications: () => void;
 }
 
-export function AppHeader({ user, cloudActive, health, healthChecking, onSignInError }: AppHeaderProps) {
+export function AppHeader({ user, cloudActive, health, healthChecking, onSignInError, notificationsEnabled, onToggleNotifications }: AppHeaderProps) {
   return (
     <header className="glass-panel" style={{
       margin: '20px',
@@ -81,7 +83,31 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
       </div>
 
       {/* STATUS BAR & SETTINGS BUTTON */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* OS notification opt-in toggle. Clicking flips the preference; if the
+            browser hasn't been asked for permission yet, the parent handler
+            will trigger the request dialog. */}
+        <button
+          type="button"
+          onClick={onToggleNotifications}
+          title={notificationsEnabled ? '通知を無効化' : '通知を有効化'}
+          className="scale-hover"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '38px',
+            height: '38px',
+            borderRadius: '50%',
+            border: '2px solid var(--panel-border)',
+            background: notificationsEnabled ? 'var(--pop-blue)' : 'var(--panel-bg)',
+            color: notificationsEnabled ? '#fff' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            boxShadow: notificationsEnabled ? '0 2px 8px rgba(51, 154, 240, 0.3)' : 'none',
+          }}
+        >
+          {notificationsEnabled ? <Bell size={16} /> : <BellOff size={16} />}
+        </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', background: 'var(--panel-bg-sunk)', padding: '8px 16px', borderRadius: '30px', border: '2px solid var(--panel-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.01)' }}>
           {/* Storage mode + account */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: cloudActive ? 'var(--pop-green)' : 'var(--text-secondary)', fontWeight: '700' }}>
