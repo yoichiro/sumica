@@ -23,11 +23,8 @@ describe('buildCaptionFieldQueue', () => {
   it('returns the 4 basic fields for a plain SD1.5 512x512 generation', () => {
     const q = buildCaptionFieldQueue(baseItem);
     expect(q.map(f => f.key)).toEqual(['model', 'size', 'date', 'sampler']);
-    expect(q[0].label).toBe('モデル');
     expect(q[0].value).toBe('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]');
-    expect(q[1].label).toBe('サイズ');
     expect(q[1].value).toBe('512×512 (1:1)');
-    expect(q[3].label).toBe('Sampler');
     expect(q[3].value).toBe('DPM++ SDE · Karras');
   });
 
@@ -62,7 +59,6 @@ describe('buildCaptionFieldQueue', () => {
     const q = buildCaptionFieldQueue({ ...baseItem, enableHr: true, hrScale: 2, denoisingStrength: 0.5 });
     expect(q.map(f => f.key)).toContain('hires');
     const hires = q.find(f => f.key === 'hires')!;
-    expect(hires.label).toBe('Hires.fix');
     expect(hires.value).toBe('×2 (denoise 0.5)');
   });
 
@@ -76,7 +72,6 @@ describe('buildCaptionFieldQueue', () => {
     });
     const loraSlots = q.filter(f => f.key.startsWith('lora-'));
     expect(loraSlots).toHaveLength(2);
-    expect(loraSlots[0].label).toBe('LoRA');
     expect(loraSlots[0].value).toBe('siitake-eye × 0.8');
     expect(loraSlots[1].value).toBe('ClearHand-V2 × 0.7');
   });
@@ -98,7 +93,6 @@ describe('buildCaptionFieldQueue', () => {
 
   it('formats the date as YYYY-MM-DD HH:mm using the ja-JP locale', () => {
     const q = buildCaptionFieldQueue(baseItem);
-    expect(q[2].label).toBe('日時');
     expect(q[2].value).toMatch(/^2026-07-05 \d{2}:\d{2}$/);
   });
 });

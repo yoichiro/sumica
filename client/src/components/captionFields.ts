@@ -3,7 +3,6 @@ import { findSdxlSelection, findSd15Selection } from './presets';
 
 export type CaptionField = {
   key: string;
-  label: string;
   value: string;
 };
 
@@ -38,36 +37,32 @@ export function buildCaptionFieldQueue(item: GenerationData): CaptionField[] {
 
   fields.push({
     key: 'model',
-    label: 'モデル',
     value: item.model && item.model.length > 0 ? item.model : '不明',
   });
 
   fields.push({
     key: 'size',
-    label: 'サイズ',
     value: formatSize(item.width, item.height),
   });
 
   fields.push({
     key: 'date',
-    label: '日時',
     value: formatDate(item.timestamp),
   });
 
   const sampler = formatSampler(item);
   if (sampler) {
-    fields.push({ key: 'sampler', label: 'Sampler', value: sampler });
+    fields.push({ key: 'sampler', value: sampler });
   }
 
   if (item.enableHr) {
-    fields.push({ key: 'hires', label: 'Hires.fix', value: formatHires(item) });
+    fields.push({ key: 'hires', value: formatHires(item) });
   }
 
   if (item.loras && item.loras.length > 0) {
     item.loras.forEach((l, i) => {
       fields.push({
         key: `lora-${i}`,
-        label: 'LoRA',
         value: `${l.name} × ${l.weight}`,
       });
     });

@@ -87,18 +87,15 @@ function FavoriteButton({
 
 function CaptionSlot({ field }: { field: CaptionField }) {
   return (
-    <div style={{ height: '20px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <span style={{ fontSize: '9px', color: 'var(--text-muted)', lineHeight: '10px' }}>
-        {field.label}
-      </span>
+    <div style={{ height: '20px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
       <span style={{
-        fontSize: '11px',
+        fontSize: '12px',
         fontWeight: 700,
         color: 'var(--text-primary)',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        lineHeight: '10px',
+        lineHeight: '20px',
       }}>
         {field.value}
       </span>

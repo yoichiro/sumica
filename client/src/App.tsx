@@ -382,12 +382,12 @@ function App() {
   }, [lightboxIndex]);
 
   // Shared tick counter that drives the gallery caption rotation. Advances every
-  // 3 seconds. Passed down to HistoryGallery so all tiles switch in sync.
+  // 6 seconds. Passed down to HistoryGallery so all tiles switch in sync.
   const [captionRotationTick, setCaptionRotationTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => {
       setCaptionRotationTick(t => t + 1);
-    }, 3000);
+    }, 6000);
     return () => clearInterval(id);
   }, []);
 
