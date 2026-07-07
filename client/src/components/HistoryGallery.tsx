@@ -1,7 +1,6 @@
 import { Star, Cloud, Folder, CheckCircle2, Circle } from 'lucide-react';
-import { useState, useEffect } from 'react';
 import type { GenerationData } from '../App';
-import { buildCaptionFieldQueue, type CaptionField } from './captionFields';
+import { buildCaptionInfo, type CaptionInfoData } from './captionFields';
 
 // Bottom-right selection toggle overlaid on a gallery tile.
 function SelectButton({
@@ -85,71 +84,56 @@ function FavoriteButton({
   );
 }
 
-function CaptionSlot({ field }: { field: CaptionField }) {
+function CaptionInfo({ info }: { info: CaptionInfoData }) {
   return (
-    <div style={{ height: '20px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
-      <span style={{
-        fontSize: '12px',
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{
+        fontSize: '13px',
         fontWeight: 700,
         color: 'var(--text-primary)',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        lineHeight: '20px',
       }}>
-        {field.value}
-      </span>
-    </div>
-  );
-}
-
-function CaptionRotator({ item, tick }: { item: GenerationData; tick: number }) {
-  const queue = buildCaptionFieldQueue(item);
-  const N = queue.length;
-
-  // For a very short queue (theoretically not possible given the 3 always-on
-  // basic fields, but guard anyway), skip the rotation animation.
-  const canRotate = N >= 2;
-
-  const [displayTick, setDisplayTick] = useState(tick);
-  const [scrolling, setScrolling] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-
-  useEffect(() => {
-    if (!canRotate) return;
-    if (isHovered) return;
-    if (tick === displayTick) return;
-    setScrolling(true);
-    const timer = setTimeout(() => {
-      setDisplayTick(tick);
-      setScrolling(false);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [tick, displayTick, canRotate, isHovered]);
-
-  const topIdx = ((displayTick % N) + N) % N;
-  const bottomIdx = (topIdx + 1) % N;
-  const nextIdx = (topIdx + 2) % N;
-
-  const SLOT_H = 40; // 2 lines × 20px
-  const LINE_H = 20;
-
-  return (
-    <div
-      style={{ height: `${SLOT_H}px`, overflow: 'hidden' }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div
-        className="caption-rotator-inner"
-        style={{
-          transform: scrolling ? `translateY(-${LINE_H}px)` : 'translateY(0)',
-          transition: scrolling ? 'transform 400ms ease-out' : 'none',
-        }}
-      >
-        <CaptionSlot field={queue[topIdx]} />
-        <CaptionSlot field={queue[bottomIdx]} />
-        <CaptionSlot field={queue[nextIdx]} />
+        {info.model}
+      </div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '6px',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          minWidth: 0,
+          flex: 1,
+        }}>
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 500,
+            color: 'var(--text-primary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {info.size}
+          </span>
+          {info.hasHires && (
+            <span title="Hires.fix 適用" style={{ fontSize: '12px', flexShrink: 0 }}>⚡</span>
+          )}
+          {info.hasLora && (
+            <span title="LoRA 適用" style={{ fontSize: '12px', flexShrink: 0 }}>🎭</span>
+          )}
+        </div>
+        <span style={{
+          fontSize: '10px',
+          color: 'var(--text-muted)',
+          flexShrink: 0,
+        }}>
+          {info.date}
+        </span>
       </div>
     </div>
   );
@@ -172,7 +156,6 @@ interface HistoryGalleryProps {
   onOpenInPreview: (item: GenerationData) => void;
   morphSourceKey: string | null;
   lightboxUrl: string | null;
-  captionRotationTick: number;
 }
 
 export function HistoryGallery({
@@ -192,7 +175,6 @@ export function HistoryGallery({
   onOpenInPreview,
   morphSourceKey,
   lightboxUrl,
-  captionRotationTick,
 }: HistoryGalleryProps) {
   return (
     <div style={{ flexShrink: 0 }}>
@@ -392,7 +374,7 @@ export function HistoryGallery({
                 title="プレビューに表示"
                 style={{ padding: '10px', textAlign: 'left', background: 'var(--panel-bg)', cursor: 'pointer' }}
               >
-                <CaptionRotator item={item} tick={captionRotationTick} />
+                <CaptionInfo info={buildCaptionInfo(item)} />
               </div>
             </div>
           ))}

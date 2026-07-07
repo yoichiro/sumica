@@ -381,16 +381,6 @@ function App() {
     if (lightboxIndex >= 0) prevLightboxIndexRef.current = lightboxIndex;
   }, [lightboxIndex]);
 
-  // Shared tick counter that drives the gallery caption rotation. Advances every
-  // 6 seconds. Passed down to HistoryGallery so all tiles switch in sync.
-  const [captionRotationTick, setCaptionRotationTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => {
-      setCaptionRotationTick(t => t + 1);
-    }, 6000);
-    return () => clearInterval(id);
-  }, []);
-
   // Batch-level cancellation signal. Set by requestCancel(), checked at the
   // top of each batch iteration. Needed because the server's cancelRequested
   // flag is defensively reset at the start of every /api/generate call, so
@@ -1401,7 +1391,6 @@ function App() {
               onOpenInPreview={openInPreview}
               morphSourceKey={morphSourceKey}
               lightboxUrl={lightboxUrl}
-              captionRotationTick={captionRotationTick}
             />
           )}
           </div>

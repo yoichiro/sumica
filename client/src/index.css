@@ -511,9 +511,3 @@ input:checked + .slider:before {
     color: var(--text-primary);
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .caption-rotator-inner {
-    transition: none !important;
-  }
-}

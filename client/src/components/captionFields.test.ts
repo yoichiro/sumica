@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCaptionFieldQueue } from './captionFields';
+import { buildCaptionInfo } from './captionFields';
 import type { GenerationData } from '../App';
 
 const baseItem: GenerationData = {
@@ -15,87 +15,79 @@ const baseItem: GenerationData = {
   timestamp: new Date('2026-07-05T14:23:00+09:00').getTime(),
   createdAt: '2026-07-05T05:23:00.000Z',
   backendMode: 'local',
-  sampler: 'DPM++ SDE',
-  scheduler: 'Karras',
 };
 
-describe('buildCaptionFieldQueue', () => {
-  it('returns the 4 basic fields for a plain SD1.5 512x512 generation', () => {
-    const q = buildCaptionFieldQueue(baseItem);
-    expect(q.map(f => f.key)).toEqual(['model', 'size', 'date', 'sampler']);
-    expect(q[0].value).toBe('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]');
-    expect(q[1].value).toBe('512×512 (1:1)');
-    expect(q[3].value).toBe('DPM++ SDE · Karras');
+describe('buildCaptionInfo', () => {
+  it('returns core fields with hasHires and hasLora both false when neither is applied', () => {
+    const info = buildCaptionInfo(baseItem);
+    expect(info.model).toBe('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]');
+    expect(info.size).toBe('512×512 (1:1)');
+    expect(info.hasHires).toBe(false);
+    expect(info.hasLora).toBe(false);
   });
 
-  it('falls back to "不明" when model is null or empty', () => {
-    const q1 = buildCaptionFieldQueue({ ...baseItem, model: null });
-    const q2 = buildCaptionFieldQueue({ ...baseItem, model: '' });
-    expect(q1[0].value).toBe('不明');
-    expect(q2[0].value).toBe('不明');
+  it('falls back to "不明" when model is null', () => {
+    const info = buildCaptionInfo({ ...baseItem, model: null });
+    expect(info.model).toBe('不明');
   });
 
-  it('drops scheduler suffix when scheduler is missing', () => {
-    const q = buildCaptionFieldQueue({ ...baseItem, scheduler: undefined });
-    expect(q[3].value).toBe('DPM++ SDE');
+  it('falls back to "不明" when model is empty string', () => {
+    const info = buildCaptionInfo({ ...baseItem, model: '' });
+    expect(info.model).toBe('不明');
   });
 
-  it('skips the sampler field when sampler is missing', () => {
-    const q = buildCaptionFieldQueue({ ...baseItem, sampler: undefined, scheduler: undefined });
-    expect(q.map(f => f.key)).toEqual(['model', 'size', 'date']);
-  });
-
-  it('omits the aspect ratio suffix when no preset matches', () => {
-    const q = buildCaptionFieldQueue({ ...baseItem, width: 999, height: 555 });
-    expect(q[1].value).toBe('999×555');
+  it('omits the aspect ratio suffix when dimensions do not match any preset', () => {
+    const info = buildCaptionInfo({ ...baseItem, width: 999, height: 555 });
+    expect(info.size).toBe('999×555');
   });
 
   it('recognizes SDXL 832x1216 as 3:2 portrait', () => {
-    const q = buildCaptionFieldQueue({ ...baseItem, width: 832, height: 1216 });
-    expect(q[1].value).toBe('832×1216 (3:2)');
+    const info = buildCaptionInfo({ ...baseItem, width: 832, height: 1216 });
+    expect(info.size).toBe('832×1216 (3:2)');
   });
 
-  it('adds a Hires.fix slot when enableHr is true', () => {
-    const q = buildCaptionFieldQueue({ ...baseItem, enableHr: true, hrScale: 2, denoisingStrength: 0.5 });
-    expect(q.map(f => f.key)).toContain('hires');
-    const hires = q.find(f => f.key === 'hires')!;
-    expect(hires.value).toBe('×2 (denoise 0.5)');
+  it('sets hasHires true when enableHr is true', () => {
+    const info = buildCaptionInfo({ ...baseItem, enableHr: true });
+    expect(info.hasHires).toBe(true);
   });
 
-  it('adds one slot per applied LoRA', () => {
-    const q = buildCaptionFieldQueue({
+  it('sets hasLora true when at least one LoRA is applied', () => {
+    const info = buildCaptionInfo({
+      ...baseItem,
+      loras: [{ name: 'x', weight: 0.5 }],
+    });
+    expect(info.hasLora).toBe(true);
+  });
+
+  it('sets hasLora true when multiple LoRAs are applied', () => {
+    const info = buildCaptionInfo({
       ...baseItem,
       loras: [
-        { name: 'siitake-eye', weight: 0.8 },
-        { name: 'ClearHand-V2', weight: 0.7 },
+        { name: 'x', weight: 0.5 },
+        { name: 'y', weight: 0.7 },
+        { name: 'z', weight: 0.3 },
       ],
     });
-    const loraSlots = q.filter(f => f.key.startsWith('lora-'));
-    expect(loraSlots).toHaveLength(2);
-    expect(loraSlots[0].value).toBe('siitake-eye × 0.8');
-    expect(loraSlots[1].value).toBe('ClearHand-V2 × 0.7');
+    expect(info.hasLora).toBe(true);
   });
 
-  it('combines Hires.fix and multiple LoRAs in order', () => {
-    const q = buildCaptionFieldQueue({
+  it('sets hasLora false when loras is an empty array', () => {
+    const info = buildCaptionInfo({ ...baseItem, loras: [] });
+    expect(info.hasLora).toBe(false);
+  });
+
+  it('formats the date as MM-DD (shape-only, timezone-agnostic)', () => {
+    const info = buildCaptionInfo(baseItem);
+    expect(info.date).toMatch(/^\d{2}-\d{2}$/);
+  });
+
+  it('flags both hasHires and hasLora when both are applied', () => {
+    const info = buildCaptionInfo({
       ...baseItem,
       enableHr: true,
-      hrScale: 2,
-      denoisingStrength: 0.5,
-      loras: [
-        { name: 'a', weight: 0.5 },
-        { name: 'b', weight: 0.6 },
-        { name: 'c', weight: 0.7 },
-      ],
+      loras: [{ name: 'a', weight: 0.5 }],
     });
-    expect(q.map(f => f.key)).toEqual(['model', 'size', 'date', 'sampler', 'hires', 'lora-0', 'lora-1', 'lora-2']);
-  });
-
-  it('formats the date as YYYY-MM-DD HH:mm in the system local timezone', () => {
-    const q = buildCaptionFieldQueue(baseItem);
-    // Shape-only match — the exact wall-clock date depends on the machine's
-    // local timezone, which we do not want CI (or a US-timezone developer)
-    // to flake against. formatDate is documented to render in the local zone.
-    expect(q[2].value).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+    expect(info.hasHires).toBe(true);
+    expect(info.hasLora).toBe(true);
   });
 });
