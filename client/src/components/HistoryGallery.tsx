@@ -1,5 +1,7 @@
 import { Star, Cloud, Folder, CheckCircle2, Circle } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import type { GenerationData } from '../App';
+import { buildCaptionFieldQueue, type CaptionField } from './captionFields';
 
 // Bottom-right selection toggle overlaid on a gallery tile.
 function SelectButton({
@@ -83,6 +85,73 @@ function FavoriteButton({
   );
 }
 
+function CaptionSlot({ field }: { field: CaptionField }) {
+  return (
+    <div style={{ height: '20px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <span style={{ fontSize: '9px', color: 'var(--text-muted)', lineHeight: '10px' }}>
+        {field.label}
+      </span>
+      <span style={{
+        fontSize: '11px',
+        fontWeight: 700,
+        color: 'var(--text-primary)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        lineHeight: '10px',
+      }}>
+        {field.value}
+      </span>
+    </div>
+  );
+}
+
+function CaptionRotator({ item, tick }: { item: GenerationData; tick: number }) {
+  const queue = buildCaptionFieldQueue(item);
+  const N = queue.length;
+
+  // For a very short queue (theoretically not possible given the 3 always-on
+  // basic fields, but guard anyway), skip the rotation animation.
+  const canRotate = N >= 2;
+
+  const [displayTick, setDisplayTick] = useState(tick);
+  const [scrolling, setScrolling] = useState(false);
+
+  useEffect(() => {
+    if (!canRotate) return;
+    if (tick === displayTick) return;
+    setScrolling(true);
+    const timer = setTimeout(() => {
+      setDisplayTick(tick);
+      setScrolling(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [tick, displayTick, canRotate]);
+
+  const topIdx = ((displayTick % N) + N) % N;
+  const bottomIdx = (topIdx + 1) % N;
+  const nextIdx = (topIdx + 2) % N;
+
+  const SLOT_H = 40; // 2 lines × 20px
+  const LINE_H = 20;
+
+  return (
+    <div style={{ height: `${SLOT_H}px`, overflow: 'hidden' }}>
+      <div
+        className="caption-rotator-inner"
+        style={{
+          transform: scrolling ? `translateY(-${LINE_H}px)` : 'translateY(0)',
+          transition: scrolling ? 'transform 400ms ease-out' : 'none',
+        }}
+      >
+        <CaptionSlot field={queue[topIdx]} />
+        <CaptionSlot field={queue[bottomIdx]} />
+        <CaptionSlot field={queue[nextIdx]} />
+      </div>
+    </div>
+  );
+}
+
 interface HistoryGalleryProps {
   historyLength: number;
   displayedHistory: GenerationData[];
@@ -100,6 +169,7 @@ interface HistoryGalleryProps {
   onOpenInPreview: (item: GenerationData) => void;
   morphSourceKey: string | null;
   lightboxUrl: string | null;
+  captionRotationTick: number;
 }
 
 export function HistoryGallery({
@@ -119,6 +189,7 @@ export function HistoryGallery({
   onOpenInPreview,
   morphSourceKey,
   lightboxUrl,
+  captionRotationTick,
 }: HistoryGalleryProps) {
   return (
     <div style={{ flexShrink: 0 }}>
@@ -318,20 +389,7 @@ export function HistoryGallery({
                 title="プレビューに表示"
                 style={{ padding: '10px', textAlign: 'left', background: 'var(--panel-bg)', cursor: 'pointer' }}
               >
-                <p style={{
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  margin: 0,
-                  color: 'var(--text-primary)'
-                }}>
-                  {item.originalPrompt}
-                </p>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                  {new Date(item.timestamp).toLocaleDateString()}
-                </span>
+                <CaptionRotator item={item} tick={captionRotationTick} />
               </div>
             </div>
           ))}
