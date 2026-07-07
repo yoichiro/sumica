@@ -135,12 +135,19 @@ function CaptionInfo({ info }: { info: CaptionInfoData }) {
         }}>
           {info.size}
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+        {/* Badges: `gap` cannot tighten these beyond a certain point because
+            emoji glyphs carry their own horizontal padding inside the bounding
+            box. Use a negative marginLeft on the second badge to visually pull
+            it against the first. */}
+        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
           {info.hasHires && (
             <span title="Hires.fix 適用" style={{ fontSize: '12px' }}>⚡</span>
           )}
           {info.hasLora && (
-            <span title="LoRA 適用" style={{ fontSize: '12px' }}>🎭</span>
+            <span
+              title="LoRA 適用"
+              style={{ fontSize: '12px', marginLeft: info.hasHires ? '-4px' : 0 }}
+            >🎭</span>
           )}
         </div>
       </div>
