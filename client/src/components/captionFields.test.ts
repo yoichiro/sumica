@@ -50,7 +50,7 @@ describe('buildCaptionFieldQueue', () => {
     expect(q[1].value).toBe('999×555');
   });
 
-  it('recognizes SDXL 1024x1536 as 3:2 portrait', () => {
+  it('recognizes SDXL 832x1216 as 3:2 portrait', () => {
     const q = buildCaptionFieldQueue({ ...baseItem, width: 832, height: 1216 });
     expect(q[1].value).toBe('832×1216 (3:2)');
   });
@@ -91,8 +91,11 @@ describe('buildCaptionFieldQueue', () => {
     expect(q.map(f => f.key)).toEqual(['model', 'size', 'date', 'sampler', 'hires', 'lora-0', 'lora-1', 'lora-2']);
   });
 
-  it('formats the date as YYYY-MM-DD HH:mm using the ja-JP locale', () => {
+  it('formats the date as YYYY-MM-DD HH:mm in the system local timezone', () => {
     const q = buildCaptionFieldQueue(baseItem);
-    expect(q[2].value).toMatch(/^2026-07-05 \d{2}:\d{2}$/);
+    // Shape-only match — the exact wall-clock date depends on the machine's
+    // local timezone, which we do not want CI (or a US-timezone developer)
+    // to flake against. formatDate is documented to render in the local zone.
+    expect(q[2].value).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   });
 });
