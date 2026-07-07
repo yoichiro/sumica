@@ -116,9 +116,11 @@ function CaptionRotator({ item, tick }: { item: GenerationData; tick: number }) 
 
   const [displayTick, setDisplayTick] = useState(tick);
   const [scrolling, setScrolling] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     if (!canRotate) return;
+    if (isHovered) return;
     if (tick === displayTick) return;
     setScrolling(true);
     const timer = setTimeout(() => {
@@ -126,7 +128,7 @@ function CaptionRotator({ item, tick }: { item: GenerationData; tick: number }) 
       setScrolling(false);
     }, 400);
     return () => clearTimeout(timer);
-  }, [tick, displayTick, canRotate]);
+  }, [tick, displayTick, canRotate, isHovered]);
 
   const topIdx = ((displayTick % N) + N) % N;
   const bottomIdx = (topIdx + 1) % N;
@@ -136,7 +138,11 @@ function CaptionRotator({ item, tick }: { item: GenerationData; tick: number }) 
   const LINE_H = 20;
 
   return (
-    <div style={{ height: `${SLOT_H}px`, overflow: 'hidden' }}>
+    <div
+      style={{ height: `${SLOT_H}px`, overflow: 'hidden' }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div
         className="caption-rotator-inner"
         style={{
