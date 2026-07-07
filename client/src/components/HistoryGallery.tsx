@@ -357,7 +357,7 @@ export function HistoryGallery({
           {displayedHistory.map((item) => (
             <div
               key={itemKey(item)}
-              className="glass-panel scale-hover"
+              className="glass-panel scale-hover gallery-tile-enter"
               style={{
                 borderRadius: '12px',
                 overflow: 'hidden',

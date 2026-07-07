@@ -511,3 +511,23 @@ input:checked + .slider:before {
     color: var(--text-primary);
   }
 }
+
+/* Gallery tile entrance animation. Runs once per newly-mounted tile (React
+   reuses existing DOM by key, so already-visible tiles don't re-animate on
+   filter changes or new item additions). Uses `backwards` fill mode so the
+   "from" state applies before the animation starts (preventing a 1-frame
+   flash at base opacity), while the "to" state releases back to the base
+   after 400ms — leaving `.scale-hover:hover { transform: scale(1.02) }` free
+   to take over cleanly. */
+@keyframes gallery-tile-enter {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.gallery-tile-enter {
+  animation: gallery-tile-enter 400ms cubic-bezier(0.25, 0.8, 0.25, 1) backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gallery-tile-enter {
+    animation: none;
+  }
+}
