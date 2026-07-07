@@ -292,8 +292,19 @@ function App() {
     }
   };
 
-  const closeLightbox = () => {
-    if (document.fullscreenElement) { document.exitFullscreen(); } // leave OS fullscreen before closing
+  const closeLightbox = async () => {
+    // If we're in OS fullscreen, we MUST await the exit before starting the
+    // View Transition. Otherwise the transition snapshots the still-fullscreen
+    // DOM and the user sees the image stuck at the maximized size for the
+    // ~1s the browser takes to actually leave fullscreen. Awaiting the
+    // Promise document.exitFullscreen() returns closes that race.
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // If exiting fails for some reason, fall through — the close still needs to happen.
+      }
+    }
     setShowLightboxInfo(true); // next open always starts with info visible
     const start = (document as DocumentWithViewTransition).startViewTransition;
     if (!start) {
