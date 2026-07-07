@@ -1,6 +1,8 @@
+import { useRef } from 'react';
 import { Star, Cloud, Folder, CheckCircle2, Circle } from 'lucide-react';
 import type { GenerationData } from '../App';
 import { buildCaptionInfo, type CaptionInfoData } from './captionFields';
+import { computeRangeSelectionAdd } from './rangeSelection';
 
 // Bottom-right selection toggle overlaid on a gallery tile.
 function SelectButton({
@@ -194,6 +196,30 @@ export function HistoryGallery({
   morphSourceKey,
   lightboxUrl,
 }: HistoryGalleryProps) {
+  // Anchor for Shift+click range selection. Tracks the last checkbox the user
+  // clicked (whether that click selected or deselected), so Shift+click on any
+  // later tile can extend a contiguous range from it. Kept in a ref because
+  // it does not need to trigger a re-render.
+  const lastClickedIdRef = useRef<string | null>(null);
+
+  const handleSelectClick = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const anchor = lastClickedIdRef.current;
+    if (e.shiftKey && anchor && anchor !== id) {
+      const ids = displayedHistory.map(itemKey);
+      const next = computeRangeSelectionAdd(anchor, id, ids, selectedIds);
+      if (next) {
+        onSetSelectedIds(next);
+      } else {
+        // Either endpoint isn't in the current view — fall back to a plain toggle.
+        onToggleSelected(id);
+      }
+    } else {
+      onToggleSelected(id);
+    }
+    lastClickedIdRef.current = id;
+  };
+
   return (
     <div style={{ flexShrink: 0 }}>
       {/* Toolbar: date filter + result count (left) / selection + delete (right).
@@ -353,7 +379,7 @@ export function HistoryGallery({
                 <SelectButton
                   size={26}
                   isSelected={selectedIds.has(itemKey(item))}
-                  onClick={(e) => { e.stopPropagation(); onToggleSelected(itemKey(item)); }}
+                  onClick={(e) => handleSelectClick(e, itemKey(item))}
                 />
                 <FavoriteButton
                   size={26}
