@@ -1349,8 +1349,13 @@ function App() {
             ))}
           </div>
 
-          {/* TAB CONTENT (scrollable) */}
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* TAB CONTENT (scrollable). Symmetric horizontal padding gives the
+              gallery's leftmost/rightmost tiles room to expand under their
+              `.scale-hover:hover { transform: scale(1.02) }` effect without
+              the outer container's implicit overflow-x clip cutting off the
+              border. (overflowY: auto forces overflow-x to behave as auto too,
+              so hover expansion needs breathing room here.) */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingLeft: '4px', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {rightTab === 'preview' && (
             <PreviewPanel
               currentGeneration={currentGeneration}
