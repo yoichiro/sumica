@@ -116,7 +116,9 @@ function CaptionInfo({ info }: { info: CaptionInfoData }) {
           {info.date}
         </span>
       </div>
-      {/* Row 2: size + Hires/LoRA presence badges, full width. */}
+      {/* Row 2: size + Hires/LoRA presence badges, full width. Badges live in
+          an inner flex group with a tighter internal gap so ⚡ and 🎭 read as
+          a paired set instead of being spaced like separate items. */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -133,12 +135,14 @@ function CaptionInfo({ info }: { info: CaptionInfoData }) {
         }}>
           {info.size}
         </span>
-        {info.hasHires && (
-          <span title="Hires.fix 適用" style={{ fontSize: '12px', flexShrink: 0 }}>⚡</span>
-        )}
-        {info.hasLora && (
-          <span title="LoRA 適用" style={{ fontSize: '12px', flexShrink: 0 }}>🎭</span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+          {info.hasHires && (
+            <span title="Hires.fix 適用" style={{ fontSize: '12px' }}>⚡</span>
+          )}
+          {info.hasLora && (
+            <span title="LoRA 適用" style={{ fontSize: '12px' }}>🎭</span>
+          )}
+        </div>
       </div>
     </div>
   );
