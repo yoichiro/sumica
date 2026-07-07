@@ -116,12 +116,14 @@ function CaptionInfo({ info }: { info: CaptionInfoData }) {
           {info.date}
         </span>
       </div>
-      {/* Row 2: size + Hires/LoRA presence badges, full width. Badges live in
-          an inner flex group with a tighter internal gap so ⚡ and 🎭 read as
-          a paired set instead of being spaced like separate items. */}
+      {/* Row 2: size on the left, Hires/LoRA presence badges on the right.
+          Badges live in an inner flex group with a negative marginLeft on the
+          second badge so ⚡ and 🎭 read as a paired set instead of being
+          spaced like separate items. */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         gap: '6px',
         minWidth: 0,
       }}>
