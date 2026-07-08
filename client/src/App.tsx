@@ -33,6 +33,7 @@ import {
   saveNotificationPreference,
   sendNotification,
 } from './utils/notifications';
+import { t } from './i18n';
 
 // View Transitions API (Baseline 2025-10); typed locally so it works regardless of lib.dom version.
 type DocumentWithViewTransition = Document & {
@@ -217,7 +218,7 @@ function App() {
       setHistory((prev) =>
         prev.map((h) => (h.id === id ? { ...h, isFavorite: !next } : h)),
       );
-      addToast(`お気に入りの更新に失敗しました: ${e.message}`, 'error');
+      addToast(t.toast.favoriteUpdateFailed(e.message), 'error');
     }
   };
 
@@ -257,9 +258,9 @@ function App() {
       }
       // closeConfirm also resets deleteTargetIds after the exit animation.
       closeConfirm();
-      addToast(`${deleteTargetIds.length}件の画像を削除しました 🗑️`, 'success');
+      addToast(t.toast.deleteSuccess(deleteTargetIds.length), 'success');
     } catch (error: any) {
-      addToast(`削除に失敗しました。\n\n詳細: ${error.message}`, 'error');
+      addToast(t.toast.deleteFailed(error.message), 'error');
     } finally {
       setDeleting(false);
     }
@@ -411,7 +412,7 @@ function App() {
   // helper used at generation-complete points below.
   const [notificationsEnabled, setNotificationsEnabled] = useState(loadNotificationPreference());
   const notify = (body: string) => {
-    if (notificationsEnabled) sendNotification('Sumica AI Studio', body);
+    if (notificationsEnabled) sendNotification(t.notification.title, body);
   };
   const toggleNotifications = async () => {
     if (notificationsEnabled) {
@@ -421,23 +422,23 @@ function App() {
     }
     const support = getNotificationSupport();
     if (!support.supported) {
-      addToast('このブラウザは通知に対応していません。', 'error');
+      addToast(t.toast.notifyNotSupported, 'error');
       return;
     }
     if (support.permission === 'denied') {
-      addToast('通知はブロックされています。ブラウザ設定から許可してください。', 'error');
+      addToast(t.toast.notifyBlocked, 'error');
       return;
     }
     if (support.permission === 'default') {
       const result = await requestNotificationPermission();
       if (result !== 'granted') {
-        addToast('通知は許可されませんでした。', 'error');
+        addToast(t.toast.notifyRejected, 'error');
         return;
       }
     }
     setNotificationsEnabled(true);
     saveNotificationPreference(true);
-    addToast('通知を有効にしました 🔔', 'success');
+    addToast(t.toast.notifyEnabled, 'success');
   };
 
   // When the lightbox image is removed from displayedHistory (e.g. due to
@@ -710,10 +711,7 @@ function App() {
             (err) => {
               const e = err as unknown as { code?: string; message?: string };
               const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
-              addToast(
-                `お気に入りの取得に失敗しました（Firestore のインデックス (isFavorite + timestamp) がデプロイされているか確認してください）: ${detail}`,
-                'error',
-              );
+              addToast(t.toast.favoritesFetchFailed(detail), 'error');
             },
           )
         : subscribeGenerations(
@@ -723,7 +721,7 @@ function App() {
             (err) => {
               const e = err as unknown as { code?: string; message?: string };
               const detail = [e.code, e.message].filter(Boolean).join(' / ') || String(err);
-              addToast(`履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${detail}`, 'error');
+              addToast(t.toast.historyFetchFailed(detail), 'error');
             },
           );
       return unsub;
@@ -912,7 +910,7 @@ function App() {
       setSeedValue(item.seed);
     }
     setSeedLocked(false);
-    addToast('設定をフォームに読み込みました 📥', 'success');
+    addToast(t.toast.loadedIntoForm, 'success');
   };
 
   // Recall a history image into the Preview tab, treating it as if it was just
@@ -1051,7 +1049,7 @@ function App() {
       await fetch(`${API_BASE}/generate/interrupt`, { method: 'POST' });
     } catch (error) {
       console.error('Failed to send cancel request:', error);
-      addToast('生成の停止要求の送信に失敗しました。', 'error');
+      addToast(t.toast.cancelRequestFailed, 'error');
       setCancelling(false);
     }
   };
@@ -1060,10 +1058,10 @@ function App() {
   // Hires.fix generations can run several minutes.
   const formatDuration = (totalSeconds: number): string => {
     const s = Math.max(0, Math.round(totalSeconds));
-    if (s < 60) return `${s}秒`;
+    if (s < 60) return t.preview.durationSeconds(s);
     const m = Math.floor(s / 60);
     const rem = s % 60;
-    return `${m}分${rem}秒`;
+    return t.preview.durationMinutesSeconds(m, rem);
   };
 
   // Wraps a single SD call with a live elapsed-time timer (client-side, no
@@ -1157,16 +1155,16 @@ function App() {
             createdAt: new Date(ts).toISOString(),
           } as GenerationData);
           setGenStatus('success');
-          addToast(`クラウド保存に失敗しました（画像は表示中）。\n\n詳細: ${saveErr.message}`, 'error');
-          notify('画像生成が完了しました（クラウド保存失敗）');
+          addToast(t.toast.cloudSaveFailed(saveErr.message), 'error');
+          notify(t.notification.generateSuccessCloudFailed);
           return;
         }
 
         setCurrentGeneration(saved);
         setGenStatus('success');
         if (!user) fetchHistory(); // signed-in history updates via onSnapshot (Task 5)
-        addToast('画像を生成しました！🎨⚡️', 'success');
-        notify('画像生成が完了しました 🎨');
+        addToast(t.toast.generateSuccess, 'success');
+        notify(t.notification.generateSuccess);
       }
     } catch (error: any) {
       if (error instanceof GenerationCancelledError) {
@@ -1174,7 +1172,7 @@ function App() {
         // user action, not an error, so no error panel is shown.
         setCurrentGeneration(prevGen);
         setGenStatus('idle');
-        addToast('画像生成を止めました🛑', 'success');
+        addToast(t.toast.generateCancelled, 'success');
         return;
       }
 
@@ -1187,8 +1185,8 @@ function App() {
       setErrorStep(currentStep);
       setGenStatus('error');
 
-      addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
-      notify('画像生成に失敗しました');
+      addToast(t.toast.generateFailed(error.message), 'error');
+      notify(t.notification.generateFailed);
     } finally {
       setLoading(false);
       setCancelling(false);
@@ -1259,20 +1257,20 @@ function App() {
 
       if (cancelledInLoop) {
         setGenStatus(succeeded > 0 ? 'success' : 'idle');
-        addToast(`${succeeded}枚生成した時点で止めました🛑`, 'success');
+        addToast(t.toast.batchCancelled(succeeded), 'success');
       } else if (succeeded === 0) {
         setErrorStep(2);
         setGenStatus('error');
-        addToast(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
-        notify(`${jobs.length}枚中1枚も生成できませんでした`);
+        addToast(t.toast.batchPartial(jobs.length, succeeded, failed), 'error');
+        notify(t.notification.batchAllFailed(jobs.length));
       } else {
         setGenStatus('success');
         if (failed === 0) {
-          addToast(`${succeeded}枚の画像を生成しました！🎨⚡️`, 'success');
-          notify(`${succeeded}枚の画像を生成しました 🎨✨`);
+          addToast(t.toast.batchAllSuccess(succeeded), 'success');
+          notify(t.notification.batchAllSuccess(succeeded));
         } else {
-          addToast(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
-          notify(`${jobs.length}枚中${succeeded}枚を生成しました（${failed}枚失敗）`);
+          addToast(t.toast.batchPartial(jobs.length, succeeded, failed), 'error');
+          notify(t.notification.batchPartial(jobs.length, succeeded, failed));
         }
       }
     } catch (error: any) {
@@ -1280,8 +1278,8 @@ function App() {
       console.error(error);
       setErrorStep(currentStep);
       setGenStatus('error');
-      addToast(`画像生成に失敗しました。\n\n詳細: ${error.message}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`, 'error');
-      notify('画像生成に失敗しました');
+      addToast(t.toast.generateFailed(error.message), 'error');
+      notify(t.notification.generateFailed);
     } finally {
       setLoading(false);
       setBatchProgress(null);
@@ -1385,7 +1383,7 @@ function App() {
         }}>
           {/* TAB BAR */}
           <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginBottom: '16px', background: 'var(--panel-bg-sunk)', padding: '6px', borderRadius: '14px' }}>
-            {([['preview', '🎨 プレビュー＆進捗'], ['gallery', `🖼️ 履歴ギャラリー (${history.length})`]] as const).map(([key, label]) => (
+            {([['preview', t.tabs.preview], ['gallery', t.tabs.gallery(history.length)]] as const).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -1522,7 +1520,7 @@ function App() {
           // that handleBatchGenerate kicks off next can take several
           // seconds with no other visible feedback, which otherwise reads
           // as the screen having frozen.
-          addToast('バッチ生成を開始しました⚡️', 'success');
+          addToast(t.toast.batchStarted, 'success');
           setShowBatchModal(false);
           handleBatchGenerate(jobs);
         }}

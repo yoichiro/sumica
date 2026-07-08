@@ -92,6 +92,8 @@ export const en: typeof ja = {
     stepSaveLabel: 'Save complete',
     badgeAriaBatch: (current, total) => `Generating image ${current}/${total}`,
     badgeAriaSingle: 'Generating',
+    durationSeconds: (s) => `${s}s`,
+    durationMinutesSeconds: (m, s) => `${m}m ${s}s`,
   },
   gallery: {
     countSuffix: (n) => `${n} items`,
@@ -178,5 +180,34 @@ export const en: typeof ja = {
     batchAllSuccess: (n) => `Generated ${n} images 🎨✨`,
     batchPartial: (total, ok, fail) => `Generated ${ok} of ${total} (${fail} failed)`,
     batchAllFailed: (total) => `Could not generate any of ${total} images`,
+  },
+  toast: {
+    favoriteUpdateFailed: (details) => `Failed to update favorite: ${details}`,
+    deleteSuccess: (n) => `Deleted ${n} image${n === 1 ? '' : 's'} 🗑️`,
+    deleteFailed: (details) => `Failed to delete.\n\nDetails: ${details}`,
+    notifyNotSupported: 'This browser does not support notifications.',
+    notifyBlocked: 'Notifications are blocked. Please allow them in browser settings.',
+    notifyRejected: 'Notifications were not allowed.',
+    notifyEnabled: 'Notifications enabled 🔔',
+    favoritesFetchFailed: (details) =>
+      `Failed to fetch favorites (check that the Firestore index (isFavorite + timestamp) is deployed): ${details}`,
+    historyFetchFailed: (details) =>
+      `Failed to fetch history (check that Firestore security rules are deployed): ${details}`,
+    loadedIntoForm: 'Loaded settings into form 📥',
+    cancelRequestFailed: 'Failed to send stop request.',
+    cloudSaveFailed: (details) => `Cloud save failed (image is displayed).\n\nDetails: ${details}`,
+    generateSuccess: 'Image generated! 🎨⚡️',
+    generateCancelled: 'Generation stopped 🛑',
+    generateFailed: (details) =>
+      `Image generation failed.\n\nDetails: ${details}\n\nMake sure LM Studio and Stable Diffusion are running locally.`,
+    batchCancelled: (n) => `Stopped after generating ${n} 🛑`,
+    batchPartial: (total, ok, fail) =>
+      `Generated ${ok} of ${total} (${fail} failed).\n\nMake sure LM Studio and Stable Diffusion are running locally.`,
+    batchAllSuccess: (n) => `Generated ${n} images! 🎨⚡️`,
+    batchStarted: 'Batch generation started ⚡️',
+  },
+  tabs: {
+    preview: '🎨 Preview & progress',
+    gallery: (count) => `🖼️ History (${count})`,
   },
 };

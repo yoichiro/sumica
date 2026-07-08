@@ -90,6 +90,8 @@ export const ja = {
     stepSaveLabel: '保存完了',
     badgeAriaBatch: (current: number, total: number) => `画像 ${current}/${total} 生成中`,
     badgeAriaSingle: '生成中',
+    durationSeconds: (s: number) => `${s}秒`,
+    durationMinutesSeconds: (m: number, s: number) => `${m}分${s}秒`,
   },
   gallery: {
     countSuffix: (n: number) => `${n}件`,
@@ -177,5 +179,34 @@ export const ja = {
     batchPartial: (total: number, ok: number, fail: number) =>
       `${total}枚中${ok}枚を生成しました（${fail}枚失敗）`,
     batchAllFailed: (total: number) => `${total}枚中1枚も生成できませんでした`,
+  },
+  toast: {
+    favoriteUpdateFailed: (details: string) => `お気に入りの更新に失敗しました: ${details}`,
+    deleteSuccess: (n: number) => `${n}件の画像を削除しました 🗑️`,
+    deleteFailed: (details: string) => `削除に失敗しました。\n\n詳細: ${details}`,
+    notifyNotSupported: 'このブラウザは通知に対応していません。',
+    notifyBlocked: '通知はブロックされています。ブラウザ設定から許可してください。',
+    notifyRejected: '通知は許可されませんでした。',
+    notifyEnabled: '通知を有効にしました 🔔',
+    favoritesFetchFailed: (details: string) =>
+      `お気に入りの取得に失敗しました（Firestore のインデックス (isFavorite + timestamp) がデプロイされているか確認してください）: ${details}`,
+    historyFetchFailed: (details: string) =>
+      `履歴の取得に失敗しました（Firestore のセキュリティルールがデプロイ済みか確認してください）: ${details}`,
+    loadedIntoForm: '設定をフォームに読み込みました 📥',
+    cancelRequestFailed: '生成の停止要求の送信に失敗しました。',
+    cloudSaveFailed: (details: string) => `クラウド保存に失敗しました（画像は表示中）。\n\n詳細: ${details}`,
+    generateSuccess: '画像を生成しました！🎨⚡️',
+    generateCancelled: '画像生成を止めました🛑',
+    generateFailed: (details: string) =>
+      `画像生成に失敗しました。\n\n詳細: ${details}\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`,
+    batchCancelled: (n: number) => `${n}枚生成した時点で止めました🛑`,
+    batchPartial: (total: number, ok: number, fail: number) =>
+      `${total}枚中${ok}枚を生成しました（${fail}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`,
+    batchAllSuccess: (n: number) => `${n}枚の画像を生成しました！🎨⚡️`,
+    batchStarted: 'バッチ生成を開始しました⚡️',
+  },
+  tabs: {
+    preview: '🎨 プレビュー＆進捗',
+    gallery: (count: number) => `🖼️ 履歴ギャラリー (${count})`,
   },
 };
