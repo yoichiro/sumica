@@ -155,4 +155,14 @@ export const en: typeof ja = {
     generateSizeButton: (n) => `Generate ${n} combinations`,
     generateModelButton: (n) => `Generate with ${n} models`,
   },
+  deleteConfirm: {
+    title: 'Are you sure?',
+    message: (n) => `${n} image${n === 1 ? '' : 's'} will be deleted. This cannot be undone.`,
+    confirmButton: 'Delete',
+    cancelButton: 'Cancel',
+    deleting: 'Deleting...',
+  },
+  toastContainer: {
+    closeButton: 'Close',
+  },
 };

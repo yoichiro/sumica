@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react';
+import { t } from '../i18n';
 
 interface DeleteConfirmModalProps {
   open: boolean;
@@ -40,10 +41,10 @@ export function DeleteConfirmModal({ open, targetCount, deleting, exiting, onCan
             <Trash2 size={26} color="var(--danger)" />
           </div>
           <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
-            {targetCount}件の画像を削除しますか？
+            {t.deleteConfirm.title}
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-            選択した画像とその生成情報が完全に削除されます。<br />この操作は取り消せません。
+            {t.deleteConfirm.message(targetCount)}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -54,7 +55,7 @@ export function DeleteConfirmModal({ open, targetCount, deleting, exiting, onCan
             className="scale-hover"
             style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
           >
-            キャンセル
+            {t.deleteConfirm.cancelButton}
           </button>
           <button
             type="button"
@@ -63,7 +64,7 @@ export function DeleteConfirmModal({ open, targetCount, deleting, exiting, onCan
             className="scale-hover"
             style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: 'var(--danger)', color: '#fff', fontWeight: '800', cursor: deleting ? 'wait' : 'pointer', opacity: deleting ? 0.7 : 1 }}
           >
-            {deleting ? '削除中...' : '削除する'}
+            {deleting ? t.deleteConfirm.deleting : t.deleteConfirm.confirmButton}
           </button>
         </div>
       </div>

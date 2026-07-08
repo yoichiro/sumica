@@ -153,4 +153,14 @@ export const ja = {
     generateSizeButton: (n: number) => `${n}通り生成する`,
     generateModelButton: (n: number) => `${n}モデルで生成する`,
   },
+  deleteConfirm: {
+    title: '本当に削除しますか？',
+    message: (n: number) => `${n}件の画像を削除します。選択した画像とその生成情報が完全に削除されます。この操作は取り消せません。`,
+    confirmButton: '削除する',
+    cancelButton: 'キャンセル',
+    deleting: '削除中...',
+  },
+  toastContainer: {
+    closeButton: '閉じる',
+  },
 };

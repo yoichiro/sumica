@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { t } from '../i18n';
 
 export interface Toast {
   id: string;
@@ -29,7 +30,7 @@ export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
           <button
             onClick={() => onRemove(toast.id)}
             className="toast-close-btn"
-            title="閉じる"
+            title={t.toastContainer.closeButton}
           >
             <X size={14} />
           </button>
