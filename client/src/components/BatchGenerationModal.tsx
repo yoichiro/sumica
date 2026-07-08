@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { Layers, X, CheckCircle2, Circle } from 'lucide-react';
+import { t } from '../i18n';
 import {
   SDXL_PRESETS,
   SDXL_SIZES,
@@ -176,7 +177,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
             <Layers color="var(--pop-blue)" size={20} />
-            <span>まとめて生成 🖼️</span>
+            <span>{t.batchModal.title}</span>
           </h3>
           <button
             type="button"
@@ -189,7 +190,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
 
         {/* Segmented mode tabs */}
         <div style={{ display: 'flex', gap: '8px', background: 'var(--panel-bg-sunk)', borderRadius: '12px', padding: '4px' }}>
-          {([['count', '枚数'], ['size', 'サイズの組合せ'], ['model', 'モデル切替']] as const).map(([mode, label]) => (
+          {([['count', t.batchModal.tabCount], ['size', t.batchModal.tabSize], ['model', t.batchModal.tabModel]] as const).map(([mode, label]) => (
             <button
               key={mode}
               type="button"
@@ -214,11 +215,11 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
         {batchMode === 'count' ? (
           <>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-              同じプロンプトで複数枚を1枚ずつ順番に生成します。生成する枚数を選んでください。
+              {t.batchModal.countDescription}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
               <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
-                {batchCount}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>枚</span>
+                {batchCount}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>{t.batchModal.countUnitLabel}</span>
               </span>
               <input
                 type="range"
@@ -230,8 +231,8 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                 style={{ width: '100%' }}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
-                <span>2枚</span>
-                <span>10枚</span>
+                <span>{t.batchModal.countRangeLabel(2)}</span>
+                <span>{t.batchModal.countRangeLabel(10)}</span>
               </div>
             </div>
           </>
@@ -241,11 +242,11 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
             return (
               <>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                  選んだアスペクト比・向き・サイズの組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。1:1 は向き選択に関わらず1枚扱いです。
+                  {t.batchModal.sizeSdxlDescription}
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>アスペクト比:</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.controlPanel.aspectRatioLabel}:</span>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       {SDXL_PRESETS.map((preset) => {
                         const active = selectedBatchRatios.has(preset.ratio);
@@ -265,7 +266,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                               cursor: 'pointer',
                               fontSize: '13px',
                             }}
-                            title={preset.ratioIsBucket ? 'SDXL純正の学習比率' : ''}
+                            title={preset.ratioIsBucket ? t.controlPanel.sdxlNativeRatioTitle : ''}
                           >
                             {preset.label}{preset.ratioIsBucket ? ' ⭐' : ''}
                           </button>
@@ -274,7 +275,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>向き:</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.controlPanel.orientationLabel}:</span>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {(['landscape', 'portrait'] as const).map((o) => {
                         const active = selectedBatchOrientations.has(o);
@@ -295,14 +296,14 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                               cursor: 'pointer',
                             }}
                           >
-                            {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
+                            {o === 'landscape' ? t.controlPanel.orientationLandscape : t.controlPanel.orientationPortrait}
                           </button>
                         );
                       })}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>サイズ:</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.controlPanel.sizeLabel}:</span>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {SDXL_SIZES.map((s) => {
                         const active = selectedBatchSizes.has(s);
@@ -330,7 +331,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                     </div>
                   </div>
                   <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
-                    {sdxlJobs.length}通り生成
+                    {t.batchModal.jobCountLabel(sdxlJobs.length)}
                   </div>
                 </div>
               </>
@@ -340,11 +341,11 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
             return (
               <>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                  選んだアスペクト比・向き・サイズの組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。1:1 のみサイズ違いを生成し、他の比率は M 固定・向きだけ選べます。
+                  {t.batchModal.sizeSd15Description}
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>アスペクト比:</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.controlPanel.aspectRatioLabel}:</span>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       {SD15_PRESETS.map((preset) => {
                         const active = selectedSd15BatchRatios.has(preset.ratio);
@@ -372,7 +373,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>向き:</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.controlPanel.orientationLabel}:</span>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {(['landscape', 'portrait'] as const).map((o) => {
                         const active = selectedSd15BatchOrientations.has(o);
@@ -393,14 +394,14 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                               cursor: 'pointer',
                             }}
                           >
-                            {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
+                            {o === 'landscape' ? t.controlPanel.orientationLandscape : t.controlPanel.orientationPortrait}
                           </button>
                         );
                       })}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>サイズ (1:1 のみ有効):</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.batchModal.sd15SizeLabel}</span>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {SDXL_SIZES.map((s) => {
                         const active = selectedSd15BatchSizes.has(s);
@@ -428,7 +429,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                     </div>
                   </div>
                   <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
-                    {sd15Jobs.length}通り生成
+                    {t.batchModal.jobCountLabel(sd15Jobs.length)}
                   </div>
                 </div>
               </>
@@ -437,13 +438,13 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
         ) : (
           <>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-              利用可能なモデルを順番に切り替えながら、1モデルにつき1枚ずつ生成します。サイズは現在のフォーム設定（{width}×{height}）を使用します。
+              {t.batchModal.modelDescription(width, height)}
             </p>
             {(() => { const modelsInBatchScope = sdModels.filter((m) => m.type === modelTypeFilter); return modelsInBatchScope.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                   <span style={{ fontSize: '40px', fontWeight: 800, color: 'var(--pop-blue)', lineHeight: 1 }}>
-                    {selectedBatchModels.size}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>/ {modelsInBatchScope.length}モデル</span>
+                    {selectedBatchModels.size}<span style={{ fontSize: '16px', color: 'var(--text-secondary)', marginLeft: '4px' }}>{t.batchModal.modelCountSuffix(modelsInBatchScope.length)}</span>
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
@@ -453,7 +454,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                     className="scale-hover"
                     style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--pop-blue)', background: 'var(--panel-bg)', color: 'var(--pop-blue)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
                   >
-                    全選択
+                    {t.gallery.selectAll}
                   </button>
                   <button
                     type="button"
@@ -461,7 +462,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                     className="scale-hover"
                     style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
                   >
-                    全解除
+                    {t.gallery.selectNone}
                   </button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '8px' }}>
@@ -499,7 +500,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
               </div>
             ) : (
               <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-orange)', background: 'var(--warning-bg)', borderRadius: '10px', padding: '14px' }}>
-                {sdModels.length === 0 ? 'モデルが取得できていません。Stable Diffusion が起動しているか確認してください。' : `${modelTypeFilter === 'sdxl' ? 'SDXL' : 'SD'}モデルが見つかりません。`}
+                {sdModels.length === 0 ? t.batchModal.noModelsFetched : t.batchModal.noModelsOfType(modelTypeFilter === 'sdxl' ? 'SDXL' : 'SD')}
               </div>
             ); })()}
           </>
@@ -512,7 +513,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
             className="scale-hover"
             style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', cursor: 'pointer' }}
           >
-            キャンセル
+            {t.batchModal.cancelButton}
           </button>
           {(() => {
             const sizeJobs = batchMode === 'size'
@@ -538,10 +539,10 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                 style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
               >
                 {batchMode === 'count'
-                  ? `${batchCount}枚生成する`
+                  ? t.batchModal.generateCountButton(batchCount)
                   : batchMode === 'size'
-                    ? `${sizeJobs.length}通り生成する`
-                    : `${selectedBatchModels.size}モデルで生成する`}
+                    ? t.batchModal.generateSizeButton(sizeJobs.length)
+                    : t.batchModal.generateModelButton(selectedBatchModels.size)}
               </button>
             );
           })()}
