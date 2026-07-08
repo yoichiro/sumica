@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { GenerationBadge } from './GenerationBadge';
+import { t } from '../i18n';
 
 describe('GenerationBadge', () => {
   it('renders nothing when idle', () => {
@@ -27,7 +28,7 @@ describe('GenerationBadge', () => {
   it('renders a lightning bolt when enhancing without batch progress', () => {
     render(<GenerationBadge genStatus="enhancing" batchProgress={null} />);
     const badge = screen.getByRole('status');
-    expect(badge).toHaveAccessibleName('生成中');
+    expect(badge).toHaveAccessibleName(t.preview.badgeAriaSingle);
     expect(badge.textContent).toContain('⚡️');
     // Single-image mode never shows a counter after the bolt.
     expect(badge.textContent?.trim()).toBe('⚡️');
@@ -49,6 +50,6 @@ describe('GenerationBadge', () => {
     );
     const badge = screen.getByRole('status');
     expect(badge.textContent).toContain('3/10');
-    expect(badge).toHaveAccessibleName('画像 3/10 生成中');
+    expect(badge).toHaveAccessibleName(t.preview.badgeAriaBatch(3, 10));
   });
 });

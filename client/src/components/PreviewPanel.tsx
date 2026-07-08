@@ -1,5 +1,6 @@
 import { Image as ImageIcon, Cloud, Folder, Trash2, Sparkles, CheckCircle2, AlertTriangle, Star } from 'lucide-react';
 import type { GenerationData } from '../App';
+import { t } from '../i18n';
 
 export type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
 
@@ -18,7 +19,7 @@ function FavoriteButton({
     <button
       type="button"
       onClick={onClick}
-      title={isFavorite ? 'お気に入りを解除' : 'お気に入りに追加'}
+      title={isFavorite ? t.preview.favoriteRemoveTitle : t.preview.favoriteAddTitle}
       className="scale-hover"
       style={{
         position: 'absolute',
@@ -131,12 +132,12 @@ export function PreviewPanel({
                 {currentGeneration.backendMode === 'firebase' ? (
                   <>
                     <Cloud size={12} color="var(--pop-blue)" />
-                    <span style={{ color: 'var(--pop-blue)' }}>クラウド保存 ☁️</span>
+                    <span style={{ color: 'var(--pop-blue)' }}>{t.header.cloudSaving}</span>
                   </>
                 ) : (
                   <>
                     <Folder size={12} color="var(--pop-orange)" />
-                    <span style={{ color: 'var(--pop-orange)' }}>ローカル保存 📁</span>
+                    <span style={{ color: 'var(--pop-orange)' }}>{t.header.localSaving}</span>
                   </>
                 )}
               </div>
@@ -152,7 +153,7 @@ export function PreviewPanel({
                   className="scale-hover"
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  ♻️ フォームにロード
+                  {t.preview.loadIntoFormButton}
                 </button>
                 <button
                   type="button"
@@ -160,23 +161,23 @@ export function PreviewPanel({
                   className="scale-hover"
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  <Trash2 size={15} /> 削除
+                  <Trash2 size={15} /> {t.preview.deleteButton}
                 </button>
               </div>
               {/* Scrollable detail */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', minHeight: 0, paddingRight: '4px' }}>
               <div>
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>元プロンプト</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>{t.preview.originalPromptLabel}</span>
                 <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{currentGeneration.originalPrompt}</p>
               </div>
 
               <div style={{ borderTop: '2px solid var(--panel-border)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
                 <div>
-                  <span>解像度: </span>
+                  <span>{t.preview.detailResolutionLabel}</span>
                   <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.width}x{currentGeneration.height}</strong>
                 </div>
                 <div>
-                  <span>ステップ: </span>
+                  <span>{t.preview.detailStepsLabel}</span>
                   <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.steps}</strong>
                 </div>
                 <div>
@@ -185,7 +186,7 @@ export function PreviewPanel({
                 </div>
                 {currentGeneration.model && (
                   <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                    <span>モデル: </span>
+                    <span>{t.preview.detailModelLabel}</span>
                     <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.model}</strong>
                   </div>
                 )}
@@ -197,13 +198,13 @@ export function PreviewPanel({
                 )}
                 {currentGeneration.sampler && (
                   <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                    <span>サンプラー: </span>
+                    <span>{t.preview.detailSamplerLabel}</span>
                     <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.sampler}</strong>
                   </div>
                 )}
                 {currentGeneration.scheduler && (
                   <div style={{ gridColumn: '1 / -1', wordBreak: 'break-all' }}>
-                    <span>スケジュール: </span>
+                    <span>{t.preview.detailSchedulerLabel}</span>
                     <strong style={{ color: 'var(--text-primary)' }}>{currentGeneration.scheduler}</strong>
                   </div>
                 )}
@@ -240,7 +241,7 @@ export function PreviewPanel({
               {currentGeneration.enhancedPrompt !== currentGeneration.originalPrompt && (
                 <div>
                   <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                    <Sparkles size={11} /> 拡張プロンプト (ポジティブ)
+                    <Sparkles size={11} /> {t.preview.enhancedPromptLabel}
                   </span>
                   <p style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.4', background: 'var(--info-bg)', padding: '10px', borderRadius: '8px', border: '2px solid var(--info-border)', wordBreak: 'break-all' }}>
                     {currentGeneration.enhancedPrompt}
@@ -251,7 +252,7 @@ export function PreviewPanel({
               {currentGeneration.negativePrompt && (
                 <div>
                   <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
-                    ❌ ネガティブプロンプト
+                    {t.preview.negativePromptLabel}
                   </span>
                   <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'var(--negative-bg)', padding: '10px', borderRadius: '8px', border: '2px solid var(--negative-border)', wordBreak: 'break-all' }}>
                     {currentGeneration.negativePrompt}
@@ -277,9 +278,9 @@ export function PreviewPanel({
               <ImageIcon size={28} />
             </div>
             <div>
-              <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', marginBottom: '4px', fontWeight: '800' }}>生成された画像のプレビュー 🖼️</h3>
+              <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', marginBottom: '4px', fontWeight: '800' }}>{t.preview.emptyStateTitle}</h3>
               <p style={{ fontSize: '13px', maxWidth: '300px', margin: '0 auto', lineHeight: '1.4' }}>
-                画像を生成すると、ここにプレビューが表示されます。
+                {t.preview.emptyStateBody}
               </p>
             </div>
           </div>
@@ -344,10 +345,10 @@ export function PreviewPanel({
 
               <div style={{ textAlign: 'left' }}>
                 <span style={{ fontSize: '14px', fontWeight: '800', display: 'block', color: genStatus === 'error' ? 'var(--danger)' : genStatus === 'success' ? 'var(--success)' : 'var(--text-primary)' }}>
-                  {genStatus === 'error' ? '生成処理エラー ❌' : genStatus === 'success' ? '生成完了！ 🎉' : '画像生成パイプライン進行中... ⚡️'}
+                  {genStatus === 'error' ? t.preview.statusErrorTitle : genStatus === 'success' ? t.preview.statusSuccessTitle : t.preview.statusInProgressTitle}
                 </span>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  {genStatus === 'error' ? '処理の途中でエラーが発生しました' : genStatus === 'success' ? 'すべての処理が正常に完了しました' : 'バックエンドでタスクを実行しています'}
+                  {genStatus === 'error' ? t.preview.statusErrorDetail : genStatus === 'success' ? t.preview.statusSuccessDetail : t.preview.statusInProgressDetail}
                 </span>
               </div>
 
@@ -360,7 +361,7 @@ export function PreviewPanel({
                   className="scale-hover"
                   style={{ padding: '8px 16px', borderRadius: '10px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--text-secondary)', fontWeight: '800', fontSize: '12px', cursor: cancelling ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
                 >
-                  {cancelling ? '生成を止めています...' : '生成を止める'}
+                  {cancelling ? t.preview.cancellingButton : t.preview.cancelButton}
                 </button>
               )}
             </div>
@@ -373,8 +374,8 @@ export function PreviewPanel({
               {genStatus === 'generating' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
                   <span>
-                    経過{formatDuration(elapsedSeconds)}
-                    {sdProgress && sdProgress.etaRelative > 0 ? ` / 残り約${formatDuration(sdProgress.etaRelative)}` : ''}
+                    {t.preview.elapsedLabel(formatDuration(elapsedSeconds))}
+                    {sdProgress && sdProgress.etaRelative > 0 ? t.preview.remainingLabel(formatDuration(sdProgress.etaRelative)) : ''}
                   </span>
                   {sdProgress && (
                     <div style={{ width: '80px', height: '4px', borderRadius: '2px', background: 'var(--panel-border)', overflow: 'hidden' }}>
@@ -407,7 +408,7 @@ export function PreviewPanel({
                 }}>
                   {(genStatus === 'error' && errorStep === 1) ? '✗' : loadingStep > 1 || genStatus === 'success' ? '✓' : '1'}
                 </div>
-                <span className={genStatus === 'enhancing' ? 'processing-shimmer' : undefined}>プロンプト拡張</span>
+                <span className={genStatus === 'enhancing' ? 'processing-shimmer' : undefined}>{t.preview.stepEnhanceLabel}</span>
               </div>
 
               <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
@@ -428,7 +429,7 @@ export function PreviewPanel({
                 }}>
                   {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 || genStatus === 'success' ? '✓' : '2'}
                 </div>
-                <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>画像生成{batchProgress ? ` (${batchProgress.current}/${batchProgress.total})` : ''}</span>
+                <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>{t.preview.stepGenerateLabel}{batchProgress ? t.preview.batchCounter(batchProgress.current, batchProgress.total) : ''}</span>
               </div>
 
               <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
@@ -449,7 +450,7 @@ export function PreviewPanel({
                 }}>
                   {(genStatus === 'error' && errorStep === 3) ? '✗' : genStatus === 'success' ? '✓' : '3'}
                 </div>
-                <span>保存完了</span>
+                <span>{t.preview.stepSaveLabel}</span>
               </div>
             </div>
             </div>

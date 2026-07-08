@@ -1,4 +1,5 @@
 import type { GenStatus } from './PreviewPanel';
+import { t } from '../i18n';
 
 // Small inline badge that appears in the Preview tab label whenever a generation
 // is in flight, so users watching the History Gallery still see that work is
@@ -23,8 +24,8 @@ export function GenerationBadge({ genStatus, batchProgress }: GenerationBadgePro
     <span
       role="status"
       aria-label={batchProgress
-        ? `画像 ${batchProgress.current}/${batchProgress.total} 生成中`
-        : '生成中'}
+        ? t.preview.badgeAriaBatch(batchProgress.current, batchProgress.total)
+        : t.preview.badgeAriaSingle}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
