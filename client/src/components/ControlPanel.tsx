@@ -94,6 +94,11 @@ export interface ControlPanelProps {
 
   onGenerate: (e: FormEvent<HTMLFormElement>) => void;
   onOpenBatchModal: () => void;
+  // True while the batch modal is mounted. Used to switch the batch button's
+  // `view-transition-name` off so the modal panel (which also carries the
+  // same name) doesn't collide with it during the View Transition — the API
+  // requires each transition name to be unique per snapshot.
+  batchModalOpen: boolean;
 }
 
 export function ControlPanel(p: ControlPanelProps) {
@@ -758,7 +763,12 @@ export function ControlPanel(p: ControlPanelProps) {
               color: 'var(--pop-blue)',
               border: '2px solid var(--pop-blue)',
               cursor: (p.loading || !p.prompt.trim()) ? 'not-allowed' : 'pointer',
-              opacity: (p.loading || !p.prompt.trim()) ? 0.5 : 1
+              opacity: (p.loading || !p.prompt.trim()) ? 0.5 : 1,
+              // Share the `view-transition-name` with the modal panel so the
+              // browser interpolates the button rect → modal rect on open (and
+              // reverses on close). Drop the name while the modal is open so
+              // both instances never carry it simultaneously.
+              viewTransitionName: p.batchModalOpen ? undefined : 'batch-morph',
             }}
           >
             <Layers size={22} />

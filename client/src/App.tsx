@@ -500,9 +500,32 @@ function App() {
   // list — the user opts OUT of specific models for that one batch.
   const [selectedBatchModels, setSelectedBatchModels] = useState<Set<string>>(new Set());
 
+  // Open/close the batch modal wrapped in a View Transition so the modal
+  // appears to expand out of the "まとめて生成" button (and shrinks back into
+  // it on close). The button and the modal panel share
+  // `view-transition-name: batch-morph` — but only one of them may carry it
+  // at any given snapshot moment, which is why ControlPanel takes
+  // `batchModalOpen` and switches the name off while the modal is up.
   const openBatchModal = () => {
     setSelectedBatchModels(new Set(sdModels.filter((m) => m.type === modelTypeFilter).map((m) => m.title)));
-    setShowBatchModal(true);
+    const start = (document as DocumentWithViewTransition).startViewTransition;
+    if (!start) {
+      setShowBatchModal(true);
+      return;
+    }
+    start.call(document, () => {
+      flushSync(() => setShowBatchModal(true)); // new snapshot: modal carries the name, button drops it
+    });
+  };
+  const closeBatchModal = () => {
+    const start = (document as DocumentWithViewTransition).startViewTransition;
+    if (!start) {
+      setShowBatchModal(false);
+      return;
+    }
+    start.call(document, () => {
+      flushSync(() => setShowBatchModal(false)); // new snapshot: button regains the name, modal gone
+    });
   };
   const toggleBatchModel = (m: string) => {
     setSelectedBatchModels((prev) => {
@@ -1372,6 +1395,7 @@ function App() {
           setSeedValue={setSeedValue}
           onGenerate={handleGenerate}
           onOpenBatchModal={openBatchModal}
+          batchModalOpen={showBatchModal}
         />
 
         {/* RIGHT COLUMN: PREVIEW & HISTORY GRID (tabbed) */}
@@ -1490,7 +1514,7 @@ function App() {
 
       <BatchGenerationModal
         open={showBatchModal}
-        onClose={() => setShowBatchModal(false)}
+        onClose={closeBatchModal}
         modelTypeFilter={modelTypeFilter}
         sdModels={sdModels}
         width={width}

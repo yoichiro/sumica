@@ -171,7 +171,13 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
           gap: '20px',
           textAlign: 'left',
           border: '2px solid var(--pop-blue)',
-          background: 'var(--panel-bg)'
+          background: 'var(--panel-bg)',
+          // Paired with the batch button's `view-transition-name: batch-morph`
+          // in ControlPanel: the button drops the name while the modal is up,
+          // so the browser interpolates the button rect → this modal rect on
+          // open (and reverses on close). Wrapped in `document.startViewTransition`
+          // by openBatchModal / closeBatchModal in App.tsx.
+          viewTransitionName: 'batch-morph',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
