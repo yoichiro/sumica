@@ -3,6 +3,7 @@ import { Star, Cloud, Folder, CheckCircle2, Circle } from 'lucide-react';
 import type { GenerationData } from '../App';
 import { buildCaptionInfo, type CaptionInfoData } from './captionFields';
 import { computeRangeSelectionAdd } from './rangeSelection';
+import { t } from '../i18n';
 
 // Bottom-right selection toggle overlaid on a gallery tile.
 function SelectButton({
@@ -19,7 +20,7 @@ function SelectButton({
     <button
       type="button"
       onClick={onClick}
-      title={isSelected ? '選択を解除' : '選択'}
+      title={isSelected ? t.gallery.deselectTooltip : t.gallery.selectTooltip}
       className="scale-hover"
       style={{
         position: 'absolute',
@@ -60,7 +61,7 @@ function FavoriteButton({
     <button
       type="button"
       onClick={onClick}
-      title={isFavorite ? 'お気に入りを解除' : 'お気に入りに追加'}
+      title={isFavorite ? t.preview.favoriteRemoveTitle : t.preview.favoriteAddTitle}
       className="scale-hover"
       style={{
         position: 'absolute',
@@ -258,7 +259,7 @@ export function HistoryGallery({
           <button
             type="button"
             onClick={() => onSetFavoritesOnly((v) => !v)}
-            title={favoritesOnly ? 'お気に入りのみの表示を解除' : 'お気に入りのみ表示'}
+            title={favoritesOnly ? t.gallery.favoritesOnlyToggleOn : t.gallery.favoritesOnlyToggleOff}
             className="scale-hover"
             style={{
               display: 'flex',
@@ -277,13 +278,13 @@ export function HistoryGallery({
             {favoritesOnly
               ? <Star size={14} fill="#ffd43b" stroke="#ffd43b" />
               : <Star size={14} />}
-            お気に入りのみ
+            {t.gallery.favoritesOnlyLabel}
           </button>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{displayedHistory.length}件</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{t.gallery.countSuffix(displayedHistory.length)}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '13px', fontWeight: 800, color: selectedIds.size > 0 ? 'var(--pop-blue)' : 'var(--text-muted)' }}>
-            {selectedIds.size}件選択
+            {t.gallery.selectedCountLabel(selectedIds.size)}
           </span>
         {(() => {
           const allDisplayedSelected = displayedHistory.length > 0
@@ -306,7 +307,7 @@ export function HistoryGallery({
                 opacity: selectAllDisabled ? 0.6 : 1
               }}
             >
-              全選択
+              {t.gallery.selectAll}
             </button>
           );
         })()}
@@ -326,7 +327,7 @@ export function HistoryGallery({
             opacity: selectedIds.size === 0 ? 0.6 : 1
           }}
         >
-          全解除
+          {t.gallery.selectNone}
         </button>
         <button
           type="button"
@@ -344,7 +345,7 @@ export function HistoryGallery({
             opacity: selectedIds.size === 0 ? 0.6 : 1
           }}
         >
-          削除
+          {t.preview.deleteButton}
         </button>
         </div>
       </div>
@@ -415,7 +416,7 @@ export function HistoryGallery({
                   it from the image gives the two actions distinct hit targets. */}
               <div
                 onClick={() => onOpenInPreview(item)}
-                title="プレビューに表示"
+                title={t.gallery.recallToPreview}
                 style={{ padding: '10px', textAlign: 'left', background: 'var(--panel-bg)', cursor: 'pointer' }}
               >
                 <CaptionInfo info={buildCaptionInfo(item)} />
@@ -426,8 +427,8 @@ export function HistoryGallery({
       ) : (
         <div className="glass-panel" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', borderRadius: '16px', background: 'var(--panel-bg)' }}>
           {historyLength === 0
-            ? '生成履歴はありません。最初の画像を生成してみましょう！🎨⚡️'
-            : '指定した日付の画像はありません 📅'}
+            ? t.gallery.emptyStateNoHistory
+            : t.gallery.emptyStateNoResults}
         </div>
       )}
     </div>

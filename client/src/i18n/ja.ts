@@ -91,4 +91,18 @@ export const ja = {
     badgeAriaBatch: (current: number, total: number) => `画像 ${current}/${total} 生成中`,
     badgeAriaSingle: '生成中',
   },
+  gallery: {
+    countSuffix: (n: number) => `${n}件`,
+    selectedCountLabel: (n: number) => `${n}件選択`,
+    favoritesOnlyLabel: 'お気に入りのみ',
+    favoritesOnlyToggleOn: 'お気に入りのみの表示を解除',
+    favoritesOnlyToggleOff: 'お気に入りのみ表示',
+    selectAll: '全選択',
+    selectNone: '全解除',
+    selectTooltip: '選択',
+    deselectTooltip: '選択を解除',
+    recallToPreview: 'プレビューに表示',
+    emptyStateNoHistory: '生成履歴はありません。最初の画像を生成してみましょう！🎨⚡️',
+    emptyStateNoResults: '指定した日付の画像はありません 📅',
+  },
 };

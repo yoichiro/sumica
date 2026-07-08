@@ -93,4 +93,18 @@ export const en: typeof ja = {
     badgeAriaBatch: (current, total) => `Generating image ${current}/${total}`,
     badgeAriaSingle: 'Generating',
   },
+  gallery: {
+    countSuffix: (n) => `${n} items`,
+    selectedCountLabel: (n) => `${n} selected`,
+    favoritesOnlyLabel: 'Favorites only',
+    favoritesOnlyToggleOn: 'Show all',
+    favoritesOnlyToggleOff: 'Show favorites only',
+    selectAll: 'Select all',
+    selectNone: 'Deselect all',
+    selectTooltip: 'Select',
+    deselectTooltip: 'Deselect',
+    recallToPreview: 'Show in preview',
+    emptyStateNoHistory: 'No generation history yet. Try generating your first image! 🎨⚡️',
+    emptyStateNoResults: 'No images for the selected date 📅',
+  },
 };
