@@ -147,3 +147,32 @@ If you want to start them separately, `npm run dev:server` and `npm run dev:clie
   - `npm run test:run --prefix client` — unit tests with Vitest
   - `npm run build --prefix client` — TypeScript type-check + Vite build
   - `npm run typecheck --prefix server` — server type-check (the runtime executes `.ts` directly via `tsx`, no separate build step)
+
+---
+
+## 📜 License
+
+Sumica AI Studio is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later). See [LICENSE](LICENSE) for the full text.
+
+The AGPL license means: if you modify Sumica and offer the modified version as a network service to others, you MUST make your modified source code available to those users under the same license. This mirrors the license of [AUTOMATIC1111 Stable Diffusion Web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui), on which Sumica depends via API — the intent is to keep improvements in the open-source ecosystem rather than being absorbed into closed commercial services.
+
+---
+
+## ⚠️ Disclaimer
+
+Sumica AI Studio is provided **"as is"** without warranty of any kind, express or implied. It **intentionally includes no content moderation or safety filters** — content moderation is out of scope for this personal utility.
+
+- **Users are solely responsible** for the content they generate and for complying with all applicable laws and regulations in their jurisdiction.
+- The author **does not endorse** and **takes no responsibility for** any third-party deployment or use of this software, including but not limited to services built on top of it.
+- Users must **independently comply with the licenses and terms** of all upstream services this software depends on — most notably the AGPL v3 of [AUTOMATIC1111 Stable Diffusion Web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui) (or whichever Stable Diffusion frontend they run) and the terms of [LM Studio](https://lmstudio.ai/).
+- The choice of Stable Diffusion model checkpoints and LoRAs is entirely the user's responsibility, including compliance with each model's own license terms.
+
+If you deploy Sumica or a fork of it as a service accessible to others, you are the operator of that service and bear full legal responsibility for its operation, including the content it generates and its compliance with all relevant laws.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! By submitting a pull request, issue comment, patch, or other contribution to this project, **you agree that your contribution will be licensed under AGPL-3.0-or-later**, the same license that covers the rest of the project. This keeps the entire codebase under a single, consistent license so all users continue to enjoy the same freedoms.
+
+Before opening a substantial PR, feel free to open an issue first to discuss the direction. For code style, follow the existing conventions in the codebase — see [`CLAUDE.md`](CLAUDE.md) for guidance.
