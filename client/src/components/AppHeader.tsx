@@ -1,5 +1,6 @@
 import { Sparkles, Cloud, Folder, LogIn, Bell, BellOff } from 'lucide-react';
 import { isFirebaseConfigured, signInWithGoogle, signOutUser, type AuthUser } from '../firebase';
+import { t } from '../i18n';
 
 export interface HealthStatus {
   lmStudio: { connected: boolean; model: string | null; error: string | null };
@@ -19,10 +20,10 @@ function ServiceStatusBadge({ label, checking, connected, detail }: {
   // full value stays on hover via the title attribute.
   const shownDetail = detail && detail.length > 20 ? `${detail.slice(0, 20)}...` : detail;
   const text = checking
-    ? `${label} 確認中…`
+    ? t.header.serviceChecking(label)
     : connected
-      ? `${label} 接続中${shownDetail ? ` (${shownDetail})` : ''}`
-      : `${label} 未接続`;
+      ? t.header.serviceConnected(label, shownDetail ?? undefined)
+      : t.header.serviceDisconnected(label);
   return (
     <div
       style={{ display: 'flex', alignItems: 'center', gap: '6px', color, fontWeight: '700' }}
@@ -74,10 +75,10 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
         </div>
         <div style={{ textAlign: 'left' }}>
           <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '0.2px', margin: 0, background: 'linear-gradient(135deg, var(--pop-blue) 30%, var(--pop-teal) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Sumica AI Studio 🎨⚡️
+            {t.header.title}
           </h1>
           <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', letterSpacing: '1.5px', marginTop: '1px', fontWeight: '700' }}>
-            Creative Image Lab
+            {t.header.subtitle}
           </span>
         </div>
       </div>
@@ -90,7 +91,7 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
         <button
           type="button"
           onClick={onToggleNotifications}
-          title={notificationsEnabled ? '通知を無効化' : '通知を有効化'}
+          title={notificationsEnabled ? t.header.notifyDisable : t.header.notifyEnable}
           className="scale-hover"
           style={{
             display: 'flex',
@@ -111,7 +112,7 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', background: 'var(--panel-bg-sunk)', padding: '8px 16px', borderRadius: '30px', border: '2px solid var(--panel-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.01)' }}>
           {/* Storage mode + account */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: cloudActive ? 'var(--pop-green)' : 'var(--text-secondary)', fontWeight: '700' }}>
-            {cloudActive ? (<><Cloud size={14} /><span>クラウド保存 ☁️</span></>) : (<><Folder size={14} /><span>ローカル保存 📁</span></>)}
+            {cloudActive ? (<><Cloud size={14} /><span>{t.header.cloudSaving}</span></>) : (<><Folder size={14} /><span>{t.header.localSaving}</span></>)}
           </div>
 
           {isFirebaseConfigured && (
@@ -122,16 +123,16 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
                   {user.photoURL && (
                     <img src={user.photoURL} alt="" referrerPolicy="no-referrer" style={{ width: 22, height: 22, borderRadius: '50%' }} />
                   )}
-                  <span style={{ fontWeight: 700, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.displayName ?? 'ユーザー'}</span>
-                  <button onClick={() => { signOutUser(); }} className="scale-hover" style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>ログアウト</button>
+                  <span style={{ fontWeight: 700, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.displayName ?? t.header.userLabel}</span>
+                  <button onClick={() => { signOutUser(); }} className="scale-hover" style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>{t.header.signOut}</button>
                 </div>
               ) : (
                 <button
-                  onClick={() => { signInWithGoogle().catch((e) => onSignInError(`サインインに失敗しました: ${e.message}`)); }}
+                  onClick={() => { signInWithGoogle().catch((e) => onSignInError(t.header.signInFailed(e.message))); }}
                   className="scale-hover"
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '2px solid var(--panel-border)', background: 'var(--panel-bg)', borderRadius: '20px', padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}
                 >
-                  <LogIn size={14} /> Googleでログイン
+                  <LogIn size={14} /> {t.header.signIn}
                 </button>
               )}
             </>
@@ -141,7 +142,7 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
 
           {/* LM Studio Status (live health check) */}
           <ServiceStatusBadge
-            label="LM Studio"
+            label={t.header.lmStudioLabel}
             checking={healthChecking && !health}
             connected={!!health?.lmStudio.connected}
             detail={health?.lmStudio.model}
@@ -151,7 +152,7 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
 
           {/* Stable Diffusion Status (live health check) */}
           <ServiceStatusBadge
-            label="SD"
+            label={t.header.sdLabel}
             checking={healthChecking && !health}
             connected={!!health?.stableDiffusion.connected}
           />
