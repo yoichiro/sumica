@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction, FormEvent } from 'react';
 import { Sparkles, RotateCw, Layers, X } from 'lucide-react';
+import { t } from '../i18n';
 import {
   SDXL_PRESETS,
   SDXL_SIZES,
@@ -119,11 +120,11 @@ export function ControlPanel(p: ControlPanelProps) {
           {/* PROMPT AREA */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', flex: 1, minHeight: 0 }}>
             <label style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-              生成プロンプト (日本語または英語)
+              {t.controlPanel.promptLabel}
             </label>
             <textarea
               className="input-field"
-              placeholder="生成したい画像の内容を入力してください... (例: 'サイバーパンクな都市、雨に濡れたネオン、未来的、シネマティック照明')"
+              placeholder={t.controlPanel.promptPlaceholder}
               value={p.prompt}
               onChange={(e) => p.setPrompt(e.target.value)}
               style={{ flex: 1, minHeight: 0, resize: 'none', lineHeight: '1.4', borderRadius: '12px' }}
@@ -147,13 +148,13 @@ export function ControlPanel(p: ControlPanelProps) {
           }}>
             {/* Stable Diffusion Model Selector */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>モデル (Stable Diffusion)</label>
+              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.modelLabel}</label>
               <div style={{ display: 'flex', gap: '6px', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '3px' }}>
-                {(['sd15', 'sdxl'] as const).map((t) => (
+                {(['sd15', 'sdxl'] as const).map((modelType) => (
                   <button
-                    key={t}
+                    key={modelType}
                     type="button"
-                    onClick={() => p.setModelTypeFilter(t)}
+                    onClick={() => p.setModelTypeFilter(modelType)}
                     disabled={p.loading}
                     style={{
                       flex: 1,
@@ -163,11 +164,11 @@ export function ControlPanel(p: ControlPanelProps) {
                       cursor: p.loading ? 'default' : 'pointer',
                       fontWeight: 800,
                       fontSize: '12px',
-                      background: p.modelTypeFilter === t ? 'var(--pop-blue)' : 'transparent',
-                      color: p.modelTypeFilter === t ? '#fff' : 'var(--text-secondary)',
+                      background: p.modelTypeFilter === modelType ? 'var(--pop-blue)' : 'transparent',
+                      color: p.modelTypeFilter === modelType ? '#fff' : 'var(--text-secondary)',
                     }}
                   >
-                    {t === 'sd15' ? 'SD' : 'SDXL'}
+                    {modelType === 'sd15' ? 'SD' : 'SDXL'}
                   </button>
                 ))}
               </div>
@@ -187,7 +188,7 @@ export function ControlPanel(p: ControlPanelProps) {
                   </select>
                 ) : (
                   <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                    <option>{p.sdModels.length === 0 ? 'モデル一覧を取得できません（SD未接続）' : p.modelTypeFilter === 'sdxl' ? 'SDXLモデルが見つかりません' : 'SD1.5モデルが見つかりません'}</option>
+                    <option>{p.sdModels.length === 0 ? t.controlPanel.modelsUnavailable : p.modelTypeFilter === 'sdxl' ? t.controlPanel.noSdxlModelsFound : t.controlPanel.noSd15ModelsFound}</option>
                   </select>
                 );
               })()}
@@ -196,7 +197,7 @@ export function ControlPanel(p: ControlPanelProps) {
             {/* Sampler + Schedule Type */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left', gridColumn: p.sdSchedulers.length > 0 ? 'auto' : '1 / -1' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サンプラー (Sampler)</label>
+                <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.samplerLabel}</label>
                 {p.sdSamplers.length > 0 ? (
                   <select
                     className="input-field"
@@ -211,14 +212,14 @@ export function ControlPanel(p: ControlPanelProps) {
                   </select>
                 ) : (
                   <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                    <option>サンプラー一覧を取得できません（SD未接続）</option>
+                    <option>{t.controlPanel.samplersUnavailable}</option>
                   </select>
                 )}
               </div>
 
               {p.sdSchedulers.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>スケジュール (Schedule Type)</label>
+                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.schedulerLabel}</label>
                   <select
                     className="input-field"
                     value={p.selectedScheduler}
@@ -241,7 +242,7 @@ export function ControlPanel(p: ControlPanelProps) {
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>アスペクト比</label>
+                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.aspectRatioLabel}</label>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       {SDXL_PRESETS.map((preset) => {
                         const active = p.selectedRatio === preset.ratio;
@@ -262,7 +263,7 @@ export function ControlPanel(p: ControlPanelProps) {
                               cursor: 'pointer',
                               fontSize: '13px',
                             }}
-                            title={preset.ratioIsBucket ? 'SDXL純正の学習比率' : ''}
+                            title={preset.ratioIsBucket ? t.controlPanel.sdxlNativeRatioTitle : ''}
                           >
                             {preset.label}{preset.ratioIsBucket ? ' ⭐' : ''}
                           </button>
@@ -274,7 +275,7 @@ export function ControlPanel(p: ControlPanelProps) {
                   <div style={{ display: 'grid', gridTemplateColumns: isSquare ? '1fr' : '1fr 1fr', gap: '8px' }}>
                     {!isSquare && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>向き</label>
+                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.orientationLabel}</label>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           {(['landscape', 'portrait'] as const).map((o) => {
                             const active = p.selectedOrientation === o;
@@ -297,7 +298,7 @@ export function ControlPanel(p: ControlPanelProps) {
                                   fontSize: '13px',
                                 }}
                               >
-                                {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
+                                {o === 'landscape' ? t.controlPanel.orientationLandscape : t.controlPanel.orientationPortrait}
                               </button>
                             );
                           })}
@@ -306,7 +307,7 @@ export function ControlPanel(p: ControlPanelProps) {
                     )}
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サイズ</label>
+                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.sizeLabel}</label>
                       <div style={{ display: 'flex', gap: '4px' }}>
                         {SDXL_SIZES.map((s) => {
                           const active = p.selectedSize === s;
@@ -329,7 +330,7 @@ export function ControlPanel(p: ControlPanelProps) {
                                 cursor: 'pointer',
                                 fontSize: '13px',
                               }}
-                              title={spec.isSdxlBucket ? 'SDXL純正の学習バケットサイズ' : ''}
+                              title={spec.isSdxlBucket ? t.controlPanel.sdxlBucketSizeTitle : ''}
                             >
                               {s}{spec.isSdxlBucket ? ' ⭐' : ''}
                             </button>
@@ -350,7 +351,7 @@ export function ControlPanel(p: ControlPanelProps) {
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>アスペクト比</label>
+                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.aspectRatioLabel}</label>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       {SD15_PRESETS.map((preset) => {
                         const active = p.selectedSd15Ratio === preset.ratio;
@@ -382,7 +383,7 @@ export function ControlPanel(p: ControlPanelProps) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
                     {!isSquare && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>向き</label>
+                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.orientationLabel}</label>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           {(['landscape', 'portrait'] as const).map((o) => {
                             const active = p.selectedSd15Orientation === o;
@@ -405,7 +406,7 @@ export function ControlPanel(p: ControlPanelProps) {
                                   fontSize: '13px',
                                 }}
                               >
-                                {o === 'landscape' ? '🖼️ 横' : '📱 縦'}
+                                {o === 'landscape' ? t.controlPanel.orientationLandscape : t.controlPanel.orientationPortrait}
                               </button>
                             );
                           })}
@@ -414,7 +415,7 @@ export function ControlPanel(p: ControlPanelProps) {
                     )}
                     {isSquare && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>サイズ</label>
+                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.sizeLabel}</label>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           {SDXL_SIZES.map((s) => {
                             const active = p.selectedSd15Size === s;
@@ -458,7 +459,7 @@ export function ControlPanel(p: ControlPanelProps) {
             {/* Steps */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                <span>サンプリングステップ数 (Steps)</span>
+                <span>{t.controlPanel.stepsLabel}</span>
                 <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{p.steps}</span>
               </div>
               <input
@@ -474,7 +475,7 @@ export function ControlPanel(p: ControlPanelProps) {
             {/* CFG Scale */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                <span>プロンプト追従性 (CFG Scale)</span>
+                <span>{t.controlPanel.cfgLabel}</span>
                 <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{p.cfgScale}</span>
               </div>
               <input
@@ -497,12 +498,12 @@ export function ControlPanel(p: ControlPanelProps) {
                   onChange={(e) => p.setHiresFixEnabled(e.target.checked)}
                   disabled={p.loading}
                 />
-                Hires.fixを有効にする
+                {t.controlPanel.hiresEnabledLabel}
               </label>
               {p.hiresFixEnabled && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '4px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>アップスケーラー (Upscaler)</label>
+                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.upscalerLabel}</label>
                     {p.sdUpscalers.length > 0 ? (
                       <select
                         className="input-field"
@@ -511,21 +512,21 @@ export function ControlPanel(p: ControlPanelProps) {
                         disabled={p.loading}
                         style={{ borderRadius: '8px' }}
                       >
-                        <option value="">SDのデフォルトを使用</option>
+                        <option value="">{t.controlPanel.upscalerDefaultOption}</option>
                         {p.sdUpscalers.map((u) => (
                           <option key={u} value={u}>{u}</option>
                         ))}
                       </select>
                     ) : (
                       <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                        <option>アップスケーラー一覧を取得できません（SD未接続）</option>
+                        <option>{t.controlPanel.upscalersUnavailable}</option>
                       </select>
                     )}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                      <span>アップスケール倍率</span>
+                      <span>{t.controlPanel.hiresScaleLabel}</span>
                       <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{p.hiresScale.toFixed(1)}x</span>
                     </div>
                     <input
@@ -541,8 +542,8 @@ export function ControlPanel(p: ControlPanelProps) {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                      <span>Hires用ステップ数 (0 = Stepsと同じ)</span>
-                      <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{p.hiresSteps === 0 ? 'Stepsと同じ' : p.hiresSteps}</span>
+                      <span>{t.controlPanel.hiresStepsLabel}</span>
+                      <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{p.hiresSteps === 0 ? t.controlPanel.hiresStepsSameAsSteps : p.hiresSteps}</span>
                     </div>
                     <input
                       type="range"
@@ -575,7 +576,7 @@ export function ControlPanel(p: ControlPanelProps) {
 
             {/* LoRA */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>LoRA (複数適用可)</label>
+              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.loraLabel}</label>
               {p.sdLoras.length > 0 ? (
                 <select
                   className="input-field"
@@ -584,19 +585,19 @@ export function ControlPanel(p: ControlPanelProps) {
                   disabled={p.loading}
                   style={{ borderRadius: '8px' }}
                 >
-                  <option value="">＋ LoRAを追加…</option>
+                  <option value="">{t.controlPanel.loraAddOption}</option>
                   {p.sdLoras.filter((l) => !p.selectedLoras.some((sl) => sl.name === l.name)).map((l) => {
                     const mismatched = l.type !== 'unknown' && l.type !== p.modelTypeFilter;
                     return (
                       <option key={l.name} value={l.name}>
-                        {l.name}{mismatched ? ` ⚠${l.type === 'sdxl' ? 'SDXL' : 'SD1.5'}用` : ''}
+                        {l.name}{mismatched ? t.controlPanel.loraTypeMismatch(l.type === 'sdxl' ? 'SDXL' : 'SD1.5') : ''}
                       </option>
                     );
                   })}
                 </select>
               ) : (
                 <select className="input-field" disabled style={{ borderRadius: '8px', color: 'var(--text-muted)' }}>
-                  <option>LoRA一覧を取得できません（SD未接続）</option>
+                  <option>{t.controlPanel.lorasUnavailable}</option>
                 </select>
               )}
               {p.selectedLoras.map((l) => (
@@ -613,7 +614,7 @@ export function ControlPanel(p: ControlPanelProps) {
                     style={{ width: '90px' }}
                   />
                   <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--pop-blue)', width: '30px', textAlign: 'right' }}>{l.weight.toFixed(2)}</span>
-                  <button type="button" onClick={() => p.removeLora(l.name)} disabled={p.loading} title="このLoRAを外す" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
+                  <button type="button" onClick={() => p.removeLora(l.name)} disabled={p.loading} title={t.controlPanel.removeLoraTitle} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
                     <X size={14} />
                   </button>
                 </div>
@@ -625,7 +626,7 @@ export function ControlPanel(p: ControlPanelProps) {
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                   <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                    Refiner (仕上げモデル) <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— 任意</span>
+                    {t.controlPanel.refinerLabel} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{t.controlPanel.optionalSuffix}</span>
                   </label>
                   <select
                     className="input-field"
@@ -634,7 +635,7 @@ export function ControlPanel(p: ControlPanelProps) {
                     disabled={p.loading}
                     style={{ borderRadius: '8px' }}
                   >
-                    <option value="">（使わない）</option>
+                    <option value="">{t.controlPanel.refinerNoneOption}</option>
                     {p.sdModels.filter((m) => m.type === 'sdxl').map((m) => (
                       <option key={m.title} value={m.title}>{m.title}</option>
                     ))}
@@ -642,7 +643,7 @@ export function ControlPanel(p: ControlPanelProps) {
                   {p.selectedRefiner && (
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                        <span>切替タイミング (Switch at)</span>
+                        <span>{t.controlPanel.refinerSwitchLabel}</span>
                         <span style={{ color: 'var(--pop-blue)', fontWeight: '800' }}>{p.refinerSwitchAt.toFixed(2)}</span>
                       </div>
                       <input
@@ -655,7 +656,7 @@ export function ControlPanel(p: ControlPanelProps) {
                         disabled={p.loading}
                       />
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        全体の {Math.round(p.refinerSwitchAt * 100)}% までベースモデル、以降Refinerで仕上げ
+                        {t.controlPanel.refinerSwitchDescription(Math.round(p.refinerSwitchAt * 100))}
                       </div>
                     </div>
                   )}
@@ -663,7 +664,7 @@ export function ControlPanel(p: ControlPanelProps) {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                   <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-                    VAE <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— 任意</span>
+                    VAE <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{t.controlPanel.optionalSuffix}</span>
                   </label>
                   <select
                     className="input-field"
@@ -672,7 +673,7 @@ export function ControlPanel(p: ControlPanelProps) {
                     disabled={p.loading}
                     style={{ borderRadius: '8px' }}
                   >
-                    <option value="">Automatic（自動）</option>
+                    <option value="">{t.controlPanel.vaeAutomaticOption}</option>
                     {p.sdVaes.map((v) => (
                       <option key={v} value={v}>{v}</option>
                     ))}
@@ -690,7 +691,7 @@ export function ControlPanel(p: ControlPanelProps) {
                   onChange={(e) => p.setSeedLocked(e.target.checked)}
                   disabled={p.loading}
                 />
-                Seedを固定する
+                {t.controlPanel.seedLockLabel}
               </label>
               {p.seedLocked && (
                 <input
@@ -730,12 +731,12 @@ export function ControlPanel(p: ControlPanelProps) {
             {p.loading ? (
               <>
                 <RotateCw size={20} className="animate-spin-custom" />
-                <span>生成リクエストを実行中... ⚡️</span>
+                <span>{t.controlPanel.generateButtonLoading}</span>
               </>
             ) : (
               <>
                 <Sparkles size={20} />
-                <span>画像を生成する 🎨⚡️</span>
+                <span>{t.controlPanel.generateButton}</span>
               </>
             )}
           </button>
@@ -744,8 +745,8 @@ export function ControlPanel(p: ControlPanelProps) {
             onClick={p.onOpenBatchModal}
             disabled={p.loading || !p.prompt.trim()}
             className="scale-hover"
-            title="複数枚をまとめて生成"
-            aria-label="複数枚をまとめて生成"
+            title={t.controlPanel.batchButtonTitle}
+            aria-label={t.controlPanel.batchButtonTitle}
             style={{
               flexShrink: 0,
               padding: '16px',
