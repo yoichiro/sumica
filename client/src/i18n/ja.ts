@@ -104,6 +104,8 @@ export const ja = {
     recallToPreview: 'プレビューに表示',
     emptyStateNoHistory: '生成履歴はありません。最初の画像を生成してみましょう！🎨⚡️',
     emptyStateNoResults: '指定した日付の画像はありません 📅',
+    badgeHiresTooltip: 'Hires.fix 適用',
+    badgeLoraTooltip: 'LoRA 適用',
   },
   lightbox: {
     imageAlt: '拡大表示',
@@ -162,5 +164,18 @@ export const ja = {
   },
   toastContainer: {
     closeButton: '閉じる',
+  },
+  caption: {
+    unknownModel: '不明',
+  },
+  notification: {
+    title: 'Sumica AI Studio',
+    generateSuccess: '画像生成が完了しました 🎨',
+    generateSuccessCloudFailed: '画像生成が完了しました（クラウド保存失敗）',
+    generateFailed: '画像生成に失敗しました',
+    batchAllSuccess: (n: number) => `${n}枚の画像を生成しました 🎨✨`,
+    batchPartial: (total: number, ok: number, fail: number) =>
+      `${total}枚中${ok}枚を生成しました（${fail}枚失敗）`,
+    batchAllFailed: (total: number) => `${total}枚中1枚も生成できませんでした`,
   },
 };

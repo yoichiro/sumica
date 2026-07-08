@@ -146,11 +146,11 @@ function CaptionInfo({ info }: { info: CaptionInfoData }) {
             it against the first. */}
         <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
           {info.hasHires && (
-            <span title="Hires.fix 適用" style={{ fontSize: '12px' }}>⚡</span>
+            <span title={t.gallery.badgeHiresTooltip} style={{ fontSize: '12px' }}>⚡</span>
           )}
           {info.hasLora && (
             <span
-              title="LoRA 適用"
+              title={t.gallery.badgeLoraTooltip}
               style={{ fontSize: '12px', marginLeft: info.hasHires ? '-4px' : 0 }}
             >🎭</span>
           )}

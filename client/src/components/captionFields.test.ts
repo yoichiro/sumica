@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildCaptionInfo } from './captionFields';
 import type { GenerationData } from '../App';
+import { t } from '../i18n';
 
 const baseItem: GenerationData = {
   originalPrompt: 'a girl',
@@ -26,14 +27,14 @@ describe('buildCaptionInfo', () => {
     expect(info.hasLora).toBe(false);
   });
 
-  it('falls back to "不明" when model is null', () => {
+  it('falls back to the unknown-model label when model is null', () => {
     const info = buildCaptionInfo({ ...baseItem, model: null });
-    expect(info.model).toBe('不明');
+    expect(info.model).toBe(t.caption.unknownModel);
   });
 
-  it('falls back to "不明" when model is empty string', () => {
+  it('falls back to the unknown-model label when model is empty string', () => {
     const info = buildCaptionInfo({ ...baseItem, model: '' });
-    expect(info.model).toBe('不明');
+    expect(info.model).toBe(t.caption.unknownModel);
   });
 
   it('omits the aspect ratio suffix when dimensions do not match any preset', () => {

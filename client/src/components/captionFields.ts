@@ -1,5 +1,6 @@
 import type { GenerationData } from '../App';
 import { findSdxlSelection, findSd15Selection } from './presets';
+import { t } from '../i18n';
 
 export type CaptionInfoData = {
   model: string;
@@ -25,7 +26,7 @@ function formatSize(width: number, height: number): string {
 
 export function buildCaptionInfo(item: GenerationData): CaptionInfoData {
   return {
-    model: item.model && item.model.length > 0 ? item.model : '不明',
+    model: item.model && item.model.length > 0 ? item.model : t.caption.unknownModel,
     size: formatSize(item.width, item.height),
     date: formatDateShort(item.timestamp),
     hasHires: !!item.enableHr,

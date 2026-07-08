@@ -106,6 +106,8 @@ export const en: typeof ja = {
     recallToPreview: 'Show in preview',
     emptyStateNoHistory: 'No generation history yet. Try generating your first image! 🎨⚡️',
     emptyStateNoResults: 'No images for the selected date 📅',
+    badgeHiresTooltip: 'Hires.fix applied',
+    badgeLoraTooltip: 'LoRA applied',
   },
   lightbox: {
     imageAlt: 'Enlarged view',
@@ -164,5 +166,17 @@ export const en: typeof ja = {
   },
   toastContainer: {
     closeButton: 'Close',
+  },
+  caption: {
+    unknownModel: 'Unknown',
+  },
+  notification: {
+    title: 'Sumica AI Studio',
+    generateSuccess: 'Image generated 🎨',
+    generateSuccessCloudFailed: 'Image generated (cloud save failed)',
+    generateFailed: 'Image generation failed',
+    batchAllSuccess: (n) => `Generated ${n} images 🎨✨`,
+    batchPartial: (total, ok, fail) => `Generated ${ok} of ${total} (${fail} failed)`,
+    batchAllFailed: (total) => `Could not generate any of ${total} images`,
   },
 };
