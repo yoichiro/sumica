@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import { Info, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, X } from 'lucide-react';
 import type { GenerationParams } from '../firebase';
+import { t } from '../i18n';
 
 // Lightbox needs to look up the currently-shown gallery item to render the
 // select-toggle, favorite button, and metadata info panel. When the lightbox
@@ -63,7 +64,7 @@ export function Lightbox({
     >
       <img
         src={url}
-        alt="拡大表示"
+        alt={t.lightbox.imageAlt}
         onClick={(e) => e.stopPropagation()}
         style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
       />
@@ -71,7 +72,7 @@ export function Lightbox({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onToggleInfo(); }}
-          title={showInfo ? '詳細情報を隠す' : '詳細情報を表示'}
+          title={showInfo ? t.lightbox.infoHideTooltip : t.lightbox.infoShowTooltip}
           aria-pressed={showInfo}
           className="scale-hover"
           style={{
@@ -105,7 +106,7 @@ export function Lightbox({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggleSelect(lightboxIndex); }}
-            title={selected ? '選択を解除 (Space)' : '選択 (Space)'}
+            title={selected ? t.lightbox.deselectTooltip : t.lightbox.selectTooltip}
             className="scale-hover"
             style={{
               position: 'absolute',
@@ -134,7 +135,7 @@ export function Lightbox({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggleFavorite(lightboxIndex); }}
-            title={fav ? 'お気に入りを解除 (F)' : 'お気に入りに追加 (F)'}
+            title={fav ? t.lightbox.favoriteRemoveTooltip : t.lightbox.favoriteAddTooltip}
             className="scale-hover"
             style={{
               position: 'absolute',
@@ -163,7 +164,7 @@ export function Lightbox({
         type="button"
         onClick={(e) => { e.stopPropagation(); onNavigate(-1); }}
         disabled={lightboxIndex <= 0}
-        title="前の画像 (←)"
+        title={t.lightbox.prevTooltip}
         className={lightboxIndex <= 0 ? '' : 'scale-hover'}
         style={{
           position: 'absolute',
@@ -188,7 +189,7 @@ export function Lightbox({
         type="button"
         onClick={(e) => { e.stopPropagation(); onNavigate(1); }}
         disabled={lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1}
-        title="次の画像 (→)"
+        title={t.lightbox.nextTooltip}
         className={(lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? '' : 'scale-hover'}
         style={{
           position: 'absolute',
@@ -212,7 +213,7 @@ export function Lightbox({
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onToggleFullscreen(); }}
-        title={isFullscreen ? '全画面を解除' : '全画面表示'}
+        title={isFullscreen ? t.lightbox.fullscreenExitTooltip : t.lightbox.fullscreenEnterTooltip}
         className="scale-hover"
         style={{
           position: 'absolute',
@@ -235,7 +236,7 @@ export function Lightbox({
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onClose(); }}
-        title="閉じる (Esc)"
+        title={t.lightbox.closeTooltip}
         className="scale-hover"
         style={{
           position: 'absolute',
@@ -264,7 +265,7 @@ export function Lightbox({
         return (
           <div
             role="region"
-            aria-label="画像の詳細情報"
+            aria-label={t.lightbox.infoPanelAriaLabel}
             aria-hidden={!showInfo}
             onClick={(e) => e.stopPropagation()}
             style={{
@@ -291,31 +292,31 @@ export function Lightbox({
               transition: 'transform 0.2s ease, opacity 0.2s ease'
             }}
           >
-            <span><span style={{ opacity: 0.7 }}>寸法:</span> <strong>{m.width}×{m.height}</strong></span>
-            {m.model && <span><span style={{ opacity: 0.7 }}>モデル:</span> <strong>{m.model}</strong></span>}
-            {m.seed !== undefined && <span><span style={{ opacity: 0.7 }}>Seed:</span> <strong style={{ fontFamily: 'monospace' }}>{m.seed}</strong></span>}
-            {m.sampler && <span><span style={{ opacity: 0.7 }}>Sampler:</span> <strong>{m.sampler}</strong></span>}
-            <span><span style={{ opacity: 0.7 }}>Steps:</span> <strong>{m.steps}</strong></span>
-            <span><span style={{ opacity: 0.7 }}>CFG:</span> <strong>{m.cfgScale}</strong></span>
+            <span><span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.dimensions}:</span> <strong>{m.width}×{m.height}</strong></span>
+            {m.model && <span><span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.model}:</span> <strong>{m.model}</strong></span>}
+            {m.seed !== undefined && <span><span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.seed}:</span> <strong style={{ fontFamily: 'monospace' }}>{m.seed}</strong></span>}
+            {m.sampler && <span><span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.sampler}:</span> <strong>{m.sampler}</strong></span>}
+            <span><span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.steps}:</span> <strong>{m.steps}</strong></span>
+            <span><span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.cfg}:</span> <strong>{m.cfgScale}</strong></span>
             {hasHr && (
               <span>
-                <span style={{ opacity: 0.7 }}>ハイレス:</span>{' '}
+                <span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.hires}:</span>{' '}
                 <strong>ON ({(m.hrScale ?? 2).toFixed(1)}×{m.hrUpscaler ? `, ${m.hrUpscaler}` : ''})</strong>
               </span>
             )}
             {hasLoras && (
               <span>
-                <span style={{ opacity: 0.7 }}>LoRA:</span>{' '}
+                <span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.lora}:</span>{' '}
                 <strong>{(m.loras || []).map((l) => `${l.name} (${l.weight})`).join(', ')}</strong>
               </span>
             )}
             {hasRefiner && (
               <span>
-                <span style={{ opacity: 0.7 }}>Refiner:</span>{' '}
+                <span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.refiner}:</span>{' '}
                 <strong>{m.refiner} (switch @ {(m.refinerSwitchAt ?? 0.8).toFixed(2)})</strong>
               </span>
             )}
-            {hasVae && <span><span style={{ opacity: 0.7 }}>VAE:</span> <strong>{m.vae}</strong></span>}
+            {hasVae && <span><span style={{ opacity: 0.7 }}>{t.lightbox.infoPanel.vae}:</span> <strong>{m.vae}</strong></span>}
           </div>
         );
       })()}
