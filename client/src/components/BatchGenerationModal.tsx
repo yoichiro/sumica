@@ -194,13 +194,23 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
           </button>
         </div>
 
-        {/* Segmented mode tabs */}
+        {/* Segmented mode tabs. Switching the tab changes which form fields
+            render, which in turn changes the modal's height. Wrap the state
+            update in a View Transition so the same-name `batch-morph`
+            element (the outer modal panel) is size-interpolated by the
+            browser instead of jump-cutting between two heights. */}
         <div style={{ display: 'flex', gap: '8px', background: 'var(--panel-bg-sunk)', borderRadius: '12px', padding: '4px' }}>
           {([['count', t.batchModal.tabCount], ['size', t.batchModal.tabSize], ['model', t.batchModal.tabModel]] as const).map(([mode, label]) => (
             <button
               key={mode}
               type="button"
-              onClick={() => setBatchMode(mode)}
+              onClick={() => {
+                if (batchMode === mode) return; // no-op click on the already-active tab
+                const apply = () => setBatchMode(mode);
+                const start = (document as unknown as { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
+                if (typeof start === 'function') start.call(document, apply);
+                else apply();
+              }}
               style={{
                 flex: 1,
                 padding: '8px',
