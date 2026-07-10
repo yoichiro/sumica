@@ -127,7 +127,7 @@ export function ControlPanel(p: ControlPanelProps) {
           minHeight: 0,
           overflow: 'hidden',
           display: 'grid',
-          gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)',
+          gridTemplateRows: 'minmax(0, 4fr) minmax(0, 6fr)',
           gap: '20px',
           paddingRight: '6px',
           marginBottom: '16px'
