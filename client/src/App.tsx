@@ -25,6 +25,7 @@ import {
   type SdLora,
 } from './components/presets';
 import { computeLoadIntoFormState } from './components/loadIntoFormState';
+import { resolveLightboxKey } from './components/lightboxKeyboard';
 import { flushSync } from 'react-dom';
 import {
   getNotificationSupport,
@@ -665,31 +666,37 @@ function App() {
     }
   };
 
-  // Lightbox keyboard control: Escape closes (unless in OS fullscreen — let the
-  // browser exit fullscreen first); ArrowLeft/Right step through the gallery order;
-  // Space toggles selection on the currently-shown gallery item.
+  // Lightbox keyboard control. The key→action mapping lives in
+  // `lightboxKeyboard.ts` as a pure function (unit-tested); this effect only
+  // dispatches the resolved action back into React state.
+  //
+  // Bindings (all only while the lightbox is open):
+  //   Escape       close (browser handles exit-fullscreen first when applicable)
+  //   ArrowLeft/Right  step through the displayed gallery order
+  //   Space        toggle selection on the current gallery item
+  //   F / f / S / s  toggle favorite on the current gallery item
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (!document.fullscreenElement) closeLightbox();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        navigateLightbox(-1);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        navigateLightbox(1);
-      } else if (e.key === ' ' || e.code === 'Space') {
-        // Space would otherwise scroll the page underneath the lightbox; suppress it.
-        if (lightboxIndex >= 0) {
+      const action = resolveLightboxKey(e.key, e.code, !!document.fullscreenElement, lightboxIndex);
+      if (!action) return;
+      switch (action.type) {
+        case 'close':
+          closeLightbox();
+          return;
+        case 'navigate':
+          e.preventDefault();
+          navigateLightbox(action.delta);
+          return;
+        case 'toggleSelection':
+          // Space would otherwise scroll the page underneath the lightbox; suppress it.
           e.preventDefault();
           toggleSelected(itemKey(displayedHistory[lightboxIndex]));
-        }
-      } else if (e.key === 'f' || e.key === 'F') {
-        if (lightboxIndex >= 0) {
+          return;
+        case 'toggleFavorite':
           e.preventDefault();
           toggleFavorite(displayedHistory[lightboxIndex]);
-        }
+          return;
       }
     };
     window.addEventListener('keydown', onKey);
