@@ -121,37 +121,6 @@ export function ControlPanel(p: ControlPanelProps) {
       overflow: 'hidden',
       height: '100%'
     }}>
-      {/* Segmented form/ranking tabs. Same visual pattern as the batch modal's
-          own mode tabs (view-transition-wrapped switch lives in App.tsx's
-          switchControlTab, since this panel doesn't own the state). */}
-      <div style={{ display: 'flex', gap: '8px', background: 'var(--panel-bg-sunk)', borderRadius: '12px', padding: '4px', marginBottom: '16px', flexShrink: 0 }}>
-        {([['form', t.controlPanel.tabForm], ['ranking', t.controlPanel.tabRanking]] as const).map(([tabKey, label]) => (
-          <button
-            key={tabKey}
-            type="button"
-            onClick={() => p.onTabChange(tabKey)}
-            style={{
-              flex: 1,
-              padding: '8px',
-              borderRadius: '9px',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: 800,
-              fontSize: '13px',
-              background: p.activeTab === tabKey ? 'var(--pop-blue)' : 'transparent',
-              color: p.activeTab === tabKey ? '#fff' : 'var(--text-secondary)',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {p.activeTab === 'ranking' ? (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          <RankingPanel rollups={p.rollups} sdModels={p.sdModels} onApplyRecipe={p.onApplyRecipe} />
-        </div>
-      ) : (
       <form onSubmit={p.onGenerate} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         <div style={{
           flex: 1,
@@ -192,6 +161,35 @@ export function ControlPanel(p: ControlPanelProps) {
             minHeight: 0,
             overflowY: 'auto'
           }}>
+            {/* Segmented form/ranking tabs — scoped to this parameters box so
+                prompt + submit stay visible regardless of tab. */}
+            <div style={{ display: 'flex', gap: '8px', background: 'var(--panel-bg)', borderRadius: '10px', padding: '3px', flexShrink: 0 }}>
+              {([['form', t.controlPanel.tabForm], ['ranking', t.controlPanel.tabRanking]] as const).map(([tabKey, label]) => (
+                <button
+                  key={tabKey}
+                  type="button"
+                  onClick={() => p.onTabChange(tabKey)}
+                  style={{
+                    flex: 1,
+                    padding: '6px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    background: p.activeTab === tabKey ? 'var(--pop-blue)' : 'transparent',
+                    color: p.activeTab === tabKey ? '#fff' : 'var(--text-secondary)',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {p.activeTab === 'ranking' ? (
+              <RankingPanel rollups={p.rollups} sdModels={p.sdModels} onApplyRecipe={p.onApplyRecipe} />
+            ) : (
+            <>
             {/* Stable Diffusion Model Selector */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
               <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.modelLabel}</label>
@@ -752,6 +750,8 @@ export function ControlPanel(p: ControlPanelProps) {
                 />
               )}
             </div>
+            </>
+            )}
           </div>
         </div>
 
@@ -816,7 +816,6 @@ export function ControlPanel(p: ControlPanelProps) {
           </button>
         </div>
       </form>
-      )}
     </section>
   );
 }
