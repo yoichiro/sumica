@@ -159,10 +159,11 @@ export function ControlPanel(p: ControlPanelProps) {
             border: '2px solid var(--panel-border)',
             flex: 1,
             minHeight: 0,
-            overflowY: 'auto'
+            overflow: 'hidden'
           }}>
-            {/* Segmented form/ranking tabs — scoped to this parameters box so
-                prompt + submit stay visible regardless of tab. */}
+            {/* Segmented form/ranking tabs — pinned above the scroll region so
+                the mode picker stays visible even after scrolling deep into the
+                params or the ranking list. */}
             <div style={{ display: 'flex', gap: '8px', background: 'var(--panel-bg)', borderRadius: '10px', padding: '3px', flexShrink: 0 }}>
               {([['form', t.controlPanel.tabForm], ['ranking', t.controlPanel.tabRanking]] as const).map(([tabKey, label]) => (
                 <button
@@ -186,6 +187,7 @@ export function ControlPanel(p: ControlPanelProps) {
               ))}
             </div>
 
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {p.activeTab === 'ranking' ? (
               <RankingPanel rollups={p.rollups} sdModels={p.sdModels} onApplyRecipe={p.onApplyRecipe} />
             ) : (
@@ -752,6 +754,7 @@ export function ControlPanel(p: ControlPanelProps) {
             </div>
             </>
             )}
+            </div>
           </div>
         </div>
 
