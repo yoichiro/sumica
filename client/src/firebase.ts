@@ -10,14 +10,14 @@ import {
 import {
   getFirestore,
   collection,
-  addDoc,
-  deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   query,
   orderBy,
   where,
-  updateDoc,
+  writeBatch,
+  increment,
   type Firestore,
 } from 'firebase/firestore';
 import {
@@ -29,6 +29,8 @@ import {
   type FirebaseStorage,
 } from 'firebase/storage';
 import { generateThumbnail } from './utils/thumbnail';
+import { normalizeParams, buildRollupKey } from './utils/rankingRollup';
+import type { RankingRollup } from './utils/rankingAnalysis';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -164,8 +166,32 @@ export async function saveGeneration(
     createdAt: new Date(timestamp).toISOString(),
     backendMode: 'firebase',
   };
-  const docRef = await addDoc(collection(dbInstance, 'users', uid, 'generations'), record);
-  return { id: docRef.id, ...record };
+
+  // Compute the rollup key and write the generation doc + rollup counter in
+  // one atomic batch — a partial failure cannot leave the rollup ahead of/
+  // behind the underlying data. A pre-allocated doc() ref replaces addDoc()
+  // so the generated ID is known before the batch commits.
+  const normalised = normalizeParams(record);
+  const rollupHash = await buildRollupKey(normalised);
+  const genRef = doc(collection(dbInstance, 'users', uid, 'generations'));
+  const rollupRef = doc(dbInstance, 'users', uid, 'rankingRollups', rollupHash);
+
+  const batch = writeBatch(dbInstance);
+  batch.set(genRef, record);
+  batch.set(
+    rollupRef,
+    {
+      version: 1,
+      params: normalised,
+      total: increment(1),
+      favs: increment(record.isFavorite ? 1 : 0),
+      updatedAt: Date.now(),
+    },
+    { merge: true },
+  );
+  await batch.commit();
+
+  return { id: genRef.id, ...record };
 }
 
 // Subscribe to a user's generations. When `dateYMD` (local YYYY-MM-DD) is provided,
@@ -221,17 +247,43 @@ export function subscribeGenerations(
 
 export async function deleteGenerations(uid: string, records: GenerationRecord[]): Promise<void> {
   if (!dbInstance || !storageInstance) throw new Error('Firebase is not configured');
+
+  // Chunk into batches of ≤250 records (2 writes each: doc delete + rollup
+  // update) to respect Firestore's 500-operation writeBatch limit.
+  for (let i = 0; i < records.length; i += 250) {
+    const chunk = records.slice(i, i + 250);
+    const batch = writeBatch(dbInstance);
+    for (const rec of chunk) {
+      const genRef = doc(dbInstance, 'users', uid, 'generations', rec.id);
+      batch.delete(genRef);
+      const normalised = normalizeParams(rec);
+      const rollupHash = await buildRollupKey(normalised);
+      const rollupRef = doc(dbInstance, 'users', uid, 'rankingRollups', rollupHash);
+      batch.set(
+        rollupRef,
+        {
+          version: 1,
+          params: normalised,
+          total: increment(-1),
+          favs: increment(rec.isFavorite ? -1 : 0),
+          updatedAt: Date.now(),
+        },
+        { merge: true },
+      );
+    }
+    await batch.commit();
+  }
+
+  // Remove the PNGs and their sidecar thumbnails. Both are best-effort —
+  // the Firestore doc removal above is the source of truth for the gallery listing.
   await Promise.all(
     records.map(async (r) => {
-      // Remove the PNG and its sidecar thumbnail. Both are best-effort —
-      // Firestore doc removal is the source of truth for the gallery listing.
       if (r.storagePath) {
         await deleteObject(ref(storageInstance!, r.storagePath)).catch(() => {});
       }
       if (r.thumbnailStoragePath) {
         await deleteObject(ref(storageInstance!, r.thumbnailStoragePath)).catch(() => {});
       }
-      await deleteDoc(doc(dbInstance!, 'users', uid, 'generations', r.id));
     }),
   );
 }
@@ -242,10 +294,29 @@ export async function updateFavorite(
   isFavorite: boolean,
 ): Promise<void> {
   if (!dbInstance) throw new Error('Firebase is not configured');
-  await updateDoc(
-    doc(dbInstance, 'users', uid, 'generations', id),
-    { isFavorite },
+  const genRef = doc(dbInstance, 'users', uid, 'generations', id);
+  const genSnap = await getDoc(genRef);
+  if (!genSnap.exists()) throw new Error('Generation not found');
+  const data = genSnap.data() as GenerationRecord;
+  const normalised = normalizeParams(data);
+  const rollupHash = await buildRollupKey(normalised);
+  const rollupRef = doc(dbInstance, 'users', uid, 'rankingRollups', rollupHash);
+
+  // Batch the isFavorite flip with the rollup's favs delta so both commit
+  // atomically — the rollup can never drift ahead of/behind the flag.
+  const batch = writeBatch(dbInstance);
+  batch.update(genRef, { isFavorite });
+  batch.set(
+    rollupRef,
+    {
+      version: 1,
+      params: normalised,
+      favs: increment(isFavorite ? 1 : -1),
+      updatedAt: Date.now(),
+    },
+    { merge: true },
   );
+  await batch.commit();
 }
 
 // Subscribe to the user's favorited generations across all dates.
@@ -277,6 +348,37 @@ export function subscribeFavorites(
     },
     (err) => {
       console.error('Firestore favorites subscription failed:', err);
+      cb([]);
+      onError?.(err);
+    },
+  );
+}
+
+// Subscribe to the user's ranking rollup counters (one doc per distinct
+// recipe, keyed by the SHA-256 hash from buildRollupKey). Backs the
+// favorite-recipe ranking view — ranking math itself lives in
+// utils/rankingAnalysis.ts and runs client-side over this live snapshot.
+export function subscribeRankingRollups(
+  uid: string,
+  cb: (rollups: RankingRollup[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  if (!dbInstance) {
+    cb([]);
+    return () => {};
+  }
+  const collRef = collection(dbInstance, 'users', uid, 'rankingRollups');
+  return onSnapshot(
+    collRef,
+    (snap) => {
+      const rollups: RankingRollup[] = snap.docs.map((d) => {
+        const raw = d.data() as Omit<RankingRollup, 'hash'>;
+        return { hash: d.id, ...raw };
+      });
+      cb(rollups);
+    },
+    (err) => {
+      console.error('Ranking rollup subscription failed:', err);
       cb([]);
       onError?.(err);
     },
