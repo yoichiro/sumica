@@ -73,4 +73,13 @@ describe('buildRollupKey', () => {
     const h4 = await buildRollupKey({ ...base, size: '512x1024' });
     expect(new Set([h1, h2, h3, h4]).size).toBe(4);
   });
+
+  it('matches the pinned expected hash for a known P (must match server test)', async () => {
+    const P = {
+      model: 'foo.safetensors', sampler: 'Euler a', scheduler: 'Karras',
+      size: '512x768', hires: true, loras: ['alpha', 'zeta'], refiner: '', vae: '',
+    };
+    const expected = 'd8217d823537a550fae6ea4cd21c5796a444ca19282ba06b8b2cf1703b67771c';
+    expect(await buildRollupKey(P)).toBe(expected);
+  });
 });
