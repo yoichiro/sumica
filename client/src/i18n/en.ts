@@ -60,6 +60,8 @@ export const en: typeof ja = {
     generateButton: 'Generate image 🎨⚡️',
     generateButtonLoading: 'Generating request... ⚡️',
     batchButtonTitle: 'Batch generate multiple images',
+    tabForm: '📝 Form',
+    tabRanking: '🏆 Ranking',
   },
   preview: {
     favoriteRemoveTitle: 'Remove from favorites',
@@ -209,5 +211,13 @@ export const en: typeof ja = {
   tabs: {
     preview: '🎨 Preview & progress',
     gallery: (count) => `🖼️ History (${count})`,
+  },
+  ranking: {
+    emptyState: 'Not enough data to build a ranking yet. Keep generating! 🎨',
+    applyToForm: 'Apply to form',
+    favsShort: (favs, total) => `${favs}/${total} fav`,
+    applyToast: 'Recipe applied to form 🎨',
+    headerWilson: 'Wilson',
+    headerRate: 'Rate',
   },
 };

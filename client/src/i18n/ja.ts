@@ -58,6 +58,8 @@ export const ja = {
     generateButton: '画像を生成する 🎨⚡️',
     generateButtonLoading: '生成リクエストを実行中... ⚡️',
     batchButtonTitle: '複数枚をまとめて生成',
+    tabForm: '📝 フォーム',
+    tabRanking: '🏆 ランキング',
   },
   preview: {
     favoriteRemoveTitle: 'お気に入りを解除',
@@ -208,5 +210,13 @@ export const ja = {
   tabs: {
     preview: '🎨 プレビュー＆進捗',
     gallery: (count: number) => `🖼️ 履歴ギャラリー (${count})`,
+  },
+  ranking: {
+    emptyState: 'まだランキングを作るための生成データが不足しています。もっと生成してみましょう 🎨',
+    applyToForm: 'フォームに適用',
+    favsShort: (favs: number, total: number) => `${favs}/${total} fav`,
+    applyToast: 'レシピをフォームに適用しました 🎨',
+    headerWilson: 'Wilson',
+    headerRate: 'Rate',
   },
 };
