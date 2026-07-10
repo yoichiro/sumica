@@ -38,16 +38,9 @@ describe('resolveLightboxKey', () => {
     expect(resolveLightboxKey('F', '', false, 0)).toEqual({ type: 'toggleFavorite' });
   });
 
-  it('returns toggleFavorite for lowercase s (the new binding this task adds)', () => {
-    expect(resolveLightboxKey('s', '', false, 0)).toEqual({ type: 'toggleFavorite' });
-  });
-
-  it('returns toggleFavorite for uppercase S (the new binding this task adds)', () => {
-    expect(resolveLightboxKey('S', '', false, 0)).toEqual({ type: 'toggleFavorite' });
-  });
-
-  it('returns null for s when lightboxIndex is negative (e.g. preview image has no persistence)', () => {
-    expect(resolveLightboxKey('s', '', false, -1)).toBeNull();
+  it('returns null for s and S (deliberately not bound — reverted after live review)', () => {
+    expect(resolveLightboxKey('s', '', false, 0)).toBeNull();
+    expect(resolveLightboxKey('S', '', false, 0)).toBeNull();
   });
 
   it('returns null for f when lightboxIndex is negative', () => {

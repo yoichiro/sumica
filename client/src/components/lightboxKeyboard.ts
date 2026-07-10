@@ -3,11 +3,6 @@
 // which item is displayed?), it returns which action the App should dispatch.
 // Extracted from App.tsx's useEffect so the mapping can be unit-tested
 // without mounting the full React tree or synthesizing DOM events.
-//
-// The favorite toggle intentionally accepts both `F/f` (original binding from
-// commit 18727fc) and `S/s` (added later as an alternative mnemonic — "S" for
-// Star). Both trigger the same action; there is no conflict because Star is
-// the only meaning either key ever has in the lightbox.
 
 export type LightboxKeyAction =
   | { type: 'close' }
@@ -35,7 +30,7 @@ export function resolveLightboxKey(
     // cannot be toggled — return null so callers know to no-op.
     return lightboxIndex >= 0 ? { type: 'toggleSelection' } : null;
   }
-  if (key === 'f' || key === 'F' || key === 's' || key === 'S') {
+  if (key === 'f' || key === 'F') {
     return lightboxIndex >= 0 ? { type: 'toggleFavorite' } : null;
   }
   return null;
