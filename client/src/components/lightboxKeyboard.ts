@@ -9,6 +9,7 @@ export type LightboxKeyAction =
   | { type: 'navigate'; delta: number }
   | { type: 'toggleSelection' }
   | { type: 'toggleFavorite' }
+  | { type: 'randomize' }
   | null;
 
 export function resolveLightboxKey(
@@ -32,6 +33,11 @@ export function resolveLightboxKey(
   }
   if (key === 'f' || key === 'F') {
     return lightboxIndex >= 0 ? { type: 'toggleFavorite' } : null;
+  }
+  if (key === 'r' || key === 'R') {
+    // Randomize only makes sense over a gallery-backed lightbox (index >= 0);
+    // the preview tab's one-off image has nothing to shuffle to.
+    return lightboxIndex >= 0 ? { type: 'randomize' } : null;
   }
   return null;
 }

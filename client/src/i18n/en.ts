@@ -121,6 +121,7 @@ export const en: typeof ja = {
     deselectTooltip: 'Deselect (Space)',
     favoriteAddTooltip: 'Add to favorites (F)',
     favoriteRemoveTooltip: 'Remove from favorites (F)',
+    randomTooltip: 'Jump to a random image (R)',
     prevTooltip: 'Previous image (←)',
     nextTooltip: 'Next image (→)',
     fullscreenEnterTooltip: 'Enter fullscreen',

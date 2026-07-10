@@ -384,6 +384,22 @@ function App() {
     setLightboxUrl(target.imageUrl);
   };
 
+  // Jump the lightbox to a random image in displayedHistory, deliberately
+  // excluding the currently-shown one so the click always causes a visible
+  // change. No-op when there are fewer than 2 candidates to choose between.
+  const randomizeLightbox = () => {
+    if (displayedHistory.length < 2) return;
+    const idx = displayedHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl);
+    // Draw a uniform integer from [0, length-1] then bump it up by 1 iff it
+    // collides with the current index — this yields uniform selection over
+    // the (length - 1) "other" items without a rejection loop.
+    let next = Math.floor(Math.random() * (displayedHistory.length - 1));
+    if (next >= idx) next += 1;
+    const target = displayedHistory[next];
+    setMorphSourceKey(itemKey(target));
+    setLightboxUrl(target.imageUrl);
+  };
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // While the delete confirm dialog plays its exit animation, `showDeleteConfirm`
   // is still true (so the DOM stays mounted) but this flag flips the CSS to the
@@ -709,7 +725,8 @@ function App() {
   //   Escape       close (browser handles exit-fullscreen first when applicable)
   //   ArrowLeft/Right  step through the displayed gallery order
   //   Space        toggle selection on the current gallery item
-  //   F / f / S / s  toggle favorite on the current gallery item
+  //   F / f        toggle favorite on the current gallery item
+  //   R / r        jump to a random image (excluding the current one)
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e: KeyboardEvent) => {
@@ -731,6 +748,10 @@ function App() {
         case 'toggleFavorite':
           e.preventDefault();
           toggleFavorite(displayedHistory[lightboxIndex]);
+          return;
+        case 'randomize':
+          e.preventDefault();
+          randomizeLightbox();
           return;
       }
     };
@@ -1622,6 +1643,7 @@ function App() {
         onToggleSelect={(idx) => toggleSelected(itemKey(displayedHistory[idx]))}
         onToggleFavorite={(idx) => toggleFavorite(displayedHistory[idx])}
         onNavigate={navigateLightbox}
+        onRandomize={randomizeLightbox}
         onClose={closeLightbox}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}

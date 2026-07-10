@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Info, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, X } from 'lucide-react';
+import { Info, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, X } from 'lucide-react';
 import type { GenerationParams } from '../firebase';
 import { t } from '../i18n';
 
@@ -23,6 +23,7 @@ interface LightboxProps {
   onToggleSelect: (index: number) => void;
   onToggleFavorite: (index: number) => void;
   onNavigate: (delta: number) => void;
+  onRandomize: () => void;
   onClose: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
@@ -40,6 +41,7 @@ export function Lightbox({
   onToggleSelect,
   onToggleFavorite,
   onNavigate,
+  onRandomize,
   onClose,
   isFullscreen,
   onToggleFullscreen,
@@ -209,6 +211,33 @@ export function Lightbox({
         }}
       >
         <ChevronRight size={22} />
+      </button>
+      {/* Shuffle: jump to a random image (excluding the current one). Only
+          meaningful for gallery-backed lightboxes with at least 2 candidates. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onRandomize(); }}
+        disabled={lightboxIndex < 0 || displayedHistory.length < 2}
+        title={t.lightbox.randomTooltip}
+        className={(lightboxIndex < 0 || displayedHistory.length < 2) ? '' : 'scale-hover'}
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '384px',
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          border: 'none',
+          background: 'rgba(255, 255, 255, 0.15)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: (lightboxIndex < 0 || displayedHistory.length < 2) ? 'not-allowed' : 'pointer',
+          opacity: (lightboxIndex < 0 || displayedHistory.length < 2) ? 0.35 : 1,
+        }}
+      >
+        <Shuffle size={20} />
       </button>
       <button
         type="button"

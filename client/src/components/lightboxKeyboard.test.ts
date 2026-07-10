@@ -43,6 +43,18 @@ describe('resolveLightboxKey', () => {
     expect(resolveLightboxKey('S', '', false, 0)).toBeNull();
   });
 
+  it('returns randomize for lowercase r', () => {
+    expect(resolveLightboxKey('r', '', false, 0)).toEqual({ type: 'randomize' });
+  });
+
+  it('returns randomize for uppercase R', () => {
+    expect(resolveLightboxKey('R', '', false, 0)).toEqual({ type: 'randomize' });
+  });
+
+  it('returns null for r when lightboxIndex is negative (preview has nothing to shuffle to)', () => {
+    expect(resolveLightboxKey('r', '', false, -1)).toBeNull();
+  });
+
   it('returns null for f when lightboxIndex is negative', () => {
     expect(resolveLightboxKey('f', '', false, -1)).toBeNull();
   });
