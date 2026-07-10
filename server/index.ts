@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
+import { normalizeParams, updateLocalRollup, type LocalRollupFile } from './utils/rankingRollup.js';
 
 // Load environment variables
 dotenv.config();
@@ -90,6 +91,10 @@ const generateThumbnailBuffer = async (imageBuffer: Buffer): Promise<Buffer> =>
 
 // Local history metadata helper
 const metadataPath = path.join(outputsDir, 'metadata.json');
+// Local mirror of the ranking rollup counters the client writes to Firestore
+// when signed in (see client/src/firebase.ts). Kept alongside metadata.json
+// so signed-out usage still feeds the favorite-recipe ranking feature.
+const LOCAL_ROLLUPS_PATH = path.join(outputsDir, 'rankingRollups.json');
 const getLocalHistory = (): GenerationMetadata[] => {
   if (!fs.existsSync(metadataPath)) {
     return [];
@@ -553,6 +558,19 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       history.unshift(metadata);
       saveLocalHistory(history);
 
+      try {
+        updateLocalRollup(
+          LOCAL_ROLLUPS_PATH,
+          normalizeParams(metadata as unknown as Record<string, unknown>),
+          1,
+          metadata.isFavorite ? 1 : 0,
+        );
+      } catch (rollupError) {
+        console.error('Failed to update local rollup on save:', rollupError);
+        // Non-fatal: the image and its metadata are already saved above;
+        // the rollup can be rebuilt later via a backfill script.
+      }
+
       res.json({ success: true, data: metadata });
     }
   } catch (error) {
@@ -768,6 +786,7 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
   try {
     const idSet = new Set(ids.map(String));
     const remaining: GenerationMetadata[] = [];
+    const deletedRecords: GenerationMetadata[] = [];
     for (const item of getLocalHistory()) {
       if (item.id && idSet.has(item.id)) {
         // Remove the PNG and any sidecar WebP thumbnail. `thumbnailPath` is
@@ -781,12 +800,30 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
             }
           }
         }
+        deletedRecords.push(item);
         deleted++;
       } else {
         remaining.push(item);
       }
     }
     saveLocalHistory(remaining);
+
+    // Rollup updates happen after metadata.json is already rewritten above —
+    // if a rollup write fails, the delete itself is still complete and the
+    // rollup can be rebuilt later via a backfill script.
+    for (const rec of deletedRecords) {
+      try {
+        updateLocalRollup(
+          LOCAL_ROLLUPS_PATH,
+          normalizeParams(rec as unknown as Record<string, unknown>),
+          -1,
+          rec.isFavorite ? -1 : 0,
+        );
+      } catch (rollupError) {
+        console.error('Failed to update local rollup on delete:', rollupError);
+      }
+    }
+
     res.json({ success: true, deleted });
   } catch (error) {
     console.error('Delete failed:', error);
@@ -809,7 +846,34 @@ app.post('/api/generations/favorite', (req: Request, res: Response) => {
   }
   target.isFavorite = isFavorite;
   saveLocalHistory(history);
+
+  try {
+    updateLocalRollup(
+      LOCAL_ROLLUPS_PATH,
+      normalizeParams(target as unknown as Record<string, unknown>),
+      0,
+      isFavorite ? 1 : -1,
+    );
+  } catch (rollupError) {
+    console.error('Failed to update local rollup on favorite:', rollupError);
+  }
+
   res.json({ success: true });
+});
+
+// 10. Return the local ranking rollup counters (signed-out mirror of the
+// Firestore `users/{uid}/rankingRollups` collection). `{}` before any local
+// generation has been saved or the Task 8 backfill has run.
+app.get('/api/ranking-rollups', (_req: Request, res: Response) => {
+  try {
+    if (!fs.existsSync(LOCAL_ROLLUPS_PATH)) {
+      return res.json({});
+    }
+    const data = JSON.parse(fs.readFileSync(LOCAL_ROLLUPS_PATH, 'utf8')) as LocalRollupFile;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 // Start Express Server
