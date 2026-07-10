@@ -52,7 +52,7 @@ export interface LoadIntoFormState {
 // matched permissively (any non-`]` chars) rather than strict hex, since we
 // only need to strip trailing bracketed suffixes — anchoring at end-of-string
 // guarantees we don't accidentally clip brackets that live inside the name.
-function stripHashSuffix(title: string): string {
+export function stripHashSuffix(title: string): string {
   return title.replace(/\s*\[[^\]]+\]\s*$/, '').trim();
 }
 
