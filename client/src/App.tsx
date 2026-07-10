@@ -191,15 +191,21 @@ function App() {
 
   // Flip isFavorite on the given item. Items without a persisted id (transient
   // preview state before save completes) are a no-op.
+  //
+  // The optimistic update touches BOTH state slices that can render this item:
+  // - `history[]` for the gallery grid and the lightbox
+  // - `currentGeneration` for the preview panel (a separate slice; the preview
+  //   is not derived from history, so failing to sync it here was the reason
+  //   the preview-side ⭐ button previously appeared inert)
   const toggleFavorite = async (item: GenerationData) => {
     const id = item.id;
     if (!id) return;
     const next = !item.isFavorite;
-    // Optimistic UI update for snappy feedback. In signed-in mode, the next
-    // Firestore onSnapshot will reconcile to the authoritative value moments
-    // later; in signed-out mode, this IS the authoritative client state.
     setHistory((prev) =>
       prev.map((h) => (h.id === id ? { ...h, isFavorite: next } : h)),
+    );
+    setCurrentGeneration((prev) =>
+      prev && prev.id === id ? { ...prev, isFavorite: next } : prev,
     );
     try {
       if (user) {
@@ -215,9 +221,12 @@ function App() {
         }
       }
     } catch (e: any) {
-      // Rollback the optimistic update before surfacing the error toast.
+      // Rollback the optimistic update on both slices before surfacing the toast.
       setHistory((prev) =>
         prev.map((h) => (h.id === id ? { ...h, isFavorite: !next } : h)),
+      );
+      setCurrentGeneration((prev) =>
+        prev && prev.id === id ? { ...prev, isFavorite: !next } : prev,
       );
       addToast(t.toast.favoriteUpdateFailed(e.message), 'error');
     }
