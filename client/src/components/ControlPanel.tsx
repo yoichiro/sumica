@@ -12,6 +12,8 @@ import {
   type SdModel,
   type SdLora,
 } from './presets';
+import RankingPanel from './RankingPanel';
+import type { RankingRollup, RankedRecipe } from '../utils/rankingAnalysis';
 
 // The entire left-column form: prompt, model picker, sampler/scheduler, resolution
 // picker (arch-specific), Hires.fix, LoRA, Refiner/VAE (SDXL), Seed, and the
@@ -99,6 +101,14 @@ export interface ControlPanelProps {
   // same name) doesn't collide with it during the View Transition — the API
   // requires each transition name to be unique per snapshot.
   batchModalOpen: boolean;
+
+  // Which sub-view this panel shows: the normal generation form, or the
+  // favorite-recipe ranking list. Owned by App.tsx (state lives there, per
+  // the project's convention); this component just renders per the value.
+  activeTab: 'form' | 'ranking';
+  onTabChange: (tab: 'form' | 'ranking') => void;
+  rollups: RankingRollup[];
+  onApplyRecipe: (recipe: RankedRecipe) => void;
 }
 
 export function ControlPanel(p: ControlPanelProps) {
@@ -111,6 +121,37 @@ export function ControlPanel(p: ControlPanelProps) {
       overflow: 'hidden',
       height: '100%'
     }}>
+      {/* Segmented form/ranking tabs. Same visual pattern as the batch modal's
+          own mode tabs (view-transition-wrapped switch lives in App.tsx's
+          switchControlTab, since this panel doesn't own the state). */}
+      <div style={{ display: 'flex', gap: '8px', background: 'var(--panel-bg-sunk)', borderRadius: '12px', padding: '4px', marginBottom: '16px', flexShrink: 0 }}>
+        {([['form', t.controlPanel.tabForm], ['ranking', t.controlPanel.tabRanking]] as const).map(([tabKey, label]) => (
+          <button
+            key={tabKey}
+            type="button"
+            onClick={() => p.onTabChange(tabKey)}
+            style={{
+              flex: 1,
+              padding: '8px',
+              borderRadius: '9px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 800,
+              fontSize: '13px',
+              background: p.activeTab === tabKey ? 'var(--pop-blue)' : 'transparent',
+              color: p.activeTab === tabKey ? '#fff' : 'var(--text-secondary)',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {p.activeTab === 'ranking' ? (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <RankingPanel rollups={p.rollups} sdModels={p.sdModels} onApplyRecipe={p.onApplyRecipe} />
+        </div>
+      ) : (
       <form onSubmit={p.onGenerate} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         <div style={{
           flex: 1,
@@ -775,6 +816,7 @@ export function ControlPanel(p: ControlPanelProps) {
           </button>
         </div>
       </form>
+      )}
     </section>
   );
 }

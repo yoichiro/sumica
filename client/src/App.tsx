@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { isFirebaseConfigured, onAuth, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
+import { isFirebaseConfigured, onAuth, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
+import type { RankingRollup, RankedRecipe } from './utils/rankingAnalysis';
 import { ToastContainer, type Toast } from './components/ToastContainer';
 import { AppHeader, type HealthStatus } from './components/AppHeader';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
@@ -24,7 +25,7 @@ import {
   type SdModel,
   type SdLora,
 } from './components/presets';
-import { computeLoadIntoFormState } from './components/loadIntoFormState';
+import { computeLoadIntoFormState, stripHashSuffix } from './components/loadIntoFormState';
 import { resolveLightboxKey } from './components/lightboxKeyboard';
 import { flushSync } from 'react-dom';
 import {
@@ -147,6 +148,29 @@ function App() {
   const [refinerSwitchAt, setRefinerSwitchAt] = useState(0.8);
   const [selectedVae, setSelectedVae] = useState('');
   const [rightTab, setRightTab] = useState<'preview' | 'gallery'>('preview');
+  // Which sub-view the left ControlPanel shows: the normal generation form,
+  // or the favorite-recipe ranking list. Owned here (not inside ControlPanel)
+  // to keep with the project's "all state lives in App.tsx" convention.
+  const [activeControlTab, setActiveControlTab] = useState<'form' | 'ranking'>('form');
+  // Favorite-recipe rollup counters (one entry per distinct 8-dim recipe hash).
+  // Signed in: live Firestore subscription (see the useEffect near the history
+  // subscription below). Signed out: fetched from GET /api/ranking-rollups at
+  // mount and re-fetched after any local mutation that can change the counts
+  // (save / favorite toggle / delete) — the server updates rankingRollups.json
+  // synchronously as part of those requests, so a refetch always sees fresh data.
+  const [rollups, setRollups] = useState<RankingRollup[]>([]);
+
+  // Switch the left panel between the generation form and the ranking list.
+  // Wrapped in a View Transition (same pattern as the batch modal's own
+  // segmented mode tabs) so the panel's height smoothly interpolates instead
+  // of jump-cutting when the two views differ in content height.
+  const switchControlTab = (next: 'form' | 'ranking') => {
+    if (activeControlTab === next) return;
+    const apply = () => setActiveControlTab(next);
+    const start = (document as DocumentWithViewTransition).startViewTransition;
+    if (start) start.call(document, apply);
+    else apply();
+  };
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Date filter is always set; defaults to today (local YYYY-MM-DD).
@@ -219,6 +243,7 @@ function App() {
         if (!res.ok) {
           throw new Error(`Server returned ${res.status}`);
         }
+        fetchRollups(); // server updated rankingRollups.json as part of the favorite request
       }
     } catch (e: any) {
       // Rollback the optimistic update on both slices before surfacing the toast.
@@ -260,6 +285,7 @@ function App() {
           throw new Error(errData.error || 'Failed to delete');
         }
         await fetchHistory();
+        fetchRollups(); // server updated rankingRollups.json as part of the delete request
       }
       setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedSet.has(id))));
       // Clear the preview if the image it shows was just deleted.
@@ -733,6 +759,21 @@ function App() {
     }
   };
 
+  // Signed-out mirror of the Firestore rollups subscription: GET /api/ranking-rollups
+  // returns a Record<hash, rollup-without-hash> JSON object; reshape it into the
+  // RankingRollup[] the RankingPanel/rankRecipes helpers expect.
+  const fetchRollups = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/ranking-rollups`);
+      if (res.ok) {
+        const data: Record<string, Omit<RankingRollup, 'hash'>> = await res.json();
+        setRollups(Object.entries(data).map(([hash, v]) => ({ hash, ...v })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch ranking rollups:', error);
+    }
+  };
+
   // History source follows auth: live Firestore subscription when signed in,
   // local REST fetch when signed out. The Firestore subscription branches on
   // `favoritesOnly`: when ON, `subscribeFavorites` runs a composite query
@@ -768,6 +809,21 @@ function App() {
     fetchHistory();
     return undefined;
   }, [user, filterDate, favoritesOnly]);
+
+  // Favorite-recipe ranking rollups: live Firestore subscription when signed
+  // in (cleaned up on unmount / uid change via the returned unsubscribe),
+  // one-shot REST fetch on mount when signed out. Signed-out refetches after
+  // mutations happen at each of the three call sites that can change a local
+  // rollup count (save, favorite toggle, delete) — see fetchRollups() calls below.
+  useEffect(() => {
+    if (user) {
+      return subscribeRankingRollups(user.uid, setRollups, (err) => {
+        console.error('Ranking rollup subscription failed:', err);
+      });
+    }
+    fetchRollups();
+    return undefined;
+  }, [user]);
 
   // Check LM Studio / Stable Diffusion connectivity. Guarded so overlapping
   // polls (or a poll racing a manual refresh) never run concurrently.
@@ -950,6 +1006,54 @@ function App() {
     }
     setSeedLocked(false);
     addToast(t.toast.loadedIntoForm, 'success');
+  };
+
+  // Apply a ranked favorite-recipe (from the Ranking tab, RankingPanel's "フォームに
+  // 適用" button) back into the form. Mirrors loadIntoForm's architecture/dimension
+  // resolution above, but the source is a rollup's NormalizedParams instead of a
+  // GenerationData — it only covers the 8 hashed dimensions, so steps/cfgScale
+  // (not part of the hash) are deliberately left at their current form values.
+  const applyRecipe = (recipe: RankedRecipe) => {
+    const rp = recipe.params;
+    const [wStr, hStr] = rp.size.split('x');
+    const w = Number(wStr);
+    const h = Number(hStr);
+    const s = computeLoadIntoFormState({ width: w, height: h, model: rp.model }, sdModels);
+    // Flip the SD/SDXL toggle BEFORE setting width/height, same ordering
+    // reasoning as loadIntoForm: the modelTypeFilter effect resolves the
+    // picker from whichever width/height land in the same render batch.
+    if (s.archToSet) setModelTypeFilter(s.archToSet);
+    if (Number.isFinite(w) && Number.isFinite(h)) {
+      setWidth(w);
+      setHeight(h);
+    }
+    // Same-architecture apply doesn't retrigger the modelTypeFilter effect, so
+    // sync the picker chips directly here too (see loadIntoForm's own comment).
+    if (s.sdxlPicker) {
+      setSelectedRatio(s.sdxlPicker.ratio);
+      setSelectedOrientation(s.sdxlPicker.orientation);
+      setSelectedSize(s.sdxlPicker.size);
+    }
+    if (s.sd15Picker) {
+      setSelectedSd15Ratio(s.sd15Picker.ratio);
+      setSelectedSd15Orientation(s.sd15Picker.orientation);
+      setSelectedSd15Size(s.sd15Picker.size);
+    }
+    // rp.model is already stripped of its "[hash]" suffix (normalizeParams strips
+    // it before hashing); resolve back to the currently-loaded checkpoint's full
+    // title (with hash) so the model <select> shows a matching option.
+    const fullTitle = sdModels.find((m) => stripHashSuffix(m.title) === rp.model)?.title;
+    setSelectedModel(fullTitle ?? rp.model);
+    setSelectedSampler(rp.sampler);
+    setSelectedScheduler(rp.scheduler);
+    setHiresFixEnabled(rp.hires);
+    // Per-LoRA weight isn't part of the normalized/hashed shape (only the name
+    // list is) — reconstitute at a neutral 1.0 rather than guessing a value.
+    setSelectedLoras(rp.loras.map((name) => ({ name, weight: 1.0 })));
+    setSelectedRefiner(rp.refiner);
+    setSelectedVae(rp.vae);
+    switchControlTab('form'); // so the user sees the applied change land in the form
+    addToast(t.ranking.applyToast, 'success');
   };
 
   // Recall a history image into the Preview tab, treating it as if it was just
@@ -1201,7 +1305,7 @@ function App() {
 
         setCurrentGeneration(saved);
         setGenStatus('success');
-        if (!user) fetchHistory(); // signed-in history updates via onSnapshot (Task 5)
+        if (!user) { fetchHistory(); fetchRollups(); } // signed-in history/rollups update via onSnapshot (Task 5)
         addToast(t.toast.generateSuccess, 'success');
         notify(t.notification.generateSuccess);
       }
@@ -1292,7 +1396,7 @@ function App() {
         }
       }
 
-      if (!user) fetchHistory(); // signed-in history updates via onSnapshot
+      if (!user) { fetchHistory(); fetchRollups(); } // signed-in history/rollups update via onSnapshot
 
       if (cancelledInLoop) {
         setGenStatus(succeeded > 0 ? 'success' : 'idle');
@@ -1412,6 +1516,10 @@ function App() {
           onGenerate={handleGenerate}
           onOpenBatchModal={openBatchModal}
           batchModalOpen={showBatchModal}
+          activeTab={activeControlTab}
+          onTabChange={switchControlTab}
+          rollups={rollups}
+          onApplyRecipe={applyRecipe}
         />
 
         {/* RIGHT COLUMN: PREVIEW & HISTORY GRID (tabbed) */}
