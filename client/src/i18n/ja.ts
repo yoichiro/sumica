@@ -121,6 +121,7 @@ export const ja = {
     favoriteAddTooltip: 'お気に入りに追加 (F)',
     favoriteRemoveTooltip: 'お気に入りを解除 (F)',
     randomTooltip: 'ランダムな画像に切り替え (R)',
+    openInPreviewTooltip: 'メインプレビューに反映',
     prevTooltip: '前の画像 (←)',
     nextTooltip: '次の画像 (→)',
     fullscreenEnterTooltip: '全画面表示',

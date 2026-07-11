@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Info, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, X } from 'lucide-react';
+import { Info, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, Eye, X } from 'lucide-react';
 import type { GenerationParams } from '../firebase';
 import { t } from '../i18n';
 
@@ -24,6 +24,11 @@ interface LightboxProps {
   onToggleFavorite: (index: number) => void;
   onNavigate: (delta: number) => void;
   onRandomize: () => void;
+  onOpenInPreview: () => void;
+  // True while a generation is running (enhancing / generating / saving) —
+  // the open-in-preview button is disabled in that window because sending
+  // a history image to the preview would clobber the live progress UI.
+  openInPreviewDisabled: boolean;
   onClose: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
@@ -42,6 +47,8 @@ export function Lightbox({
   onToggleFavorite,
   onNavigate,
   onRandomize,
+  onOpenInPreview,
+  openInPreviewDisabled,
   onClose,
   isFullscreen,
   onToggleFullscreen,
@@ -239,6 +246,37 @@ export function Lightbox({
       >
         <Shuffle size={20} />
       </button>
+      {/* Open-in-preview: send the currently displayed gallery item to the
+          Preview tab, then close the lightbox. Hidden when the lightbox is
+          showing the preview tab's own current generation (lightboxIndex < 0)
+          — there's nothing to "send back" in that case. */}
+      {lightboxIndex >= 0 && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenInPreview(); }}
+          disabled={openInPreviewDisabled}
+          title={t.lightbox.openInPreviewTooltip}
+          className={openInPreviewDisabled ? '' : 'scale-hover'}
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '436px',
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: 'rgba(255, 255, 255, 0.15)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: openInPreviewDisabled ? 'not-allowed' : 'pointer',
+            opacity: openInPreviewDisabled ? 0.35 : 1,
+          }}
+        >
+          <Eye size={20} />
+        </button>
+      )}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onToggleFullscreen(); }}

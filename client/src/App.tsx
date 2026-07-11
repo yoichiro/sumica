@@ -1672,6 +1672,13 @@ function App() {
         onToggleFavorite={(idx) => toggleFavorite(displayedHistory[idx])}
         onNavigate={navigateLightbox}
         onRandomize={randomizeLightbox}
+        onOpenInPreview={() => {
+          const item = displayedHistory[lightboxIndex];
+          if (!item) return;
+          openInPreview(item);
+          closeLightbox();
+        }}
+        openInPreviewDisabled={genStatus === 'enhancing' || genStatus === 'generating' || genStatus === 'saving'}
         onClose={closeLightbox}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
