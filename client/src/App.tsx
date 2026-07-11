@@ -759,6 +759,28 @@ function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxUrl, morphSourceKey, displayedHistory, lightboxIndex]);
 
+  // "D" hotkey → same as clicking the gallery's 削除 button. Fires only when
+  // the gallery tab is active, at least one image is selected, no lightbox /
+  // confirm modal is open, and the user is not typing in an input. That last
+  // guard is what keeps "d" inside the prompt textarea from wiping the day's
+  // selection.
+  useEffect(() => {
+    if (rightTab !== 'gallery') return;
+    if (selectedIds.size === 0) return;
+    if (lightboxUrl) return;         // lightbox owns its own keymap
+    if (showDeleteConfirm) return;   // don't re-trigger while the confirm modal is up
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'd' && e.key !== 'D') return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+      e.preventDefault();
+      requestDelete(Array.from(selectedIds));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [rightTab, selectedIds, lightboxUrl, showDeleteConfirm]);
+
   // Track OS fullscreen state to swap the toggle icon.
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);

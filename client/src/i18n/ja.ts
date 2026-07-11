@@ -110,6 +110,7 @@ export const ja = {
     emptyStateNoResults: '指定した日付の画像はありません 📅',
     badgeHiresTooltip: 'Hires.fix 適用',
     badgeLoraTooltip: 'LoRA 適用',
+    deleteHotkeyHint: '選択した画像を削除 (D)',
   },
   lightbox: {
     imageAlt: '拡大表示',

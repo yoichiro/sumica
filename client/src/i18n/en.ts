@@ -112,6 +112,7 @@ export const en: typeof ja = {
     emptyStateNoResults: 'No images for the selected date 📅',
     badgeHiresTooltip: 'Hires.fix applied',
     badgeLoraTooltip: 'LoRA applied',
+    deleteHotkeyHint: 'Delete selected images (D)',
   },
   lightbox: {
     imageAlt: 'Enlarged view',

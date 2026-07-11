@@ -333,6 +333,7 @@ export function HistoryGallery({
           type="button"
           onClick={() => onRequestDelete([...selectedIds])}
           disabled={selectedIds.size === 0}
+          title={selectedIds.size === 0 ? undefined : t.gallery.deleteHotkeyHint}
           className={selectedIds.size === 0 ? '' : 'scale-hover'}
           style={{
             background: 'none',
