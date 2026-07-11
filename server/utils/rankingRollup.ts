@@ -4,19 +4,33 @@
 // tsx + Node's native fs). The hash format MUST stay in lockstep with
 // the client — the pinned-hash test in this file catches accidental
 // divergence.
+//
+// See ADR 24 for the extended-dimensions recipe shape.
 
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+
+export type NormalizedLora = {
+  name: string;
+  weight: number;
+};
 
 export type NormalizedParams = {
   model: string;
   sampler: string;
   scheduler: string;
   size: string;
+  steps: number;
+  cfg: number;
   hires: boolean;
-  loras: string[];
+  hiresUpscaler: string;
+  hiresScale: number;
+  hiresSteps: number;
+  hiresDenoising: number;
+  loras: NormalizedLora[];
   refiner: string;
+  refinerSwitchAt: number;
   vae: string;
 };
 
@@ -26,9 +40,16 @@ type RawParams = {
   scheduler?: string;
   width?: number;
   height?: number;
+  steps?: number;
+  cfgScale?: number;
   enableHr?: boolean;
+  hrUpscaler?: string;
+  hrScale?: number;
+  hrSecondPassSteps?: number;
+  denoisingStrength?: number;
   loras?: { name: string; weight?: number }[];
   refiner?: string;
+  refinerSwitchAt?: number;
   vae?: string;
 };
 
@@ -43,9 +64,18 @@ export function normalizeParams(p: RawParams | Record<string, unknown>): Normali
     sampler: src.sampler || '',
     scheduler: src.scheduler || '',
     size: `${src.width ?? 0}x${src.height ?? 0}`,
+    steps: src.steps ?? 0,
+    cfg: src.cfgScale ?? 0,
     hires: !!src.enableHr,
-    loras: (src.loras || []).map((l) => l.name).sort(),
+    hiresUpscaler: src.hrUpscaler || '',
+    hiresScale: src.hrScale ?? 0,
+    hiresSteps: src.hrSecondPassSteps ?? 0,
+    hiresDenoising: src.denoisingStrength ?? 0,
+    loras: (src.loras || [])
+      .map((l) => ({ name: l.name, weight: l.weight ?? 1 }))
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
     refiner: src.refiner || '',
+    refinerSwitchAt: src.refinerSwitchAt ?? 0,
     vae: src.vae || '',
   };
 }

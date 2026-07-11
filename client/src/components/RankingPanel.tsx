@@ -50,6 +50,18 @@ export default function RankingPanel({
   );
 }
 
+function formatHiresDetail(p: RankedRecipe['params']): string {
+  // Concatenate whichever hires fields are populated. Recipes migrated from
+  // pre-ADR-24 records may have zeros here, so blanks are elided rather than
+  // shown as "0x" / "0 steps".
+  const parts: string[] = [];
+  if (p.hiresUpscaler) parts.push(p.hiresUpscaler);
+  if (p.hiresScale) parts.push(`${p.hiresScale}x`);
+  if (p.hiresSteps) parts.push(`${p.hiresSteps} steps`);
+  if (p.hiresDenoising) parts.push(`denoise ${p.hiresDenoising}`);
+  return parts.join(' · ');
+}
+
 function RankingRow({
   recipe,
   rank,
@@ -61,7 +73,14 @@ function RankingRow({
 }) {
   const badge = RANK_EMOJI[rank] ?? `${rank + 1}`;
   const { params } = recipe;
-  const metaLine = [params.sampler, params.scheduler, params.size].filter(Boolean).join(' · ');
+  const metaParts = [params.sampler, params.scheduler, params.size].filter(Boolean);
+  if (params.steps) metaParts.push(`${t.lightbox.infoPanel.steps} ${params.steps}`);
+  if (params.cfg) metaParts.push(`${t.lightbox.infoPanel.cfg} ${params.cfg}`);
+  const metaLine = metaParts.join(' · ');
+  const hiresDetail = params.hires ? formatHiresDetail(params) : '';
+  const loraLabel = params.loras
+    .map((l) => `${l.name} (${l.weight})`)
+    .join(', ');
 
   return (
     <div
@@ -97,18 +116,24 @@ function RankingRow({
           </div>
         )}
         {params.hires && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, wordBreak: 'break-all' }}>
             {t.lightbox.infoPanel.hires}
+            {hiresDetail && `: ${hiresDetail}`}
           </div>
         )}
         {params.loras.length > 0 && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, wordBreak: 'break-all' }}>
-            {t.lightbox.infoPanel.lora}: {params.loras.join(', ')}
+            {t.lightbox.infoPanel.lora}: {loraLabel}
           </div>
         )}
         {(params.refiner || params.vae) && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, wordBreak: 'break-all' }}>
-            {params.refiner && `${t.lightbox.infoPanel.refiner}: ${params.refiner}`}
+            {params.refiner && (
+              <>
+                {t.lightbox.infoPanel.refiner}: {params.refiner}
+                {params.refinerSwitchAt ? ` @${params.refinerSwitchAt}` : ''}
+              </>
+            )}
             {params.refiner && params.vae && ' · '}
             {params.vae && `${t.lightbox.infoPanel.vae}: ${params.vae}`}
           </div>

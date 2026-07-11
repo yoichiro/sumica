@@ -10,9 +10,16 @@ const BASE_PARAMS = {
   sampler: '',
   scheduler: '',
   size: '',
+  steps: 0,
+  cfg: 0,
   hires: false,
-  loras: [] as string[],
+  hiresUpscaler: '',
+  hiresScale: 0,
+  hiresSteps: 0,
+  hiresDenoising: 0,
+  loras: [] as { name: string; weight: number }[],
   refiner: '',
+  refinerSwitchAt: 0,
   vae: '',
 };
 
@@ -71,18 +78,40 @@ describe('RankingPanel', () => {
         sampler: 'DPM++ 2M',
         scheduler: 'Karras',
         size: '1024x1024',
+        steps: 25,
+        cfg: 7,
         hires: true,
-        loras: ['loraOne', 'loraTwo'],
+        hiresUpscaler: 'Latent',
+        hiresScale: 2,
+        hiresSteps: 15,
+        hiresDenoising: 0.5,
+        loras: [
+          { name: 'loraOne', weight: 0.7 },
+          { name: 'loraTwo', weight: 0.9 },
+        ],
         refiner: 'refinerX',
+        refinerSwitchAt: 0.8,
         vae: 'vaeY',
       }),
     ];
     render(<RankingPanel rollups={rollups} sdModels={[]} onApplyRecipe={vi.fn()} minSample={3} />);
     expect(screen.getByText('checkpointA')).toBeInTheDocument();
-    expect(screen.getByText('DPM++ 2M · Karras · 1024x1024')).toBeInTheDocument();
-    expect(screen.getByText(t.lightbox.infoPanel.hires)).toBeInTheDocument();
-    expect(screen.getByText(`${t.lightbox.infoPanel.lora}: loraOne, loraTwo`)).toBeInTheDocument();
-    expect(screen.getByText(`${t.lightbox.infoPanel.refiner}: refinerX · ${t.lightbox.infoPanel.vae}: vaeY`)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `DPM++ 2M · Karras · 1024x1024 · ${t.lightbox.infoPanel.steps} 25 · ${t.lightbox.infoPanel.cfg} 7`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(`${t.lightbox.infoPanel.hires}: Latent · 2x · 15 steps · denoise 0.5`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(`${t.lightbox.infoPanel.lora}: loraOne (0.7), loraTwo (0.9)`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `${t.lightbox.infoPanel.refiner}: refinerX @0.8 · ${t.lightbox.infoPanel.vae}: vaeY`,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('falls back to the unknown-model label when model is blank', () => {

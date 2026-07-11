@@ -1054,8 +1054,9 @@ function App() {
   // Apply a ranked favorite-recipe (from the Ranking tab, RankingPanel's "フォームに
   // 適用" button) back into the form. Mirrors loadIntoForm's architecture/dimension
   // resolution above, but the source is a rollup's NormalizedParams instead of a
-  // GenerationData — it only covers the 8 hashed dimensions, so steps/cfgScale
-  // (not part of the hash) are deliberately left at their current form values.
+  // GenerationData. ADR 24 expanded the recipe shape to cover every generation
+  // form field except prompt and seed, so applying a recipe now fully restores
+  // the form — nothing is left "sticky" from the previous form state.
   const applyRecipe = (recipe: RankedRecipe) => {
     const rp = recipe.params;
     const [wStr, hStr] = rp.size.split('x');
@@ -1089,11 +1090,16 @@ function App() {
     setSelectedModel(fullTitle ?? rp.model);
     setSelectedSampler(rp.sampler);
     setSelectedScheduler(rp.scheduler);
+    setSteps(rp.steps);
+    setCfgScale(rp.cfg);
     setHiresFixEnabled(rp.hires);
-    // Per-LoRA weight isn't part of the normalized/hashed shape (only the name
-    // list is) — reconstitute at a neutral 1.0 rather than guessing a value.
-    setSelectedLoras(rp.loras.map((name) => ({ name, weight: 1.0 })));
+    setSelectedUpscaler(rp.hiresUpscaler);
+    setHiresScale(rp.hiresScale);
+    setHiresSteps(rp.hiresSteps);
+    setHiresDenoising(rp.hiresDenoising);
+    setSelectedLoras(rp.loras.map((l) => ({ name: l.name, weight: l.weight })));
     setSelectedRefiner(rp.refiner);
+    setRefinerSwitchAt(rp.refinerSwitchAt);
     setSelectedVae(rp.vae);
     switchControlTab('form'); // so the user sees the applied change land in the form
     addToast(t.ranking.applyToast, 'success');

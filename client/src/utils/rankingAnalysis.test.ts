@@ -2,7 +2,21 @@ import { describe, it, expect } from 'vitest';
 import { wilsonLower, rankRecipes, type RankingRollup } from './rankingAnalysis';
 
 const P = {
-  model: 'm', sampler: '', scheduler: '', size: '', hires: false, loras: [], refiner: '', vae: '',
+  model: 'm',
+  sampler: '',
+  scheduler: '',
+  size: '',
+  steps: 0,
+  cfg: 0,
+  hires: false,
+  hiresUpscaler: '',
+  hiresScale: 0,
+  hiresSteps: 0,
+  hiresDenoising: 0,
+  loras: [],
+  refiner: '',
+  refinerSwitchAt: 0,
+  vae: '',
 };
 
 function rollup(hash: string, total: number, favs: number): RankingRollup {
