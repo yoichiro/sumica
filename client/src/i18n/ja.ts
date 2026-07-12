@@ -217,10 +217,7 @@ export const ja = {
   ranking: {
     emptyState: 'まだランキングを作るための生成データが不足しています。もっと生成してみましょう 🎨',
     applyToForm: 'フォームに適用',
-    favsShort: (favs: number, total: number) => `${favs}/${total} fav`,
     favCountLabel: (favs: number) => `${favs}件のお気に入り`,
     applyToast: 'レシピをフォームに適用しました 🎨',
-    headerWilson: 'Wilson',
-    headerRate: 'Rate',
   },
 };

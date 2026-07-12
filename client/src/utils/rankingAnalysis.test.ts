@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wilsonLower, rankRecipes, type RankingRollup } from './rankingAnalysis';
+import { rankRecipes, type RankingRollup } from './rankingAnalysis';
 
 const P = {
   model: 'm',
@@ -19,69 +19,56 @@ const P = {
   vae: '',
 };
 
-function rollup(hash: string, total: number, favs: number): RankingRollup {
-  return { hash, params: { ...P, model: hash }, total, favs, updatedAt: 0 };
+function rollup(hash: string, total: number, favs: number, updatedAt = 0): RankingRollup {
+  return { hash, params: { ...P, model: hash }, total, favs, updatedAt };
 }
 
-describe('wilsonLower', () => {
-  it('returns 0 for total=0', () => {
-    expect(wilsonLower(0, 0)).toBe(0);
-  });
-
-  it('approximates known values for 5/7 (~0.359)', () => {
-    expect(wilsonLower(5, 7)).toBeGreaterThan(0.35);
-    expect(wilsonLower(5, 7)).toBeLessThan(0.37);
-  });
-
-  it('approximates known values for 20/25 (~0.61) — larger sample is closer to raw rate', () => {
-    // Wilson lower ~ 0.61; raw rate = 0.80
-    expect(wilsonLower(20, 25)).toBeGreaterThan(0.60);
-    expect(wilsonLower(20, 25)).toBeLessThan(0.63);
-  });
-
-  it('penalises singleton wins (1/1) — Wilson << 1.0', () => {
-    expect(wilsonLower(1, 1)).toBeLessThan(0.3);
-  });
-
-  it('is monotonic non-decreasing when adding a fav without adding a loss', () => {
-    expect(wilsonLower(6, 10)).toBeGreaterThan(wilsonLower(5, 10));
-  });
-});
-
 describe('rankRecipes', () => {
-  it('filters out entries below minSample', () => {
-    const out = rankRecipes([rollup('a', 2, 1), rollup('b', 5, 1)], 3, 10);
+  it('filters out recipes with zero favorites', () => {
+    const out = rankRecipes([rollup('a', 5, 0), rollup('b', 5, 1)]);
     expect(out.map((r) => r.hash)).toEqual(['b']);
   });
 
-  it('sorts by wilson descending; tie-break by total descending', () => {
-    // Both have wilson 0 (favs=0), so tie-break puts higher total first
-    const out = rankRecipes([rollup('small', 3, 0), rollup('big', 10, 0)], 3, 10);
-    expect(out.map((r) => r.hash)).toEqual(['big', 'small']);
+  it('sorts by favs desc; larger fav count comes first regardless of total', () => {
+    // 'many-attempts': 100 attempts, 2 favs. 'few-attempts': 3 attempts, 3 favs.
+    // Under Wilson, 'many-attempts' might have won on evidence; under ADR 35's
+    // absolute-favs rule, 'few-attempts' wins because 3 keepers > 2 keepers.
+    const out = rankRecipes([rollup('many-attempts', 100, 2), rollup('few-attempts', 3, 3)]);
+    expect(out.map((r) => r.hash)).toEqual(['few-attempts', 'many-attempts']);
+  });
+
+  it('tie-breaks equal fav counts by updatedAt desc (recent activity wins)', () => {
+    const out = rankRecipes([
+      rollup('older', 10, 3, 100),
+      rollup('newer', 10, 3, 200),
+    ]);
+    expect(out.map((r) => r.hash)).toEqual(['newer', 'older']);
   });
 
   it('caps the output length at topN', () => {
-    const many = Array.from({ length: 15 }, (_, i) => rollup(`r${i}`, 5, i));
-    const out = rankRecipes(many, 3, 10);
+    const many = Array.from({ length: 15 }, (_, i) => rollup(`r${i}`, 5, i + 1));
+    const out = rankRecipes(many, 10);
     expect(out).toHaveLength(10);
   });
 
-  it('includes rate and wilson on every row', () => {
-    const out = rankRecipes([rollup('a', 4, 2)], 3, 10);
-    expect(out[0]).toMatchObject({ total: 4, favs: 2, rate: 0.5 });
-    expect(typeof out[0].wilson).toBe('number');
-  });
-
   it('handles empty input', () => {
-    expect(rankRecipes([], 3, 10)).toEqual([]);
+    expect(rankRecipes([])).toEqual([]);
   });
 
-  it('does not crash on rollup with 0 total (filtered out by minSample)', () => {
-    expect(rankRecipes([rollup('x', 0, 0)], 3, 10)).toEqual([]);
+  it('does not crash on rollups with 0 total (they are filtered by fav=0 anyway)', () => {
+    expect(rankRecipes([rollup('x', 0, 0)])).toEqual([]);
   });
 
-  it('applies default minSample=3 and topN=10 when omitted', () => {
-    const out = rankRecipes([rollup('a', 2, 1), rollup('b', 3, 1)]);
-    expect(out.map((r) => r.hash)).toEqual(['b']);
+  it('applies default topN=10 when omitted', () => {
+    const many = Array.from({ length: 15 }, (_, i) => rollup(`r${i}`, 5, i + 1));
+    const out = rankRecipes(many);
+    expect(out).toHaveLength(10);
+  });
+
+  it('does not mutate the input array', () => {
+    const input: RankingRollup[] = [rollup('a', 5, 1, 100), rollup('b', 5, 3, 200)];
+    const snapshot = [...input];
+    rankRecipes(input);
+    expect(input).toEqual(snapshot);
   });
 });

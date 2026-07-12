@@ -3,8 +3,8 @@ import { t } from '../i18n';
 import type { SdModel } from './presets';
 
 // Presentational-only Top-N favorite-recipe ranking list. Consumes the raw
-// rollup counters and runs them through `rankRecipes` (Wilson-lower-bound
-// sort) itself, so the parent only has to supply the rollup data and an
+// rollup counters and runs them through `rankRecipes` (favs-desc sort per
+// ADR 35) itself, so the parent only has to supply the rollup data and an
 // apply-to-form callback. `sdModels` is accepted (but currently unused) so
 // the prop surface is stable if a future revision wants to resolve/display
 // friendly model names instead of raw checkpoint filenames.
@@ -12,7 +12,6 @@ export interface RankingPanelProps {
   rollups: RankingRollup[];
   sdModels: SdModel[];
   onApplyRecipe: (recipe: RankedRecipe) => void;
-  minSample?: number;
   topN?: number;
 }
 
@@ -51,10 +50,9 @@ function parseSize(size: string): {
 export default function RankingPanel({
   rollups,
   onApplyRecipe,
-  minSample = 3,
   topN = 10,
 }: RankingPanelProps) {
-  const ranked = rankRecipes(rollups, minSample, topN);
+  const ranked = rankRecipes(rollups, topN);
 
   if (ranked.length === 0) {
     return (
