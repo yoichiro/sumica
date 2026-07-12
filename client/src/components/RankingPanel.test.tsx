@@ -63,13 +63,13 @@ describe('RankingPanel', () => {
     expect(screen.getAllByRole('button', { name: t.ranking.applyToForm })).toHaveLength(10);
   });
 
-  it('renders rate%, Wilson%, and sample count for a row', () => {
+  it('renders the favorite count for a row (no Wilson/Rate percentages)', () => {
     const rollups = [rollup('solo', 4, 2)];
     render(<RankingPanel rollups={rollups} sdModels={[]} onApplyRecipe={vi.fn()} minSample={3} />);
-    // rate = 2/4 = 50.0%
-    expect(screen.getByText(`${t.ranking.headerRate} 50.0%`)).toBeInTheDocument();
-    expect(screen.getByText(`(${t.ranking.favsShort(2, 4)})`)).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(`^${t.ranking.headerWilson} `))).toBeInTheDocument();
+    expect(screen.getByText(`⭐ ${t.ranking.favCountLabel(2)}`)).toBeInTheDocument();
+    // Wilson / Rate percentages are intentionally removed from the header.
+    expect(screen.queryByText(new RegExp(t.ranking.headerWilson))).not.toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(t.ranking.headerRate))).not.toBeInTheDocument();
   });
 
   it('renders a compact, readable description of the recipe params', () => {
@@ -96,11 +96,15 @@ describe('RankingPanel', () => {
     ];
     render(<RankingPanel rollups={rollups} sdModels={[]} onApplyRecipe={vi.fn()} minSample={3} />);
     expect(screen.getByText('checkpointA')).toBeInTheDocument();
+    // meta line no longer contains the size — sampler/scheduler/steps/cfg only.
     expect(
       screen.getByText(
-        `DPM++ 2M · Karras · 1024x1024 · ${t.lightbox.infoPanel.steps} 25 · ${t.lightbox.infoPanel.cfg} 7`,
+        `DPM++ 2M · Karras · ${t.lightbox.infoPanel.steps} 25 · ${t.lightbox.infoPanel.cfg} 7`,
       ),
     ).toBeInTheDocument();
+    // The dedicated size block shows the ratio (1024:1024 → 1:1) and pixels.
+    expect(screen.getByText('1:1')).toBeInTheDocument();
+    expect(screen.getByText('1024×1024')).toBeInTheDocument();
     expect(
       screen.getByText(`${t.lightbox.infoPanel.hires}: Latent · 2x · 15 steps · denoise 0.5`),
     ).toBeInTheDocument();

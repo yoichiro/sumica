@@ -18,6 +18,36 @@ export interface RankingPanelProps {
 
 const RANK_EMOJI = ['🥇', '🥈', '🥉'];
 
+// Euclidean GCD, integer-only. Used to reduce a raw pixel WxH pair to its
+// simplest aspect-ratio form (e.g. 1024x768 → gcd 256 → 4:3). Returns 1 when
+// either side is non-positive so callers still get a valid ratio string.
+function gcd(a: number, b: number): number {
+  a = Math.abs(a);
+  b = Math.abs(b);
+  if (a === 0 || b === 0) return 1;
+  while (b !== 0) {
+    [a, b] = [b, a % b];
+  }
+  return a;
+}
+
+// Parse a "WxH" NormalizedParams.size string into structured display data.
+// Returns null if the string is malformed or has zero-ish dimensions —
+// callers just skip the size block in that case.
+function parseSize(size: string): {
+  width: number;
+  height: number;
+  ratioLabel: string;
+} | null {
+  const m = /^(\d+)x(\d+)$/.exec(size);
+  if (!m) return null;
+  const width = Number(m[1]);
+  const height = Number(m[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  const g = gcd(width, height);
+  return { width, height, ratioLabel: `${width / g}:${height / g}` };
+}
+
 export default function RankingPanel({
   rollups,
   onApplyRecipe,
@@ -62,6 +92,29 @@ function formatHiresDetail(p: RankedRecipe['params']): string {
   return parts.join(' · ');
 }
 
+// Fixed max edge for the aspect-ratio preview rectangle. The other side is
+// derived so the longest dimension always fits into RECT_MAX_EDGE and the
+// shape reflects the true W:H ratio.
+const RECT_MAX_EDGE = 32;
+
+function AspectRatioRect({ width, height }: { width: number; height: number }) {
+  const rectWidth = width >= height ? RECT_MAX_EDGE : Math.round(RECT_MAX_EDGE * (width / height));
+  const rectHeight = height >= width ? RECT_MAX_EDGE : Math.round(RECT_MAX_EDGE * (height / width));
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: `${rectWidth}px`,
+        height: `${rectHeight}px`,
+        border: '1.5px solid var(--pop-blue)',
+        borderRadius: 3,
+        background: 'rgba(51, 154, 240, 0.12)',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
 function RankingRow({
   recipe,
   rank,
@@ -73,7 +126,8 @@ function RankingRow({
 }) {
   const badge = RANK_EMOJI[rank] ?? `${rank + 1}`;
   const { params } = recipe;
-  const metaParts = [params.sampler, params.scheduler, params.size].filter(Boolean);
+  // meta line no longer carries size — the dedicated size block below takes over.
+  const metaParts = [params.sampler, params.scheduler].filter(Boolean);
   if (params.steps) metaParts.push(`${t.lightbox.infoPanel.steps} ${params.steps}`);
   if (params.cfg) metaParts.push(`${t.lightbox.infoPanel.cfg} ${params.cfg}`);
   const metaLine = metaParts.join(' · ');
@@ -81,6 +135,7 @@ function RankingRow({
   const loraLabel = params.loras
     .map((l) => `${l.name} (${l.weight})`)
     .join(', ');
+  const sizeInfo = parseSize(params.size);
 
   return (
     <div
@@ -96,20 +151,41 @@ function RankingRow({
     >
       <div style={{ fontSize: 20, minWidth: 32, textAlign: 'center' }}>{badge}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: 8, fontSize: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700, color: 'var(--pop-blue)' }}>
-            {t.ranking.headerWilson} {(recipe.wilson * 100).toFixed(1)}%
+        {/* Header row: fav count on the left, Apply button on the right. Sharing
+            the row lets model name and info below use the full column width. */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: 'var(--pop-blue)', fontWeight: 700 }}>
+            ⭐ {t.ranking.favCountLabel(recipe.favs)}
           </span>
-          <span style={{ color: 'var(--text-secondary)' }}>
-            {t.ranking.headerRate} {(recipe.rate * 100).toFixed(1)}%
-          </span>
-          <span style={{ color: 'var(--text-muted)' }}>
-            ({t.ranking.favsShort(recipe.favs, recipe.total)})
-          </span>
+          <button
+            type="button"
+            onClick={() => onApply(recipe)}
+            style={{
+              padding: '6px 12px',
+              fontSize: 12,
+              fontWeight: 700,
+              background: 'var(--pop-blue)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            {t.ranking.applyToForm}
+          </button>
         </div>
         <div style={{ fontSize: 13, wordBreak: 'break-all', marginBottom: 4, color: 'var(--text-primary)' }}>
           {params.model || t.caption.unknownModel}
         </div>
+        {sizeInfo && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+            <AspectRatioRect width={sizeInfo.width} height={sizeInfo.height} />
+            <span>{sizeInfo.ratioLabel}</span>
+            <span>·</span>
+            <span>{sizeInfo.width}×{sizeInfo.height}</span>
+          </div>
+        )}
         {metaLine && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', wordBreak: 'break-all' }}>
             {metaLine}
@@ -139,24 +215,6 @@ function RankingRow({
           </div>
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => onApply(recipe)}
-        style={{
-          padding: '6px 12px',
-          fontSize: 12,
-          fontWeight: 700,
-          background: 'var(--pop-blue)',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 8,
-          cursor: 'pointer',
-          alignSelf: 'center',
-          flexShrink: 0,
-        }}
-      >
-        {t.ranking.applyToForm}
-      </button>
     </div>
   );
 }
