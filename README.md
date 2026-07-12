@@ -6,6 +6,8 @@ A futuristic desktop web app that pairs LM Studio (local LLM) with Stable Diffus
 
 **Japanese / English UI support** — the language is auto-detected from your browser's `navigator.language`, and the URL query `?hl=ja` / `?hl=en` overrides it explicitly.
 
+![Sumica AI Studio screenshot](sumica-screenshot.png)
+
 ---
 
 ## 🚀 Prerequisites
