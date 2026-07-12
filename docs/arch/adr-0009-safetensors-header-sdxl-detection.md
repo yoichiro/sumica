@@ -27,7 +27,7 @@
 
 ## Status
 
-承認済み
+承認済み — [[adr-0029-sd-sdxl-architecture-ui-handling]] により「SDXL モデルを UI から除外する」挙動は撤廃されました。`.safetensors` ヘッダー解析のロジックそのものは残り、モデル種別 (`sd15`/`sdxl`) の分類目的で本 ADR の設計を継続利用します。分類結果を「除外」に使うか「トグルによる単一情報源」に使うかの選択は ADR 29 の判断が優先されます。
 
 ## Consequences
 

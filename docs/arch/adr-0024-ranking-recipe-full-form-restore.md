@@ -2,7 +2,7 @@
 
 ## Context
 
-[[adr-0021-favorite-recipe-rollup-ranking]] で導入したお気に入りレシピランキングは、recipe を **8 次元** (`model` / `sampler` / `scheduler` / `size` / `hires` / `LoRA-set` / `refiner` / `vae`) の組み合わせで識別してきました。SHA-256 でハッシュした値が Firestore の `users/{uid}/rankingRollups/{hash}` の doc ID になり、`writeBatch` + `increment()` で total / favs カウンタを維持します。ここまでは `docs/arch/adr-0021-favorite-recipe-rollup-ranking.md` の設計そのままです。
+[[adr-0021-favorite-recipe-rollup-ranking]] で導入したお気に入りレシピランキングは（その基盤は [[adr-0030-favorite-images-foundation]] の `isFavorite` フラグ機構）、recipe を **8 次元** (`model` / `sampler` / `scheduler` / `size` / `hires` / `LoRA-set` / `refiner` / `vae`) の組み合わせで識別してきました。SHA-256 でハッシュした値が Firestore の `users/{uid}/rankingRollups/{hash}` の doc ID になり、`writeBatch` + `increment()` で total / favs カウンタを維持します。ここまでは `docs/arch/adr-0021-favorite-recipe-rollup-ranking.md` の設計そのままです。
 
 洋一郎さんが実運用でランキング機能を使う中で、次の 2 つの問題が浮上しました。
 
@@ -40,7 +40,7 @@ LoRA は `{name, weight}[]` を `name` 昇順でソートします。同じ `nam
 `applyRecipe()` は既存の architecture/dimension resolution ロジック (`computeLoadIntoFormState`) を再利用しつつ、上記 15 次元すべてを form state に書き戻します。プロンプトと seed のみ、意図的に除外します。
 
 - **プロンプト**: recipe に含まれず、ユーザーが自分で書くもの。復元すると意図しない上書きが起きます。
-- **seed**: [[adr-0011-seed-lock-toggle]] の loadIntoForm 同様、「フォームに適用」は "recipe を試したい" 意図で使うため、seed を固定するとユーザーの試行機会が奪われます。
+- **seed**: フォームの seed ロック機構は「同一結果の再現用」の位置付けで、既存の `loadIntoForm` (履歴からのフォーム反映) も seed ロックは OFF のまま値だけ復元します。「フォームに適用」は "recipe を試したい" 意図で使うため、seed を固定するとユーザーの試行機会が奪われます。同じ設計判断を継承します。
 
 代替案として次を比較検討し、いずれも却下しました。
 

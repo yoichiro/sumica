@@ -2,7 +2,7 @@
 
 ## Context
 
-Sumica は生成した画像を [[adr-0001-client-side-firebase-persistence]] に沿って、サインイン時は Firestore、サインアウト時は `server/outputs/` にメタデータごと永続化してきました。各生成には `model` / `sampler` / `scheduler` / `size` / `hires` / `LoRA-set` / `refiner` / `vae` の 8 次元のパラメータが付随し、`updateFavorite` で `isFavorite` フラグがトグルされます。
+Sumica は生成した画像を [[adr-0001-client-side-firebase-persistence]] に沿って、サインイン時は Firestore、サインアウト時は `server/outputs/` にメタデータごと永続化してきました。各生成には `model` / `sampler` / `scheduler` / `size` / `hires` / `LoRA-set` / `refiner` / `vae` の 8 次元のパラメータが付随し、[[adr-0030-favorite-images-foundation]] で確立した `isFavorite` フラグ + `writeBatch` の楽観的更新機構によってお気に入り状態がトグルされます。本 ADR はその上に統計的ランキング層を積みます。
 
 Firestore 側だけで 1128 枚、うち 212 枚がお気に入り（率 18.8%）に達した時点で、「どのパラメータの組み合わせでお気に入りにマークされる確率が高いか」を可視化できれば、次の生成での意思決定を支援できるという着想が生まれました。実データを `server/scripts/analyze-favorites.ts` で集計したところ、Wilson 下限 35.9%（生 71.4%）を叩き出すレシピが実在し、パラメータ次元の相互作用（同じモデルでもサイズによってお気に入り率が大きく変わる、モデル固有の "得意な Sampler/Scheduler" が存在する）も確認できました。ランキング化は統計的に十分意味のある規模のデータであると分かりました。
 
