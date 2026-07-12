@@ -13,6 +13,7 @@ import {
   type SdLora,
 } from './presets';
 import RankingPanel from './RankingPanel';
+import { AspectRatioRect } from './AspectRatioRect';
 import type { RankingRollup, RankedRecipe } from '../utils/rankingAnalysis';
 
 // The entire left-column form: prompt, model picker, sampler/scheduler, resolution
@@ -292,6 +293,13 @@ export function ControlPanel(p: ControlPanelProps) {
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       {SDXL_PRESETS.map((preset) => {
                         const active = p.selectedRatio === preset.ratio;
+                        const [rwRaw, rhRaw] = preset.ratio.split(':').map(Number);
+                        // The rect flips with the current orientation so the picker
+                        // previews the actual generated shape. 1:1 is unaffected
+                        // (rwRaw === rhRaw), so this branches purely on orientation.
+                        const isPortrait = p.selectedOrientation === 'portrait';
+                        const rw = isPortrait ? rhRaw : rwRaw;
+                        const rh = isPortrait ? rwRaw : rhRaw;
                         return (
                           <button
                             key={preset.ratio}
@@ -308,10 +316,20 @@ export function ControlPanel(p: ControlPanelProps) {
                               fontWeight: 800,
                               cursor: 'pointer',
                               fontSize: '13px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
                             }}
                             title={preset.ratioIsBucket ? t.controlPanel.sdxlNativeRatioTitle : ''}
                           >
-                            {preset.label}{preset.ratioIsBucket ? ' ⭐' : ''}
+                            <AspectRatioRect
+                              width={rw}
+                              height={rh}
+                              maxEdge={20}
+                              borderColor={active ? '#fff' : 'var(--pop-blue)'}
+                              background={active ? 'rgba(255, 255, 255, 0.22)' : 'rgba(51, 154, 240, 0.12)'}
+                            />
+                            <span>{preset.label}{preset.ratioIsBucket ? ' ⭐' : ''}</span>
                           </button>
                         );
                       })}
@@ -401,6 +419,12 @@ export function ControlPanel(p: ControlPanelProps) {
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       {SD15_PRESETS.map((preset) => {
                         const active = p.selectedSd15Ratio === preset.ratio;
+                        const [rwRaw, rhRaw] = preset.ratio.split(':').map(Number);
+                        // Mirror SDXL's orientation-aware rect behaviour, using
+                        // the SD1.5-specific orientation state.
+                        const isPortrait = p.selectedSd15Orientation === 'portrait';
+                        const rw = isPortrait ? rhRaw : rwRaw;
+                        const rh = isPortrait ? rwRaw : rhRaw;
                         return (
                           <button
                             key={preset.ratio}
@@ -417,9 +441,19 @@ export function ControlPanel(p: ControlPanelProps) {
                               fontWeight: 800,
                               cursor: 'pointer',
                               fontSize: '13px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
                             }}
                           >
-                            {preset.label}
+                            <AspectRatioRect
+                              width={rw}
+                              height={rh}
+                              maxEdge={20}
+                              borderColor={active ? '#fff' : 'var(--pop-blue)'}
+                              background={active ? 'rgba(255, 255, 255, 0.22)' : 'rgba(51, 154, 240, 0.12)'}
+                            />
+                            <span>{preset.label}</span>
                           </button>
                         );
                       })}

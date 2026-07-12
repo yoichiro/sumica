@@ -1,6 +1,7 @@
 import { rankRecipes, type RankingRollup, type RankedRecipe } from '../utils/rankingAnalysis';
 import { t } from '../i18n';
 import type { SdModel } from './presets';
+import { AspectRatioRect } from './AspectRatioRect';
 
 // Presentational-only Top-N favorite-recipe ranking list. Consumes the raw
 // rollup counters and runs them through `rankRecipes` (favs-desc sort per
@@ -88,29 +89,6 @@ function formatHiresDetail(p: RankedRecipe['params']): string {
   if (p.hiresSteps) parts.push(`${p.hiresSteps} steps`);
   if (p.hiresDenoising) parts.push(`denoise ${p.hiresDenoising}`);
   return parts.join(' · ');
-}
-
-// Fixed max edge for the aspect-ratio preview rectangle. The other side is
-// derived so the longest dimension always fits into RECT_MAX_EDGE and the
-// shape reflects the true W:H ratio.
-const RECT_MAX_EDGE = 32;
-
-function AspectRatioRect({ width, height }: { width: number; height: number }) {
-  const rectWidth = width >= height ? RECT_MAX_EDGE : Math.round(RECT_MAX_EDGE * (width / height));
-  const rectHeight = height >= width ? RECT_MAX_EDGE : Math.round(RECT_MAX_EDGE * (height / width));
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        width: `${rectWidth}px`,
-        height: `${rectHeight}px`,
-        border: '1.5px solid var(--pop-blue)',
-        borderRadius: 3,
-        background: 'rgba(51, 154, 240, 0.12)',
-        flexShrink: 0,
-      }}
-    />
-  );
 }
 
 function RankingRow({
