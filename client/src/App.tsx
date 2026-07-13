@@ -1048,6 +1048,10 @@ function App() {
       setSeedValue(item.seed);
     }
     setSeedLocked(false);
+    // If the user is currently on the Ranking tab, surface the freshly-populated
+    // form so the applied settings are actually visible. No-op when already on
+    // the form tab (switchControlTab early-returns on same-tab).
+    switchControlTab('form');
     addToast(t.toast.loadedIntoForm, 'success');
   };
 
