@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import RankingPanel from './RankingPanel';
 import type { RankingRollup, RankedRecipe } from '../utils/rankingAnalysis';
+import type { SdModel } from './presets';
 import { t } from '../i18n';
 
 const BASE_PARAMS = {
@@ -121,6 +122,37 @@ describe('RankingPanel', () => {
     const rollups = [rollup('h', 5, 3, { model: '' })];
     render(<RankingPanel rollups={rollups} sdModels={[]} onApplyRecipe={vi.fn()} />);
     expect(screen.getByText(t.caption.unknownModel)).toBeInTheDocument();
+  });
+
+  it('shows an SDXL chip when the recipe model resolves to an SDXL checkpoint', () => {
+    const sdModels: SdModel[] = [{ title: 'coolSDXL.safetensors [abc]', type: 'sdxl' }];
+    const rollups = [rollup('h', 5, 3, { model: 'coolSDXL.safetensors' })];
+    render(<RankingPanel rollups={rollups} sdModels={sdModels} onApplyRecipe={vi.fn()} />);
+    expect(screen.getByText('SDXL')).toBeInTheDocument();
+    expect(screen.queryByText('SD1.5')).not.toBeInTheDocument();
+  });
+
+  it('shows an SD1.5 chip when the recipe model resolves to an SD1.5 checkpoint', () => {
+    const sdModels: SdModel[] = [{ title: 'plainSD.safetensors [xyz]', type: 'sd15' }];
+    const rollups = [rollup('h', 5, 3, { model: 'plainSD.safetensors' })];
+    render(<RankingPanel rollups={rollups} sdModels={sdModels} onApplyRecipe={vi.fn()} />);
+    expect(screen.getByText('SD1.5')).toBeInTheDocument();
+    expect(screen.queryByText('SDXL')).not.toBeInTheDocument();
+  });
+
+  it('omits the arch chip when the model name is blank', () => {
+    const rollups = [rollup('h', 5, 3, { model: '' })];
+    render(<RankingPanel rollups={rollups} sdModels={[]} onApplyRecipe={vi.fn()} />);
+    expect(screen.queryByText('SDXL')).not.toBeInTheDocument();
+    expect(screen.queryByText('SD1.5')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the "xl"-in-name heuristic when the model is not in sdModels', () => {
+    // No matching entry in sdModels — inferSdArchitectureFromTitle should
+    // still infer SDXL from the "xl" substring rather than dropping the chip.
+    const rollups = [rollup('h', 5, 3, { model: 'someXLCheckpoint.safetensors' })];
+    render(<RankingPanel rollups={rollups} sdModels={[]} onApplyRecipe={vi.fn()} />);
+    expect(screen.getByText('SDXL')).toBeInTheDocument();
   });
 
   it('calls onApplyRecipe with the full recipe when Apply is clicked', async () => {

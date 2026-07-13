@@ -2,13 +2,14 @@ import { rankRecipes, type RankingRollup, type RankedRecipe } from '../utils/ran
 import { t } from '../i18n';
 import type { SdModel } from './presets';
 import { AspectRatioRect } from './AspectRatioRect';
+import { inferSdArchitectureFromTitle } from './loadIntoFormState';
 
 // Presentational-only Top-N favorite-recipe ranking list. Consumes the raw
 // rollup counters and runs them through `rankRecipes` (favs-desc sort per
 // ADR 35) itself, so the parent only has to supply the rollup data and an
-// apply-to-form callback. `sdModels` is accepted (but currently unused) so
-// the prop surface is stable if a future revision wants to resolve/display
-// friendly model names instead of raw checkpoint filenames.
+// apply-to-form callback. `sdModels` is threaded down to each row so the
+// architecture chip (SDXL / SD1.5) can be resolved against the currently-
+// loaded checkpoint list.
 export interface RankingPanelProps {
   rollups: RankingRollup[];
   sdModels: SdModel[];
@@ -50,6 +51,7 @@ function parseSize(size: string): {
 
 export default function RankingPanel({
   rollups,
+  sdModels,
   onApplyRecipe,
   topN = 10,
 }: RankingPanelProps) {
@@ -73,7 +75,13 @@ export default function RankingPanel({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 4px' }}>
       {ranked.map((recipe, i) => (
-        <RankingRow key={recipe.hash} recipe={recipe} rank={i} onApply={onApplyRecipe} />
+        <RankingRow
+          key={recipe.hash}
+          recipe={recipe}
+          rank={i}
+          sdModels={sdModels}
+          onApply={onApplyRecipe}
+        />
       ))}
     </div>
   );
@@ -94,10 +102,12 @@ function formatHiresDetail(p: RankedRecipe['params']): string {
 function RankingRow({
   recipe,
   rank,
+  sdModels,
   onApply,
 }: {
   recipe: RankedRecipe;
   rank: number;
+  sdModels: SdModel[];
   onApply: (recipe: RankedRecipe) => void;
 }) {
   const badge = RANK_EMOJI[rank] ?? `${rank + 1}`;
@@ -112,6 +122,12 @@ function RankingRow({
     .map((l) => `${l.name} (${l.weight})`)
     .join(', ');
   const sizeInfo = parseSize(params.size);
+  // Resolve the recipe's architecture against the currently-loaded checkpoint
+  // list. Returns null for blank model names; falls back to the "xl"-in-title
+  // heuristic when the model isn't in `sdModels` (e.g. SD disconnected or the
+  // checkpoint was renamed). No chip renders when arch is null.
+  const arch = inferSdArchitectureFromTitle(params.model, sdModels);
+  const archLabel = arch === 'sdxl' ? 'SDXL' : arch === 'sd15' ? 'SD1.5' : null;
 
   return (
     <div
@@ -151,8 +167,26 @@ function RankingRow({
             {t.ranking.applyToForm}
           </button>
         </div>
-        <div style={{ fontSize: 13, wordBreak: 'break-all', marginBottom: 4, color: 'var(--text-primary)' }}>
-          {params.model || t.caption.unknownModel}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+          {archLabel && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: 0.3,
+                padding: '2px 6px',
+                borderRadius: 6,
+                background: arch === 'sdxl' ? 'var(--pop-blue)' : 'var(--text-muted)',
+                color: '#fff',
+                flexShrink: 0,
+              }}
+            >
+              {archLabel}
+            </span>
+          )}
+          <span style={{ fontSize: 13, wordBreak: 'break-all', color: 'var(--text-primary)' }}>
+            {params.model || t.caption.unknownModel}
+          </span>
         </div>
         {sizeInfo && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>
