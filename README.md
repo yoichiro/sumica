@@ -128,7 +128,12 @@ If you want to start them separately, `npm run dev:server` and `npm run dev:clie
 - Date filter, ⭐ favorites-only filter, and inline badges for generation attributes (⚡ Hires / 🎭 LoRA)
 - **Shift-click** to range-select, then delete multiple images in one go
 - **Lightbox**: info panel with 10 generation parameters, fullscreen view, keyboard shortcuts (←→ / Space / F / Esc), image-to-image navigation, and morph animations powered by View Transitions
-- **Load into form** — recall a past image's generation settings (model, size, Seed, Sampler, LoRAs, …) into the form with one click
+- **Load into form** — recall a past image's generation settings (model, size, Seed, Sampler, LoRAs, …) into the form with one click. If the ranking tab is open on the left, it automatically switches back to the form so the applied settings are visible.
+
+### 🏆 Ranking
+
+- The left panel has a **🏆 Ranking** tab alongside the generation form, showing your Top-N favorite "recipes" — every distinct combination of model / size / Sampler / Scheduler / Steps / CFG / Hires / LoRA / Refiner / VAE that you've ⭐-favorited at least once, ordered by absolute favorite count (see [ADR 35](docs/arch/adr-0035-ranking-order-by-absolute-favs.md)).
+- Each row surfaces the recipe's key parameters at a glance: an **SDXL / SD1.5 architecture chip** on the model name, an aspect-ratio rectangle preview of the size, and a **"Apply to form"** button that pushes every parameter back into the generation form in one click.
 
 ### 🎨 UX
 
