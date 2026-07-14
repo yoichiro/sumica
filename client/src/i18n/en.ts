@@ -114,7 +114,7 @@ export const en: typeof ja = {
     filters: {
       buttonLabel: 'Filter',
       activeCountSuffix: (n: number) => ` (${n})`,
-      archLabel: 'Architecture',
+      archLabel: 'Model type',
       archAll: 'All',
       modelLabel: 'Model',
       modelAll: 'All',

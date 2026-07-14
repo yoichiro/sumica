@@ -112,7 +112,7 @@ export const ja = {
     filters: {
       buttonLabel: 'フィルター',
       activeCountSuffix: (n: number) => ` (${n})`,
-      archLabel: 'アーキテクチャ',
+      archLabel: 'モデル種別',
       archAll: 'すべて',
       modelLabel: 'モデル',
       modelAll: 'すべて',

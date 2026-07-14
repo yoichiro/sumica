@@ -26,7 +26,7 @@ import {
   type SdModel,
   type SdLora,
 } from './components/presets';
-import { computeLoadIntoFormState, stripHashSuffix } from './components/loadIntoFormState';
+import { computeLoadIntoFormState, inferSdArchitectureFromTitle, stripHashSuffix } from './components/loadIntoFormState';
 import { resolveLightboxKey } from './components/lightboxKeyboard';
 import { flushSync } from 'react-dom';
 import {
@@ -211,6 +211,23 @@ function App() {
   // selects. Deriving from baseScopedHistory (not raw history) means the dropdowns
   // only show values that could actually match after the date/favorites filter.
   const filterOptions = useMemo(() => deriveFilterOptions(baseScopedHistory), [baseScopedHistory]);
+
+  // Narrow the model dropdown to only checkpoints matching the currently-selected
+  // arch. When no arch filter is set, show all models from the base scope. This
+  // stops "SDXL selected but showing SD1.5 models in dropdown" contradictions.
+  const availableModels = useMemo(() => {
+    if (!galleryFilters.arch) return filterOptions.models;
+    return filterOptions.models.filter((m) => inferSdArchitectureFromTitle(m, sdModels) === galleryFilters.arch);
+  }, [filterOptions.models, galleryFilters.arch, sdModels]);
+
+  // If the current model filter no longer matches the arch scope (e.g. user picked
+  // model X then flipped arch to a bucket that excludes X), null it out so the
+  // select doesn't dangle a value that's absent from its options.
+  useEffect(() => {
+    if (galleryFilters.model && !availableModels.includes(galleryFilters.model)) {
+      setGalleryFilters((f) => ({ ...f, model: null }));
+    }
+  }, [availableModels, galleryFilters.model]);
 
   // When filters change and hide previously-selected items, prune the hidden
   // ids from selectedIds so a subsequent "delete selected" can't operate on
@@ -1684,7 +1701,7 @@ function App() {
               baseScopedHistoryLength={baseScopedHistory.length}
               galleryFilters={galleryFilters}
               onSetGalleryFilters={setGalleryFilters}
-              availableModels={filterOptions.models}
+              availableModels={availableModels}
               availableSamplers={filterOptions.samplers}
             />
           )}
