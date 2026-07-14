@@ -257,6 +257,12 @@ export function HistoryGallery({
         minHeight: '40px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <GalleryFiltersPopover
+            filters={galleryFilters}
+            onSetFilters={onSetGalleryFilters}
+            availableModels={availableModels}
+            availableSamplers={availableSamplers}
+          />
           <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', opacity: favoritesOnly ? 0.4 : 1 }}>
             📅
             <input
@@ -292,12 +298,6 @@ export function HistoryGallery({
               : <Star size={14} />}
             {t.gallery.favoritesOnlyLabel}
           </button>
-          <GalleryFiltersPopover
-            filters={galleryFilters}
-            onSetFilters={onSetGalleryFilters}
-            availableModels={availableModels}
-            availableSamplers={availableSamplers}
-          />
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{t.gallery.countSuffix(displayedHistory.length)}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
