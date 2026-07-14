@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Filter } from 'lucide-react';
 import { t } from '../i18n';
 import type { GalleryFilters } from './galleryFilters';
@@ -33,12 +34,16 @@ export function GalleryFiltersPopover({
   // Wrap open/close in a View Transition so the browser interpolates the
   // shared `gallery-filter-morph` element rect between the button (closed
   // state) and the popover panel (open state). Same pattern as the batch
-  // modal — see ControlPanel.tsx line 849 + BatchGenerationModal.tsx line 180.
+  // modal — see App.tsx openBatchModal / closeBatchModal. `flushSync` is
+  // required so React commits the state change synchronously inside the
+  // callback; otherwise React's default batching lets startViewTransition
+  // capture the "new" snapshot before the DOM actually changed, and the
+  // browser skips the animation (observed as a ~40ms no-op on close).
   const setOpenWithTransition = (next: boolean) => {
-    const apply = () => setOpen(next);
+    const apply = () => flushSync(() => setOpen(next));
     const start = (document as unknown as { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
     if (typeof start === 'function') start.call(document, apply);
-    else apply();
+    else setOpen(next);
   };
 
   useEffect(() => {
