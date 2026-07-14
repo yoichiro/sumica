@@ -213,10 +213,13 @@ function App() {
   const filterOptions = useMemo(() => deriveFilterOptions(baseScopedHistory), [baseScopedHistory]);
 
   // Narrow the model dropdown to only checkpoints matching the currently-selected
-  // arch. When no arch filter is set, show all models from the base scope. This
-  // stops "SDXL selected but showing SD1.5 models in dropdown" contradictions.
+  // arch. When arch is null (モデル種別=すべて), return an empty list so the
+  // popover's `showModel = length > 1` guard auto-hides the model select — a
+  // mixed SDXL/SD1.5 model list is not useful when the user hasn't committed to
+  // an arch. The stale-clear useEffect below then null-out any lingering model
+  // filter, keeping visible UI and filter state in sync.
   const availableModels = useMemo(() => {
-    if (!galleryFilters.arch) return filterOptions.models;
+    if (!galleryFilters.arch) return [];
     return filterOptions.models.filter((m) => inferSdArchitectureFromTitle(m, sdModels) === galleryFilters.arch);
   }, [filterOptions.models, galleryFilters.arch, sdModels]);
 
