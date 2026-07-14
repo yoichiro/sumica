@@ -30,13 +30,24 @@ export function GalleryFiltersPopover({
   const showModel = availableModels.length > 1;
   const showSampler = availableSamplers.length > 1;
 
+  // Wrap open/close in a View Transition so the browser interpolates the
+  // shared `gallery-filter-morph` element rect between the button (closed
+  // state) and the popover panel (open state). Same pattern as the batch
+  // modal — see ControlPanel.tsx line 849 + BatchGenerationModal.tsx line 180.
+  const setOpenWithTransition = (next: boolean) => {
+    const apply = () => setOpen(next);
+    const start = (document as unknown as { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
+    if (typeof start === 'function') start.call(document, apply);
+    else apply();
+  };
+
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpenWithTransition(false);
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') setOpenWithTransition(false);
     };
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
@@ -58,7 +69,7 @@ export function GalleryFiltersPopover({
     <div ref={wrapperRef} style={{ position: 'relative' }}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpenWithTransition(!open)}
         className="scale-hover"
         style={{
           display: 'flex',
@@ -72,6 +83,11 @@ export function GalleryFiltersPopover({
           fontSize: '12px',
           fontWeight: 800,
           cursor: 'pointer',
+          // Share the `view-transition-name` with the popover panel so the
+          // browser interpolates the button rect → popover rect on open (and
+          // reverses on close). Drop the name while the popover is open so
+          // both instances never carry it simultaneously.
+          viewTransitionName: open ? undefined : 'gallery-filter-morph',
         }}
       >
         <Filter size={14} />
@@ -95,6 +111,11 @@ export function GalleryFiltersPopover({
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
+            // Paired with the filter button's `view-transition-name:
+            // gallery-filter-morph`: the button drops the name while the
+            // popover is up, so the browser interpolates the button rect →
+            // this popover rect on open (and reverses on close).
+            viewTransitionName: 'gallery-filter-morph',
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -173,7 +194,7 @@ export function GalleryFiltersPopover({
             </button>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={() => setOpenWithTransition(false)}
               style={{
                 padding: '5px 10px',
                 borderRadius: '8px',
