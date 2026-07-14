@@ -3,6 +3,8 @@ import { Star, Cloud, Folder, CheckCircle2, Circle } from 'lucide-react';
 import type { GenerationData } from '../App';
 import { buildCaptionInfo, type CaptionInfoData } from './captionFields';
 import { computeRangeSelectionAdd } from './rangeSelection';
+import { GalleryFiltersPopover } from './GalleryFiltersPopover';
+import type { GalleryFilters } from './galleryFilters';
 import { t } from '../i18n';
 
 // Bottom-right selection toggle overlaid on a gallery tile.
@@ -177,6 +179,11 @@ interface HistoryGalleryProps {
   onOpenInPreview: (item: GenerationData) => void;
   morphSourceKey: string | null;
   lightboxUrl: string | null;
+  baseScopedHistoryLength: number;
+  galleryFilters: GalleryFilters;
+  onSetGalleryFilters: (filters: GalleryFilters) => void;
+  availableModels: string[];
+  availableSamplers: string[];
 }
 
 export function HistoryGallery({
@@ -196,6 +203,11 @@ export function HistoryGallery({
   onOpenInPreview,
   morphSourceKey,
   lightboxUrl,
+  baseScopedHistoryLength,
+  galleryFilters,
+  onSetGalleryFilters,
+  availableModels,
+  availableSamplers,
 }: HistoryGalleryProps) {
   // Anchor for Shift+click range selection. Tracks the last checkbox the user
   // clicked (whether that click selected or deselected), so Shift+click on any
@@ -280,6 +292,12 @@ export function HistoryGallery({
               : <Star size={14} />}
             {t.gallery.favoritesOnlyLabel}
           </button>
+          <GalleryFiltersPopover
+            filters={galleryFilters}
+            onSetFilters={onSetGalleryFilters}
+            availableModels={availableModels}
+            availableSamplers={availableSamplers}
+          />
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{t.gallery.countSuffix(displayedHistory.length)}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -429,7 +447,9 @@ export function HistoryGallery({
         <div className="glass-panel" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', borderRadius: '16px', background: 'var(--panel-bg)' }}>
           {historyLength === 0
             ? t.gallery.emptyStateNoHistory
-            : t.gallery.emptyStateNoResults}
+            : baseScopedHistoryLength === 0
+              ? t.gallery.emptyStateNoResults
+              : t.gallery.emptyStateFiltered}
         </div>
       )}
     </div>

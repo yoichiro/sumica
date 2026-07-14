@@ -10,6 +10,7 @@ import { PreviewPanel } from './components/PreviewPanel';
 import { HistoryGallery } from './components/HistoryGallery';
 import { ControlPanel } from './components/ControlPanel';
 import { GenerationBadge } from './components/GenerationBadge';
+import { applyGalleryFilters, deriveFilterOptions, type GalleryFilters } from './components/galleryFilters';
 import {
   SDXL_PRESETS,
   SDXL_SIZES,
@@ -172,6 +173,7 @@ function App() {
     else apply();
   };
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [galleryFilters, setGalleryFilters] = useState<GalleryFilters>({ arch: null, model: null, sampler: null });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Date filter is always set; defaults to today (local YYYY-MM-DD).
   const [filterDate, setFilterDate] = useState(() => {
@@ -192,12 +194,35 @@ function App() {
   // over the date filter. Signed in + favoritesOnly: subscribeFavorites already
   // scoped the data, so just pass it through. Signed out + favoritesOnly: the
   // full history is loaded, filter client-side.
-  const displayedHistory = useMemo(() => {
-    if (favoritesOnly) {
-      return user ? history : history.filter((h) => !!h.isFavorite);
-    }
+  // Base scope: existing date + favoritesOnly filters. Exposed so HistoryGallery
+  // can distinguish "no data for this date" from "no data matches your gallery filters"
+  // in the empty-state message.
+  const baseScopedHistory = useMemo(() => {
+    if (favoritesOnly) return user ? history : history.filter((h) => !!h.isFavorite);
     return filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
   }, [history, favoritesOnly, filterDate, user]);
+
+  const displayedHistory = useMemo(
+    () => applyGalleryFilters(baseScopedHistory, galleryFilters, sdModels),
+    [baseScopedHistory, galleryFilters, sdModels],
+  );
+
+  // Distinct values from the current base scope, feeding the popover's model/sampler
+  // selects. Deriving from baseScopedHistory (not raw history) means the dropdowns
+  // only show values that could actually match after the date/favorites filter.
+  const filterOptions = useMemo(() => deriveFilterOptions(baseScopedHistory), [baseScopedHistory]);
+
+  // When filters change and hide previously-selected items, prune the hidden
+  // ids from selectedIds so a subsequent "delete selected" can't operate on
+  // invisible rows. Sized-guarded so identical selection sets don't re-render.
+  useEffect(() => {
+    const visibleKeys = new Set(displayedHistory.map(itemKey));
+    setSelectedIds((prev) => {
+      const next = new Set<string>();
+      for (const k of prev) if (visibleKeys.has(k)) next.add(k);
+      return next.size === prev.size ? prev : next;
+    });
+  }, [displayedHistory]);
 
   // Cloud storage is active only when Firebase is configured AND the user is signed in.
   const cloudActive = isFirebaseConfigured && !!user;
@@ -1656,6 +1681,11 @@ function App() {
               onOpenInPreview={openInPreview}
               morphSourceKey={morphSourceKey}
               lightboxUrl={lightboxUrl}
+              baseScopedHistoryLength={baseScopedHistory.length}
+              galleryFilters={galleryFilters}
+              onSetGalleryFilters={setGalleryFilters}
+              availableModels={filterOptions.models}
+              availableSamplers={filterOptions.samplers}
             />
           )}
           </div>
