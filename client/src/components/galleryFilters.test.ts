@@ -91,6 +91,8 @@ describe('applyGalleryFilters', () => {
   });
 
   it('applies arch + model + sampler as AND', () => {
+    // The model filter carries the stripped title (that's what deriveFilterOptions
+    // hands to the dropdown and what the popover writes back to filters.model).
     const history = [
       mkRecord({ model: 'juggernautXL.safetensors [abc]', sampler: 'Euler a' }),
       mkRecord({ model: 'juggernautXL.safetensors [abc]', sampler: 'DPM++ 2M' }),
@@ -98,13 +100,26 @@ describe('applyGalleryFilters', () => {
     ];
     const filters: GalleryFilters = {
       arch: 'sdxl',
-      model: 'juggernautXL.safetensors [abc]',
+      model: 'juggernautXL.safetensors',
       sampler: 'Euler a',
     };
     const out = applyGalleryFilters(history, filters, KNOWN_MODELS);
     expect(out).toHaveLength(1);
     expect(out[0].sampler).toBe('Euler a');
     expect(out[0].model).toContain('juggernautXL');
+  });
+
+  it('matches records with and without a [hash] suffix under the same stripped filter value', () => {
+    // Older records may carry `[hash]`, newer ones may not — both should match
+    // the same stripped filter value that the dropdown offers.
+    const history = [
+      mkRecord({ model: 'coolModel.safetensors [abc]' }),
+      mkRecord({ model: 'coolModel.safetensors' }),
+      mkRecord({ model: 'otherModel.safetensors [def]' }),
+    ];
+    const out = applyGalleryFilters(history, { ...ALL_NULL, model: 'coolModel.safetensors' }, []);
+    expect(out).toHaveLength(2);
+    expect(out.every((r) => r.model?.startsWith('coolModel.safetensors'))).toBe(true);
   });
 
   it('returns empty array when input is empty', () => {
@@ -134,6 +149,20 @@ describe('deriveFilterOptions', () => {
     const opts = deriveFilterOptions(history);
     expect(opts.models).toEqual(['ok-model']);
     expect(opts.samplers).toEqual(['ok-sampler']);
+  });
+
+  it('collapses hash-suffixed variants of the same base title into one distinct entry', () => {
+    // Same base filename with different [hash] suffixes (or none) should show
+    // up once in the dropdown — otherwise the user sees three visually-identical
+    // options for what is effectively the same checkpoint.
+    const history = [
+      mkRecord({ model: 'foo.safetensors [abc]' }),
+      mkRecord({ model: 'foo.safetensors [def]' }),
+      mkRecord({ model: 'foo.safetensors' }),
+      mkRecord({ model: 'bar.safetensors [xyz]' }),
+    ];
+    const opts = deriveFilterOptions(history);
+    expect(opts.models).toEqual(['bar.safetensors', 'foo.safetensors']);
   });
 });
 
