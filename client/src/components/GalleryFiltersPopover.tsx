@@ -30,26 +30,43 @@ export function GalleryFilterToggleButton({ filters, open, onToggle }: GalleryFi
       onClick={() => onToggle(!open)}
       className="scale-hover"
       style={{
+        // The button itself is a transparent frame — its background/border
+        // live on a sibling `<span>` below, which is what actually carries
+        // the shared view-transition-name. Keeping the label off the morph
+        // target stops the text from being interpolated (stretched) into the
+        // panel rect during open/close.
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
         padding: '5px 10px',
-        borderRadius: '8px',
-        border: active > 0 ? 'none' : '1.5px solid var(--panel-border)',
-        background: active > 0 ? 'var(--pop-blue)' : 'transparent',
+        border: 'none',
+        background: 'transparent',
         color: active > 0 ? '#fff' : 'var(--text-secondary)',
         fontSize: '12px',
         fontWeight: 800,
         cursor: 'pointer',
-        // Drop the shared view-transition-name while the panel is open so both
-        // instances never carry it simultaneously — the browser needs exactly
-        // one owner per name in each snapshot to interpolate.
-        viewTransitionName: open ? undefined : 'gallery-filter-morph',
       }}
     >
-      <Filter size={14} />
-      {t.gallery.filters.buttonLabel}
-      {active > 0 && t.gallery.filters.activeCountSuffix(active)}
+      {/* Border-only frame: this is the sole element that morphs into the
+          panel's outline. Absolute-positioned behind the content, drops the
+          view-transition-name while the panel is open so both instances
+          never carry it simultaneously. */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          border: active > 0 ? 'none' : '1.5px solid var(--panel-border)',
+          background: active > 0 ? 'var(--pop-blue)' : 'transparent',
+          borderRadius: '8px',
+          pointerEvents: 'none',
+          viewTransitionName: open ? undefined : 'gallery-filter-morph',
+        }}
+      />
+      <Filter size={14} style={{ position: 'relative' }} />
+      <span style={{ position: 'relative' }}>{t.gallery.filters.buttonLabel}</span>
+      {active > 0 && <span style={{ position: 'relative' }}>{t.gallery.filters.activeCountSuffix(active)}</span>}
     </button>
   );
 }
