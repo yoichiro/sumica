@@ -213,30 +213,53 @@ function App() {
     [baseScopedHistory, galleryFilters, sdModels],
   );
 
-  // Distinct values from the current base scope, feeding the popover's model/sampler
-  // selects. Deriving from baseScopedHistory (not raw history) means the dropdowns
-  // only show values that could actually match after the date/favorites filter.
-  const filterOptions = useMemo(() => deriveFilterOptions(baseScopedHistory), [baseScopedHistory]);
+  // Arch-scoped view of the base scope. All non-arch filter option lists are
+  // derived from THIS (not baseScopedHistory) so picking モデル種別=SDXL causes
+  // the aspect ratio / orientation / sampler lists to shrink to what actually
+  // exists in the SDXL subset. When arch is null, everything from the base
+  // scope is visible.
+  const archScopedHistory = useMemo(() => {
+    if (!galleryFilters.arch) return baseScopedHistory;
+    return baseScopedHistory.filter((it) => inferSdArchitectureFromTitle(it.model ?? '', sdModels) === galleryFilters.arch);
+  }, [baseScopedHistory, galleryFilters.arch, sdModels]);
 
-  // Narrow the model dropdown to only checkpoints matching the currently-selected
-  // arch. When arch is null (モデル種別=すべて), return an empty list so the
-  // popover's `showModel = length > 1` guard auto-hides the model select — a
-  // mixed SDXL/SD1.5 model list is not useful when the user hasn't committed to
-  // an arch. The stale-clear useEffect below then null-out any lingering model
-  // filter, keeping visible UI and filter state in sync.
+  // Distinct values from the arch-scoped scope, feeding the popover's dropdowns
+  // and radios. Every non-arch axis auto-shrinks whenever arch changes.
+  const filterOptions = useMemo(() => deriveFilterOptions(archScopedHistory), [archScopedHistory]);
+
+  // Model dropdown mirrors filterOptions.models except when arch is null: in
+  // that case we return [] so `showModel = length > 1` auto-hides the select
+  // — mixing SDXL and SD1.5 models in one list is not useful.
   const availableModels = useMemo(() => {
     if (!galleryFilters.arch) return [];
-    return filterOptions.models.filter((m) => inferSdArchitectureFromTitle(m, sdModels) === galleryFilters.arch);
-  }, [filterOptions.models, galleryFilters.arch, sdModels]);
+    return filterOptions.models;
+  }, [filterOptions.models, galleryFilters.arch]);
 
-  // If the current model filter no longer matches the arch scope (e.g. user picked
-  // model X then flipped arch to a bucket that excludes X), null it out so the
-  // select doesn't dangle a value that's absent from its options.
+  // Stale-value clearing: whenever the arch (and hence the option lists) shifts
+  // such that a currently-selected value falls out of its options, null the
+  // dangling filter so state and UI stay in sync. Each effect is guarded by a
+  // truthiness check on the field, so once cleared the effect is a no-op and
+  // cannot loop.
   useEffect(() => {
     if (galleryFilters.model && !availableModels.includes(galleryFilters.model)) {
       setGalleryFilters((f) => ({ ...f, model: null }));
     }
   }, [availableModels, galleryFilters.model]);
+  useEffect(() => {
+    if (galleryFilters.sampler && !filterOptions.samplers.includes(galleryFilters.sampler)) {
+      setGalleryFilters((f) => ({ ...f, sampler: null }));
+    }
+  }, [filterOptions.samplers, galleryFilters.sampler]);
+  useEffect(() => {
+    if (galleryFilters.aspectRatio && !filterOptions.aspectRatios.includes(galleryFilters.aspectRatio)) {
+      setGalleryFilters((f) => ({ ...f, aspectRatio: null }));
+    }
+  }, [filterOptions.aspectRatios, galleryFilters.aspectRatio]);
+  useEffect(() => {
+    if (galleryFilters.orientation && !filterOptions.orientations.includes(galleryFilters.orientation)) {
+      setGalleryFilters((f) => ({ ...f, orientation: null }));
+    }
+  }, [filterOptions.orientations, galleryFilters.orientation]);
 
   // Orientation is meaningless when aspectRatio === '1:1' (the shape is square).
   // Mirror the arch=null → model-null pattern: clear the orientation filter so
