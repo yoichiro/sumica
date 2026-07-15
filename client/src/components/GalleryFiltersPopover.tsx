@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Filter } from 'lucide-react';
 import { t } from '../i18n';
-import type { GalleryFilters } from './galleryFilters';
+import type { AspectRatioOption, GalleryFilters } from './galleryFilters';
 import { countActiveFilters } from './galleryFilters';
 
 // Gallery filter UI, split into two named exports so the parent can render the
@@ -78,7 +78,7 @@ export interface GalleryFilterPanelProps {
   onSetFilters: (filters: GalleryFilters) => void;
   availableModels: string[];
   availableSamplers: string[];
-  availableAspectRatios: string[];
+  availableAspectRatios: AspectRatioOption[];
   availableOrientations: Exclude<GalleryFilters['orientation'], null>[];
   onClose: () => void;
 }
@@ -152,7 +152,7 @@ export function GalleryFilterPanel({
           value={filters.aspectRatio ?? ''}
           onChange={(v) => onSetFilters({ ...filters, aspectRatio: v || null })}
           allLabel={t.gallery.filters.aspectRatioAll}
-          options={availableAspectRatios}
+          options={availableAspectRatios.map((a) => ({ value: a.ratio, label: a.label }))}
         />
       )}
 
@@ -246,8 +246,12 @@ function FilterSelectGroup({
   value: string;
   onChange: (next: string) => void;
   allLabel: string;
-  options: string[];
+  // Accepts either plain strings (value===label, used by model/sampler) or
+  // { value, label } pairs when the display string differs from the filter
+  // key (used by aspect ratio to show "4:3 (1024×768)").
+  options: ReadonlyArray<string | { value: string; label: string }>;
 }) {
+  const normalized = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o));
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
       <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
@@ -269,15 +273,15 @@ function FilterSelectGroup({
           background: 'var(--input-bg)',
           border: '1.5px solid var(--panel-border)',
           borderRadius: '6px',
-          maxWidth: '220px',
+          maxWidth: '260px',
           cursor: 'pointer',
           outline: 'none',
         }}
       >
         <option value="">{allLabel}</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
+        {normalized.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </select>

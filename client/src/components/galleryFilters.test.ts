@@ -213,14 +213,30 @@ describe('deriveFilterOptions', () => {
 
   it('extracts distinct aspect ratios sorted widest-first, collapsing portrait/landscape of the same shape', () => {
     const history = [
-      mkRecord({ width: 768, height: 1024 }),   // portrait 4:3
-      mkRecord({ width: 1024, height: 768 }),   // landscape 4:3 (same key after normalization)
+      mkRecord({ width: 768, height: 1024 }),   // portrait 4:3 → 1024×768 canonical
+      mkRecord({ width: 1024, height: 768 }),   // landscape 4:3 → 1024×768 canonical (same)
       mkRecord({ width: 512, height: 512 }),    // 1:1
       mkRecord({ width: 1920, height: 1080 }),  // 16:9
     ];
     const opts = deriveFilterOptions(history);
-    // widest first: 16:9 (1.777), 4:3 (1.333), 1:1 (1.0)
-    expect(opts.aspectRatios).toEqual(['16:9', '4:3', '1:1']);
+    // widest first: 16:9 (1.777), 4:3 (1.333), 1:1 (1.0). Label = "ratio (larger×smaller)".
+    expect(opts.aspectRatios).toEqual([
+      { ratio: '16:9', label: '16:9 (1920×1080)' },
+      { ratio: '4:3', label: '4:3 (1024×768)' },
+      { ratio: '1:1', label: '1:1 (512×512)' },
+    ]);
+  });
+
+  it('lists multiple pixel dimensions per aspect ratio bigger-first when the ratio spans several sizes', () => {
+    const history = [
+      mkRecord({ width: 512, height: 512 }),
+      mkRecord({ width: 1024, height: 1024 }),
+      mkRecord({ width: 768, height: 768 }),
+    ];
+    const opts = deriveFilterOptions(history);
+    expect(opts.aspectRatios).toEqual([
+      { ratio: '1:1', label: '1:1 (1024×1024 / 768×768 / 512×512)' },
+    ]);
   });
 
   it('extracts distinct orientations excluding square', () => {

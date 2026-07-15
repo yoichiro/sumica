@@ -5,7 +5,7 @@ import type { GenerationData } from '../App';
 import { buildCaptionInfo, type CaptionInfoData } from './captionFields';
 import { computeRangeSelectionAdd } from './rangeSelection';
 import { GalleryFilterToggleButton, GalleryFilterPanel } from './GalleryFiltersPopover';
-import type { GalleryFilters } from './galleryFilters';
+import type { AspectRatioOption, GalleryFilters } from './galleryFilters';
 import { t } from '../i18n';
 
 // Bottom-right selection toggle overlaid on a gallery tile.
@@ -185,7 +185,7 @@ interface HistoryGalleryProps {
   onSetGalleryFilters: (filters: GalleryFilters) => void;
   availableModels: string[];
   availableSamplers: string[];
-  availableAspectRatios: string[];
+  availableAspectRatios: AspectRatioOption[];
   availableOrientations: Exclude<GalleryFilters['orientation'], null>[];
 }
 

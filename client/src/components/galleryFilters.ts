@@ -74,21 +74,40 @@ export function applyGalleryFilters(
   });
 }
 
+// One row of the aspect ratio dropdown. `ratio` is the canonical filter key
+// ("4:3"); `label` is the display string, which appends the distinct pixel
+// dimensions ("4:3 (1024×768)") so the user can see "which specific shape"
+// the ratio maps to. Portrait and landscape of the same underlying dimensions
+// (e.g., 768×1024 and 1024×768) collapse to a single `1024×768` canonical form,
+// then orientation acts as the separate axis that splits them.
+export interface AspectRatioOption {
+  ratio: string;
+  label: string;
+}
+
 export function deriveFilterOptions(history: GenerationData[]): {
   models: string[];
   samplers: string[];
-  aspectRatios: string[];
+  aspectRatios: AspectRatioOption[];
   orientations: Exclude<GalleryOrientation, 'square'>[];
 } {
   const models = new Set<string>();
   const samplers = new Set<string>();
-  const aspectRatios = new Set<string>();
   const orientations = new Set<Exclude<GalleryOrientation, 'square'>>();
+  // ratio → set of canonical "larger×smaller" dimension strings
+  const ratioDims = new Map<string, Set<string>>();
   for (const it of history) {
     if (it.model) models.add(stripHashSuffix(it.model));
     if (it.sampler) samplers.add(it.sampler);
     const ratio = computeAspectRatio(it.width, it.height);
-    if (ratio) aspectRatios.add(ratio);
+    if (ratio) {
+      const larger = Math.max(it.width, it.height);
+      const smaller = Math.min(it.width, it.height);
+      const dimKey = `${larger}×${smaller}`;
+      const existing = ratioDims.get(ratio);
+      if (existing) existing.add(dimKey);
+      else ratioDims.set(ratio, new Set([dimKey]));
+    }
     const orientation = computeOrientation(it.width, it.height);
     // Square (1:1) records don't participate in the orientation filter — the
     // aspectRatio=1:1 case already fully describes them.
@@ -96,12 +115,22 @@ export function deriveFilterOptions(history: GenerationData[]): {
   }
   // Aspect ratios sorted "widest first" (largest larger/smaller quotient) so
   // 21:9, 16:9 come before 4:3, 1:1 — matches the wide→square progression a
-  // user thinks in visually.
-  const sortedRatios = [...aspectRatios].sort((a, b) => ratioValue(b) - ratioValue(a));
+  // user thinks in visually. Dimensions per ratio sorted "bigger first" so the
+  // most substantial resolution leads when multiple exist for the same ratio.
+  const aspectRatios: AspectRatioOption[] = [...ratioDims.entries()]
+    .map(([ratio, dims]) => {
+      const sortedDims = [...dims].sort((a, b) => {
+        const [al] = a.split('×').map(Number);
+        const [bl] = b.split('×').map(Number);
+        return bl - al;
+      });
+      return { ratio, label: `${ratio} (${sortedDims.join(' / ')})` };
+    })
+    .sort((a, b) => ratioValue(b.ratio) - ratioValue(a.ratio));
   return {
     models: [...models].sort(),
     samplers: [...samplers].sort(),
-    aspectRatios: sortedRatios,
+    aspectRatios,
     orientations: [...orientations].sort(),
   };
 }

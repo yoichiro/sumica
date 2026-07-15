@@ -251,7 +251,7 @@ function App() {
     }
   }, [filterOptions.samplers, galleryFilters.sampler]);
   useEffect(() => {
-    if (galleryFilters.aspectRatio && !filterOptions.aspectRatios.includes(galleryFilters.aspectRatio)) {
+    if (galleryFilters.aspectRatio && !filterOptions.aspectRatios.some((a) => a.ratio === galleryFilters.aspectRatio)) {
       setGalleryFilters((f) => ({ ...f, aspectRatio: null }));
     }
   }, [filterOptions.aspectRatios, galleryFilters.aspectRatio]);
