@@ -1,4 +1,4 @@
-import { RotateCcw, Search } from 'lucide-react';
+import { RotateCcw, Filter } from 'lucide-react';
 import { rankRecipes, type RankingRollup, type RankedRecipe } from '../utils/rankingAnalysis';
 import { t } from '../i18n';
 import type { SdModel } from './presets';
@@ -198,7 +198,7 @@ function RankingRow({
                 cursor: 'pointer',
               }}
             >
-              <Search size={14} />
+              <Filter size={14} />
             </button>
           </div>
         </div>
