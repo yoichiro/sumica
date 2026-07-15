@@ -236,8 +236,8 @@ export const en: typeof ja = {
   },
   ranking: {
     emptyState: 'Not enough data to build a ranking yet. Keep generating! 🎨',
-    applyToForm: 'Apply to form',
+    applyToForm: 'Load into form',
     favCountLabel: (favs) => `${favs} favorite${favs === 1 ? '' : 's'}`,
-    applyToast: 'Recipe applied to form 🎨',
+    applyToast: 'Recipe loaded into form 🎨',
   },
 };
