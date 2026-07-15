@@ -147,16 +147,13 @@ export function GalleryFilterPanel({
       </FilterGroup>
 
       {showAspectRatio && (
-        <FilterGroup label={t.gallery.filters.aspectRatioLabel}>
-          {[{ value: null as string | null, label: t.gallery.filters.aspectRatioAll }, ...availableAspectRatios.map((r) => ({ value: r as string | null, label: r }))].map((opt) => (
-            <RadioOption
-              key={String(opt.value)}
-              checked={filters.aspectRatio === opt.value}
-              onChange={() => onSetFilters({ ...filters, aspectRatio: opt.value })}
-              label={opt.label}
-            />
-          ))}
-        </FilterGroup>
+        <FilterSelectGroup
+          label={t.gallery.filters.aspectRatioLabel}
+          value={filters.aspectRatio ?? ''}
+          onChange={(v) => onSetFilters({ ...filters, aspectRatio: v || null })}
+          allLabel={t.gallery.filters.aspectRatioAll}
+          options={availableAspectRatios}
+        />
       )}
 
       {showOrientation && (
