@@ -254,11 +254,28 @@ function FilterSelectGroup({
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
       <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
+      {/* Deliberately not using the .input-field class: that variant is tuned
+          for large form inputs (padding: 12px 16px, font-size: 15px), which
+          would tower over the neighbouring radio groups. Compact inline
+          styles below match the radio-row height (~24px) so all filter axes
+          sit on the same visual baseline. */}
       <select
-        className="input-field"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{ borderRadius: '8px', maxWidth: '220px' }}
+        style={{
+          height: '22px',
+          padding: '0 6px',
+          fontSize: '13px',
+          lineHeight: '20px',
+          fontFamily: 'inherit',
+          color: 'var(--text-primary)',
+          background: 'var(--input-bg)',
+          border: '1.5px solid var(--panel-border)',
+          borderRadius: '6px',
+          maxWidth: '220px',
+          cursor: 'pointer',
+          outline: 'none',
+        }}
       >
         <option value="">{allLabel}</option>
         {options.map((o) => (
