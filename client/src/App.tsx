@@ -237,26 +237,36 @@ function App() {
 
   // Stale-value clearing: whenever the arch (and hence the option lists) shifts
   // such that a currently-selected value falls out of its options, null the
-  // dangling filter so state and UI stay in sync. Each effect is guarded by a
-  // truthiness check on the field, so once cleared the effect is a no-op and
-  // cannot loop.
+  // dangling filter so state and UI stay in sync.
+  //
+  // Guard: each effect only clears when the option list is NON-empty (i.e.,
+  // we have data to compare against). An empty list means "no records in
+  // scope" — which can happen transiently between renders when
+  // `applyRecipeToGalleryFilter` flips `favoritesOnly` and swaps the whole
+  // filter set in the same batch; the useMemos re-derive on the first commit
+  // before history has settled, briefly showing empty options. Without the
+  // length>0 guard, that transient triggered a cascade of null-outs that
+  // required a second click to fully reflect the recipe. Preserving intent
+  // when we can't affirmatively refute it is also better UX in general
+  // (e.g., date-swap into an empty day now keeps the user's filter selection
+  // instead of silently dropping it).
   useEffect(() => {
-    if (galleryFilters.model && !availableModels.includes(galleryFilters.model)) {
+    if (galleryFilters.model && availableModels.length > 0 && !availableModels.includes(galleryFilters.model)) {
       setGalleryFilters((f) => ({ ...f, model: null }));
     }
   }, [availableModels, galleryFilters.model]);
   useEffect(() => {
-    if (galleryFilters.sampler && !filterOptions.samplers.includes(galleryFilters.sampler)) {
+    if (galleryFilters.sampler && filterOptions.samplers.length > 0 && !filterOptions.samplers.includes(galleryFilters.sampler)) {
       setGalleryFilters((f) => ({ ...f, sampler: null }));
     }
   }, [filterOptions.samplers, galleryFilters.sampler]);
   useEffect(() => {
-    if (galleryFilters.aspectRatio && !filterOptions.aspectRatios.some((a) => a.ratio === galleryFilters.aspectRatio)) {
+    if (galleryFilters.aspectRatio && filterOptions.aspectRatios.length > 0 && !filterOptions.aspectRatios.some((a) => a.ratio === galleryFilters.aspectRatio)) {
       setGalleryFilters((f) => ({ ...f, aspectRatio: null }));
     }
   }, [filterOptions.aspectRatios, galleryFilters.aspectRatio]);
   useEffect(() => {
-    if (galleryFilters.orientation && !filterOptions.orientations.includes(galleryFilters.orientation)) {
+    if (galleryFilters.orientation && filterOptions.orientations.length > 0 && !filterOptions.orientations.includes(galleryFilters.orientation)) {
       setGalleryFilters((f) => ({ ...f, orientation: null }));
     }
   }, [filterOptions.orientations, galleryFilters.orientation]);
