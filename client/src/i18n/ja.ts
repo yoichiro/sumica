@@ -64,7 +64,7 @@ export const ja = {
   preview: {
     favoriteRemoveTitle: 'お気に入りを解除',
     favoriteAddTitle: 'お気に入りに追加',
-    loadIntoFormButton: '♻️ フォームにロード',
+    loadIntoFormButton: 'フォームにロード',
     deleteButton: '削除',
     originalPromptLabel: '元プロンプト',
     detailResolutionLabel: '解像度: ',

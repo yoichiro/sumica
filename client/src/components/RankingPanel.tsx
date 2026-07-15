@@ -1,3 +1,4 @@
+import { RotateCcw } from 'lucide-react';
 import { rankRecipes, type RankingRollup, type RankedRecipe } from '../utils/rankingAnalysis';
 import { t } from '../i18n';
 import type { SdModel } from './presets';
@@ -153,6 +154,9 @@ function RankingRow({
             type="button"
             onClick={() => onApply(recipe)}
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
               padding: '6px 12px',
               fontSize: 12,
               fontWeight: 700,
@@ -164,6 +168,7 @@ function RankingRow({
               flexShrink: 0,
             }}
           >
+            <RotateCcw size={12} />
             {t.ranking.applyToForm}
           </button>
         </div>

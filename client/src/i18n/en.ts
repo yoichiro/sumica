@@ -66,7 +66,7 @@ export const en: typeof ja = {
   preview: {
     favoriteRemoveTitle: 'Remove from favorites',
     favoriteAddTitle: 'Add to favorites',
-    loadIntoFormButton: '♻️ Load into form',
+    loadIntoFormButton: 'Load into form',
     deleteButton: 'Delete',
     originalPromptLabel: 'Original prompt',
     detailResolutionLabel: 'Resolution: ',

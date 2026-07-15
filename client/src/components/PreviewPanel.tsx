@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Cloud, Folder, Trash2, Sparkles, CheckCircle2, AlertTriangle, Star } from 'lucide-react';
+import { Image as ImageIcon, Cloud, Folder, Trash2, Sparkles, CheckCircle2, AlertTriangle, Star, RotateCcw } from 'lucide-react';
 import type { GenerationData } from '../App';
 import { t } from '../i18n';
 
@@ -153,7 +153,7 @@ export function PreviewPanel({
                   className="scale-hover"
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  {t.preview.loadIntoFormButton}
+                  <RotateCcw size={15} /> {t.preview.loadIntoFormButton}
                 </button>
                 <button
                   type="button"
