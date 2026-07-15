@@ -1,9 +1,10 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Star, Cloud, Folder, CheckCircle2, Circle } from 'lucide-react';
 import type { GenerationData } from '../App';
 import { buildCaptionInfo, type CaptionInfoData } from './captionFields';
 import { computeRangeSelectionAdd } from './rangeSelection';
-import { GalleryFiltersPopover } from './GalleryFiltersPopover';
+import { GalleryFilterToggleButton, GalleryFilterPanel } from './GalleryFiltersPopover';
 import type { GalleryFilters } from './galleryFilters';
 import { t } from '../i18n';
 
@@ -219,6 +220,20 @@ export function HistoryGallery({
   // it does not need to trigger a re-render.
   const lastClickedIdRef = useRef<string | null>(null);
 
+  // Filter panel is a persistent inline block below the toolbar row — the toggle
+  // button in the row expands/collapses it, and the grid slides down while it's
+  // open. Wrapping the state change in startViewTransition + flushSync lets the
+  // browser interpolate the button rect ↔ panel rect via the shared
+  // `view-transition-name: gallery-filter-morph` on both surfaces (see the
+  // batch modal in App.tsx for the same pattern).
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const setFilterPanelOpenWithTransition = (next: boolean) => {
+    const apply = () => flushSync(() => setFilterPanelOpen(next));
+    const start = (document as unknown as { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
+    if (typeof start === 'function') start.call(document, apply);
+    else setFilterPanelOpen(next);
+  };
+
   const handleSelectClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const anchor = lastClickedIdRef.current;
@@ -239,14 +254,20 @@ export function HistoryGallery({
 
   return (
     <div style={{ flexShrink: 0 }}>
-      {/* Toolbar: date filter + result count (left) / selection + delete (right).
-          Sticks to the top of the surrounding scroll container so it stays
-          visible while the image grid below scrolls. */}
+      {/* Sticky toolbar: date filter + result count (left) / selection + delete
+          (right) on the first row, then an inline filter panel below when open.
+          The whole cluster sticks to the top of the surrounding scroll
+          container so both stay visible while the grid scrolls. */}
       <div style={{
         position: 'sticky',
         top: 0,
         zIndex: 1,
         marginBottom: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+      }}>
+      <div style={{
         padding: '8px 16px',
         background: 'var(--panel-bg)',
         border: '2px solid var(--panel-border)',
@@ -261,13 +282,10 @@ export function HistoryGallery({
         minHeight: '40px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <GalleryFiltersPopover
+          <GalleryFilterToggleButton
             filters={galleryFilters}
-            onSetFilters={onSetGalleryFilters}
-            availableModels={availableModels}
-            availableSamplers={availableSamplers}
-            availableAspectRatios={availableAspectRatios}
-            availableOrientations={availableOrientations}
+            open={filterPanelOpen}
+            onToggle={setFilterPanelOpenWithTransition}
           />
           <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', opacity: favoritesOnly ? 0.4 : 1 }}>
             📅
@@ -373,6 +391,18 @@ export function HistoryGallery({
           {t.preview.deleteButton}
         </button>
         </div>
+      </div>
+      {filterPanelOpen && (
+        <GalleryFilterPanel
+          filters={galleryFilters}
+          onSetFilters={onSetGalleryFilters}
+          availableModels={availableModels}
+          availableSamplers={availableSamplers}
+          availableAspectRatios={availableAspectRatios}
+          availableOrientations={availableOrientations}
+          onClose={() => setFilterPanelOpenWithTransition(false)}
+        />
+      )}
       </div>
       {displayedHistory.length > 0 ? (
         <div style={{

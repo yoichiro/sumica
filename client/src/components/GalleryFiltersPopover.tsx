@@ -1,37 +1,80 @@
-import { useEffect, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useEffect } from 'react';
 import { Filter } from 'lucide-react';
 import { t } from '../i18n';
 import type { GalleryFilters } from './galleryFilters';
 import { countActiveFilters } from './galleryFilters';
 
-// Toggle button + popover for the gallery-side filter surface added in the
-// 2026-07-15 filter-expansion pass. Renders a Filter icon button next to the
-// existing date + favorites controls; opening it exposes an arch radio group
-// and two native selects (model, sampler). Auto-hides fields whose distinct
-// value set has <= 1 entries, since filtering by an axis with a single option
-// is not useful.
-export interface GalleryFiltersPopoverProps {
+// Gallery filter UI, split into two named exports so the parent can render the
+// toggle button inside its toolbar row and the panel inline BELOW that row.
+// The 2026-07-15 iteration originally shipped this as an overlay popover, but
+// the workflow turned out to be exploratory (twist filters, watch grid update,
+// repeat) — the popover covered the grid it was meant to reveal, so the panel
+// now flows as a normal block that pushes the grid down when open. The button
+// still carries the shared `view-transition-name: gallery-filter-morph` with
+// the panel so the browser interpolates the button rect ↔ panel rect on
+// open/close (App.tsx side wraps setState in startViewTransition + flushSync).
+
+// ── Toggle button ──────────────────────────────────────────────────────
+
+export interface GalleryFilterToggleButtonProps {
+  filters: GalleryFilters;
+  open: boolean;
+  onToggle: (next: boolean) => void;
+}
+
+export function GalleryFilterToggleButton({ filters, open, onToggle }: GalleryFilterToggleButtonProps) {
+  const active = countActiveFilters(filters);
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(!open)}
+      className="scale-hover"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '5px 10px',
+        borderRadius: '8px',
+        border: active > 0 ? 'none' : '1.5px solid var(--panel-border)',
+        background: active > 0 ? 'var(--pop-blue)' : 'transparent',
+        color: active > 0 ? '#fff' : 'var(--text-secondary)',
+        fontSize: '12px',
+        fontWeight: 800,
+        cursor: 'pointer',
+        // Drop the shared view-transition-name while the panel is open so both
+        // instances never carry it simultaneously — the browser needs exactly
+        // one owner per name in each snapshot to interpolate.
+        viewTransitionName: open ? undefined : 'gallery-filter-morph',
+      }}
+    >
+      <Filter size={14} />
+      {t.gallery.filters.buttonLabel}
+      {active > 0 && t.gallery.filters.activeCountSuffix(active)}
+    </button>
+  );
+}
+
+// ── Panel ──────────────────────────────────────────────────────────────
+
+export interface GalleryFilterPanelProps {
   filters: GalleryFilters;
   onSetFilters: (filters: GalleryFilters) => void;
   availableModels: string[];
   availableSamplers: string[];
   availableAspectRatios: string[];
   availableOrientations: Exclude<GalleryFilters['orientation'], null>[];
+  onClose: () => void;
 }
 
-export function GalleryFiltersPopover({
+export function GalleryFilterPanel({
   filters,
   onSetFilters,
   availableModels,
   availableSamplers,
   availableAspectRatios,
   availableOrientations,
-}: GalleryFiltersPopoverProps) {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const active = countActiveFilters(filters);
-
+  onClose,
+}: GalleryFilterPanelProps) {
   const showModel = availableModels.length > 1;
   const showSampler = availableSamplers.length > 1;
   const showAspectRatio = availableAspectRatios.length > 1;
@@ -39,36 +82,13 @@ export function GalleryFiltersPopover({
   // records AND the user isn't restricting to 1:1 (which is inherently square).
   const showOrientation = availableOrientations.length > 1 && filters.aspectRatio !== '1:1';
 
-  // Wrap open/close in a View Transition so the browser interpolates the
-  // shared `gallery-filter-morph` element rect between the button (closed
-  // state) and the popover panel (open state). Same pattern as the batch
-  // modal — see App.tsx openBatchModal / closeBatchModal. `flushSync` is
-  // required so React commits the state change synchronously inside the
-  // callback; otherwise React's default batching lets startViewTransition
-  // capture the "new" snapshot before the DOM actually changed, and the
-  // browser skips the animation (observed as a ~40ms no-op on close).
-  const setOpenWithTransition = (next: boolean) => {
-    const apply = () => flushSync(() => setOpen(next));
-    const start = (document as unknown as { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
-    if (typeof start === 'function') start.call(document, apply);
-    else setOpen(next);
-  };
-
   useEffect(() => {
-    if (!open) return;
-    const handleClick = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpenWithTransition(false);
-    };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenWithTransition(false);
+      if (e.key === 'Escape') onClose();
     };
-    document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [open]);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
 
   const clear = () => onSetFilters({ arch: null, model: null, sampler: null, aspectRatio: null, orientation: null });
 
@@ -79,202 +99,157 @@ export function GalleryFiltersPopover({
   ];
 
   return (
-    <div ref={wrapperRef} style={{ position: 'relative' }}>
+    <div
+      role="region"
+      aria-label={t.gallery.filters.buttonLabel}
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '16px 24px',
+        padding: '12px 16px',
+        borderRadius: '10px',
+        border: '1px solid var(--panel-border)',
+        background: 'var(--panel-bg)',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+        // Paired with the toggle button's `view-transition-name`; the button
+        // drops the name while the panel is up so the browser interpolates
+        // the button rect ↔ this panel rect on open/close.
+        viewTransitionName: 'gallery-filter-morph',
+      }}
+    >
+      <FilterGroup label={t.gallery.filters.archLabel}>
+        {archOptions.map((opt) => (
+          <RadioOption
+            key={String(opt.value)}
+            checked={filters.arch === opt.value}
+            onChange={() => onSetFilters({ ...filters, arch: opt.value })}
+            label={opt.label}
+          />
+        ))}
+      </FilterGroup>
+
+      {showAspectRatio && (
+        <FilterGroup label={t.gallery.filters.aspectRatioLabel}>
+          {[{ value: null as string | null, label: t.gallery.filters.aspectRatioAll }, ...availableAspectRatios.map((r) => ({ value: r as string | null, label: r }))].map((opt) => (
+            <RadioOption
+              key={String(opt.value)}
+              checked={filters.aspectRatio === opt.value}
+              onChange={() => onSetFilters({ ...filters, aspectRatio: opt.value })}
+              label={opt.label}
+            />
+          ))}
+        </FilterGroup>
+      )}
+
+      {showOrientation && (
+        <FilterGroup label={t.gallery.filters.orientationLabel}>
+          {[
+            { value: null as GalleryFilters['orientation'], label: t.gallery.filters.orientationAll },
+            { value: 'landscape' as const, label: t.gallery.filters.orientationLandscape },
+            { value: 'portrait' as const, label: t.gallery.filters.orientationPortrait },
+          ].map((opt) => (
+            <RadioOption
+              key={String(opt.value)}
+              checked={filters.orientation === opt.value}
+              onChange={() => onSetFilters({ ...filters, orientation: opt.value })}
+              label={opt.label}
+            />
+          ))}
+        </FilterGroup>
+      )}
+
+      {showModel && (
+        <FilterSelectGroup
+          label={t.gallery.filters.modelLabel}
+          value={filters.model ?? ''}
+          onChange={(v) => onSetFilters({ ...filters, model: v || null })}
+          allLabel={t.gallery.filters.modelAll}
+          options={availableModels}
+        />
+      )}
+
+      {showSampler && (
+        <FilterSelectGroup
+          label={t.gallery.filters.samplerLabel}
+          value={filters.sampler ?? ''}
+          onChange={(v) => onSetFilters({ ...filters, sampler: v || null })}
+          allLabel={t.gallery.filters.samplerAll}
+          options={availableSamplers}
+        />
+      )}
+
       <button
         type="button"
-        onClick={() => setOpenWithTransition(!open)}
+        onClick={clear}
         className="scale-hover"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
           padding: '5px 10px',
           borderRadius: '8px',
-          border: active > 0 ? 'none' : '1.5px solid var(--panel-border)',
-          background: active > 0 ? 'var(--pop-blue)' : 'transparent',
-          color: active > 0 ? '#fff' : 'var(--text-secondary)',
+          border: '1.5px solid var(--panel-border)',
+          background: 'transparent',
+          color: 'var(--text-secondary)',
           fontSize: '12px',
           fontWeight: 800,
           cursor: 'pointer',
-          // Share the `view-transition-name` with the popover panel so the
-          // browser interpolates the button rect → popover rect on open (and
-          // reverses on close). Drop the name while the popover is open so
-          // both instances never carry it simultaneously.
-          viewTransitionName: open ? undefined : 'gallery-filter-morph',
+          marginLeft: 'auto',
         }}
       >
-        <Filter size={14} />
-        {t.gallery.filters.buttonLabel}
-        {active > 0 && t.gallery.filters.activeCountSuffix(active)}
+        {t.gallery.filters.clearButton}
       </button>
-      {open && (
-        <div
-          role="dialog"
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            left: 0,
-            zIndex: 100,
-            minWidth: '280px',
-            padding: '16px',
-            borderRadius: '10px',
-            border: '1px solid var(--panel-border)',
-            background: 'var(--panel-bg)',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-            // Paired with the filter button's `view-transition-name:
-            // gallery-filter-morph`: the button drops the name while the
-            // popover is up, so the browser interpolates the button rect →
-            // this popover rect on open (and reverses on close).
-            viewTransitionName: 'gallery-filter-morph',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              {t.gallery.filters.archLabel}
-            </label>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {archOptions.map((opt) => (
-                <label
-                  key={String(opt.value)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  <input
-                    type="radio"
-                    checked={filters.arch === opt.value}
-                    onChange={() => onSetFilters({ ...filters, arch: opt.value })}
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-          </div>
-          {showModel && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                {t.gallery.filters.modelLabel}
-              </label>
-              <select
-                className="input-field"
-                value={filters.model ?? ''}
-                onChange={(e) => onSetFilters({ ...filters, model: e.target.value || null })}
-                style={{ borderRadius: '8px' }}
-              >
-                <option value="">{t.gallery.filters.modelAll}</option>
-                {availableModels.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {showSampler && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                {t.gallery.filters.samplerLabel}
-              </label>
-              <select
-                className="input-field"
-                value={filters.sampler ?? ''}
-                onChange={(e) => onSetFilters({ ...filters, sampler: e.target.value || null })}
-                style={{ borderRadius: '8px' }}
-              >
-                <option value="">{t.gallery.filters.samplerAll}</option>
-                {availableSamplers.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {showAspectRatio && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                {t.gallery.filters.aspectRatioLabel}
-              </label>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                {[
-                  { value: null, label: t.gallery.filters.aspectRatioAll },
-                  ...availableAspectRatios.map((r) => ({ value: r, label: r })),
-                ].map((opt) => (
-                  <label
-                    key={String(opt.value)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' }}
-                  >
-                    <input
-                      type="radio"
-                      checked={filters.aspectRatio === opt.value}
-                      onChange={() => onSetFilters({ ...filters, aspectRatio: opt.value })}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-          {showOrientation && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                {t.gallery.filters.orientationLabel}
-              </label>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                {[
-                  { value: null, label: t.gallery.filters.orientationAll },
-                  { value: 'landscape' as const, label: t.gallery.filters.orientationLandscape },
-                  { value: 'portrait' as const, label: t.gallery.filters.orientationPortrait },
-                ].map((opt) => (
-                  <label
-                    key={String(opt.value)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' }}
-                  >
-                    <input
-                      type="radio"
-                      checked={filters.orientation === opt.value}
-                      onChange={() => onSetFilters({ ...filters, orientation: opt.value })}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
-            <button
-              type="button"
-              onClick={clear}
-              className="scale-hover"
-              style={{
-                padding: '5px 10px',
-                borderRadius: '8px',
-                border: '1.5px solid var(--panel-border)',
-                background: 'transparent',
-                color: 'var(--text-secondary)',
-                fontSize: '12px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-            >
-              {t.gallery.filters.clearButton}
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpenWithTransition(false)}
-              style={{
-                padding: '5px 10px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'var(--pop-blue)',
-                color: '#fff',
-                fontSize: '12px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-            >
-              {t.gallery.filters.closeButton}
-            </button>
-          </div>
-        </div>
-      )}
+    </div>
+  );
+}
+
+// ── Small internal presentational helpers ──────────────────────────────
+
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>{children}</div>
+    </div>
+  );
+}
+
+function RadioOption({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' }}>
+      <input type="radio" checked={checked} onChange={onChange} />
+      {label}
+    </label>
+  );
+}
+
+function FilterSelectGroup({
+  label,
+  value,
+  onChange,
+  allLabel,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  allLabel: string;
+  options: string[];
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</span>
+      <select
+        className="input-field"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ borderRadius: '8px', maxWidth: '220px' }}
+      >
+        <option value="">{allLabel}</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
