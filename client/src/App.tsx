@@ -10,7 +10,7 @@ import { PreviewPanel } from './components/PreviewPanel';
 import { HistoryGallery } from './components/HistoryGallery';
 import { ControlPanel } from './components/ControlPanel';
 import { GenerationBadge } from './components/GenerationBadge';
-import { applyGalleryFilters, deriveFilterOptions, type GalleryFilters } from './components/galleryFilters';
+import { applyGalleryFilters, computeAspectRatio, deriveFilterOptions, type GalleryFilters } from './components/galleryFilters';
 import {
   SDXL_PRESETS,
   SDXL_SIZES,
@@ -1192,6 +1192,50 @@ function App() {
     addToast(t.ranking.applyToast, 'success');
   };
 
+  // Push a ranked recipe into the gallery filter surface (as opposed to the
+  // generation form). Maps the recipe's params → the 5 gallery filter axes,
+  // flips favoritesOnly on so the search spans all-time favorites (a recipe
+  // was ranked BY favorites, so this is the correct scope; sticking to the
+  // current date would let the stale-clear effects null everything the
+  // moment that date has no matching favorites), and switches the right pane
+  // to the gallery so the newly-narrowed grid is immediately visible.
+  const applyRecipeToGalleryFilter = (recipe: RankedRecipe) => {
+    const rp = recipe.params;
+    const [wStr, hStr] = rp.size.split('x');
+    const w = Number(wStr);
+    const h = Number(hStr);
+    const inferredArch = inferSdArchitectureFromTitle(rp.model, sdModels);
+    const arch: GalleryFilters['arch'] = inferredArch === 'sdxl' || inferredArch === 'sd15' ? inferredArch : null;
+    const aspectRatio = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0
+      ? computeAspectRatio(w, h)
+      : null;
+    // Square records don't participate in orientation — leave it null so 1:1
+    // recipes match all orientations (which is a no-op given aspectRatio=1:1).
+    const orientation: GalleryFilters['orientation'] =
+      Number.isFinite(w) && Number.isFinite(h) && w > h
+        ? 'landscape'
+        : Number.isFinite(w) && Number.isFinite(h) && h > w
+          ? 'portrait'
+          : null;
+    const nextFilters: GalleryFilters = {
+      arch,
+      model: rp.model || null,
+      sampler: rp.sampler || null,
+      aspectRatio,
+      orientation,
+    };
+    // Force favoritesOnly=true so the search covers all-time favorites — the
+    // recipe was ranked BY favorites in the first place, and staying on the
+    // current date scope would clear the extra filters via the stale-clear
+    // effects whenever that date has no matching favorites (~always for a
+    // random rank click). favoritesOnly bypasses filterDate in
+    // baseScopedHistory, giving the filters something to match against.
+    setFavoritesOnly(true);
+    setGalleryFilters(nextFilters);
+    setRightTab('gallery');
+    addToast(t.ranking.applyToFilterToast, 'success');
+  };
+
   // Recall a history image into the Preview tab, treating it as if it was just
   // generated: same success-state transition as handleGenerate's success branch,
   // minus the toast. Ignored while a generation is in progress so the live
@@ -1656,6 +1700,7 @@ function App() {
           onTabChange={switchControlTab}
           rollups={rollups}
           onApplyRecipe={applyRecipe}
+          onApplyRecipeToGalleryFilter={applyRecipeToGalleryFilter}
         />
 
         {/* RIGHT COLUMN: PREVIEW & HISTORY GRID (tabbed) */}

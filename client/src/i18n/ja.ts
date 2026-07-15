@@ -236,7 +236,9 @@ export const ja = {
   ranking: {
     emptyState: 'まだランキングを作るための生成データが不足しています。もっと生成してみましょう 🎨',
     applyToForm: 'フォームにロード',
+    applyToFilter: 'ギャラリーで探す',
     favCountLabel: (favs: number) => `${favs}件のお気に入り`,
     applyToast: 'レシピをフォームに読み込みました 🎨',
+    applyToFilterToast: 'レシピをギャラリーフィルターに反映しました 🔍',
   },
 };

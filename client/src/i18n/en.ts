@@ -237,7 +237,9 @@ export const en: typeof ja = {
   ranking: {
     emptyState: 'Not enough data to build a ranking yet. Keep generating! 🎨',
     applyToForm: 'Load into form',
+    applyToFilter: 'Find in gallery',
     favCountLabel: (favs) => `${favs} favorite${favs === 1 ? '' : 's'}`,
     applyToast: 'Recipe loaded into form 🎨',
+    applyToFilterToast: 'Recipe applied to gallery filters 🔍',
   },
 };

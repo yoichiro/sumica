@@ -110,6 +110,7 @@ export interface ControlPanelProps {
   onTabChange: (tab: 'form' | 'ranking') => void;
   rollups: RankingRollup[];
   onApplyRecipe: (recipe: RankedRecipe) => void;
+  onApplyRecipeToGalleryFilter: (recipe: RankedRecipe) => void;
 }
 
 export function ControlPanel(p: ControlPanelProps) {
@@ -190,7 +191,7 @@ export function ControlPanel(p: ControlPanelProps) {
 
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {p.activeTab === 'ranking' ? (
-              <RankingPanel rollups={p.rollups} sdModels={p.sdModels} onApplyRecipe={p.onApplyRecipe} />
+              <RankingPanel rollups={p.rollups} sdModels={p.sdModels} onApplyRecipe={p.onApplyRecipe} onApplyRecipeToGalleryFilter={p.onApplyRecipeToGalleryFilter} />
             ) : (
             <>
             {/* Stable Diffusion Model Selector */}

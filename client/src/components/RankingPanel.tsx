@@ -1,4 +1,4 @@
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Search } from 'lucide-react';
 import { rankRecipes, type RankingRollup, type RankedRecipe } from '../utils/rankingAnalysis';
 import { t } from '../i18n';
 import type { SdModel } from './presets';
@@ -7,14 +7,15 @@ import { inferSdArchitectureFromTitle } from './loadIntoFormState';
 
 // Presentational-only Top-N favorite-recipe ranking list. Consumes the raw
 // rollup counters and runs them through `rankRecipes` (favs-desc sort per
-// ADR 35) itself, so the parent only has to supply the rollup data and an
-// apply-to-form callback. `sdModels` is threaded down to each row so the
-// architecture chip (SDXL / SD1.5) can be resolved against the currently-
-// loaded checkpoint list.
+// ADR 35) itself, so the parent only has to supply the rollup data and the
+// two apply callbacks (into form, and into gallery filter). `sdModels` is
+// threaded down to each row so the architecture chip (SDXL / SD1.5) can be
+// resolved against the currently-loaded checkpoint list.
 export interface RankingPanelProps {
   rollups: RankingRollup[];
   sdModels: SdModel[];
   onApplyRecipe: (recipe: RankedRecipe) => void;
+  onApplyRecipeToGalleryFilter: (recipe: RankedRecipe) => void;
   topN?: number;
 }
 
@@ -54,6 +55,7 @@ export default function RankingPanel({
   rollups,
   sdModels,
   onApplyRecipe,
+  onApplyRecipeToGalleryFilter,
   topN = 10,
 }: RankingPanelProps) {
   const ranked = rankRecipes(rollups, topN);
@@ -82,6 +84,7 @@ export default function RankingPanel({
           rank={i}
           sdModels={sdModels}
           onApply={onApplyRecipe}
+          onApplyToGalleryFilter={onApplyRecipeToGalleryFilter}
         />
       ))}
     </div>
@@ -105,11 +108,13 @@ function RankingRow({
   rank,
   sdModels,
   onApply,
+  onApplyToGalleryFilter,
 }: {
   recipe: RankedRecipe;
   rank: number;
   sdModels: SdModel[];
   onApply: (recipe: RankedRecipe) => void;
+  onApplyToGalleryFilter: (recipe: RankedRecipe) => void;
 }) {
   const badge = RANK_EMOJI[rank] ?? `${rank + 1}`;
   const { params } = recipe;
@@ -150,27 +155,52 @@ function RankingRow({
           <span style={{ fontSize: 12, color: 'var(--pop-blue)', fontWeight: 700 }}>
             ⭐ {t.ranking.favCountLabel(recipe.favs)}
           </span>
-          <button
-            type="button"
-            onClick={() => onApply(recipe)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '6px 12px',
-              fontSize: 12,
-              fontWeight: 700,
-              background: 'var(--pop-blue)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            <RotateCcw size={12} />
-            {t.ranking.applyToForm}
-          </button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => onApply(recipe)}
+              title={t.ranking.applyToForm}
+              aria-label={t.ranking.applyToForm}
+              className="scale-hover"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                padding: 0,
+                background: 'var(--pop-blue)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+            >
+              <RotateCcw size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onApplyToGalleryFilter(recipe)}
+              title={t.ranking.applyToFilter}
+              aria-label={t.ranking.applyToFilter}
+              className="scale-hover"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                padding: 0,
+                background: 'transparent',
+                color: 'var(--pop-blue)',
+                border: '1.5px solid var(--pop-blue)',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+            >
+              <Search size={14} />
+            </button>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
           {archLabel && (
