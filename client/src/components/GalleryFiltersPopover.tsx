@@ -16,6 +16,8 @@ export interface GalleryFiltersPopoverProps {
   onSetFilters: (filters: GalleryFilters) => void;
   availableModels: string[];
   availableSamplers: string[];
+  availableAspectRatios: string[];
+  availableOrientations: Exclude<GalleryFilters['orientation'], null>[];
 }
 
 export function GalleryFiltersPopover({
@@ -23,6 +25,8 @@ export function GalleryFiltersPopover({
   onSetFilters,
   availableModels,
   availableSamplers,
+  availableAspectRatios,
+  availableOrientations,
 }: GalleryFiltersPopoverProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -30,6 +34,10 @@ export function GalleryFiltersPopover({
 
   const showModel = availableModels.length > 1;
   const showSampler = availableSamplers.length > 1;
+  const showAspectRatio = availableAspectRatios.length > 1;
+  // Orientation only makes sense when the day has both landscape and portrait
+  // records AND the user isn't restricting to 1:1 (which is inherently square).
+  const showOrientation = availableOrientations.length > 1 && filters.aspectRatio !== '1:1';
 
   // Wrap open/close in a View Transition so the browser interpolates the
   // shared `gallery-filter-morph` element rect between the button (closed
@@ -62,7 +70,7 @@ export function GalleryFiltersPopover({
     };
   }, [open]);
 
-  const clear = () => onSetFilters({ arch: null, model: null, sampler: null });
+  const clear = () => onSetFilters({ arch: null, model: null, sampler: null, aspectRatio: null, orientation: null });
 
   const archOptions: { value: GalleryFilters['arch']; label: string }[] = [
     { value: null, label: t.gallery.filters.archAll },
@@ -177,6 +185,57 @@ export function GalleryFiltersPopover({
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
+            </div>
+          )}
+          {showAspectRatio && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                {t.gallery.filters.aspectRatioLabel}
+              </label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {[
+                  { value: null, label: t.gallery.filters.aspectRatioAll },
+                  ...availableAspectRatios.map((r) => ({ value: r, label: r })),
+                ].map((opt) => (
+                  <label
+                    key={String(opt.value)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' }}
+                  >
+                    <input
+                      type="radio"
+                      checked={filters.aspectRatio === opt.value}
+                      onChange={() => onSetFilters({ ...filters, aspectRatio: opt.value })}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {showOrientation && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                {t.gallery.filters.orientationLabel}
+              </label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {[
+                  { value: null, label: t.gallery.filters.orientationAll },
+                  { value: 'landscape' as const, label: t.gallery.filters.orientationLandscape },
+                  { value: 'portrait' as const, label: t.gallery.filters.orientationPortrait },
+                ].map((opt) => (
+                  <label
+                    key={String(opt.value)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' }}
+                  >
+                    <input
+                      type="radio"
+                      checked={filters.orientation === opt.value}
+                      onChange={() => onSetFilters({ ...filters, orientation: opt.value })}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
             </div>
           )}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>

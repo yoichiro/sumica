@@ -184,6 +184,8 @@ interface HistoryGalleryProps {
   onSetGalleryFilters: (filters: GalleryFilters) => void;
   availableModels: string[];
   availableSamplers: string[];
+  availableAspectRatios: string[];
+  availableOrientations: Exclude<GalleryFilters['orientation'], null>[];
 }
 
 export function HistoryGallery({
@@ -208,6 +210,8 @@ export function HistoryGallery({
   onSetGalleryFilters,
   availableModels,
   availableSamplers,
+  availableAspectRatios,
+  availableOrientations,
 }: HistoryGalleryProps) {
   // Anchor for Shift+click range selection. Tracks the last checkbox the user
   // clicked (whether that click selected or deselected), so Shift+click on any
@@ -262,6 +266,8 @@ export function HistoryGallery({
             onSetFilters={onSetGalleryFilters}
             availableModels={availableModels}
             availableSamplers={availableSamplers}
+            availableAspectRatios={availableAspectRatios}
+            availableOrientations={availableOrientations}
           />
           <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', opacity: favoritesOnly ? 0.4 : 1 }}>
             📅

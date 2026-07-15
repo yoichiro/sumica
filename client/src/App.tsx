@@ -173,7 +173,13 @@ function App() {
     else apply();
   };
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [galleryFilters, setGalleryFilters] = useState<GalleryFilters>({ arch: null, model: null, sampler: null });
+  const [galleryFilters, setGalleryFilters] = useState<GalleryFilters>({
+    arch: null,
+    model: null,
+    sampler: null,
+    aspectRatio: null,
+    orientation: null,
+  });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Date filter is always set; defaults to today (local YYYY-MM-DD).
   const [filterDate, setFilterDate] = useState(() => {
@@ -231,6 +237,15 @@ function App() {
       setGalleryFilters((f) => ({ ...f, model: null }));
     }
   }, [availableModels, galleryFilters.model]);
+
+  // Orientation is meaningless when aspectRatio === '1:1' (the shape is square).
+  // Mirror the arch=null → model-null pattern: clear the orientation filter so
+  // the (hidden) UI and filter state stay consistent.
+  useEffect(() => {
+    if (galleryFilters.aspectRatio === '1:1' && galleryFilters.orientation) {
+      setGalleryFilters((f) => ({ ...f, orientation: null }));
+    }
+  }, [galleryFilters.aspectRatio, galleryFilters.orientation]);
 
   // When filters change and hide previously-selected items, prune the hidden
   // ids from selectedIds so a subsequent "delete selected" can't operate on
@@ -1706,6 +1721,8 @@ function App() {
               onSetGalleryFilters={setGalleryFilters}
               availableModels={availableModels}
               availableSamplers={filterOptions.samplers}
+              availableAspectRatios={filterOptions.aspectRatios}
+              availableOrientations={filterOptions.orientations}
             />
           )}
           </div>

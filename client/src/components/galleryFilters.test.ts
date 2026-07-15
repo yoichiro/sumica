@@ -8,7 +8,7 @@ import {
 import type { GenerationData } from '../App';
 import type { SdModel } from './presets';
 
-const ALL_NULL: GalleryFilters = { arch: null, model: null, sampler: null };
+const ALL_NULL: GalleryFilters = { arch: null, model: null, sampler: null, aspectRatio: null, orientation: null };
 
 function mkRecord(overrides: Partial<GenerationData>): GenerationData {
   return {
@@ -102,6 +102,8 @@ describe('applyGalleryFilters', () => {
       arch: 'sdxl',
       model: 'juggernautXL.safetensors',
       sampler: 'Euler a',
+      aspectRatio: null,
+      orientation: null,
     };
     const out = applyGalleryFilters(history, filters, KNOWN_MODELS);
     expect(out).toHaveLength(1);
@@ -120,6 +122,50 @@ describe('applyGalleryFilters', () => {
     const out = applyGalleryFilters(history, { ...ALL_NULL, model: 'coolModel.safetensors' }, []);
     expect(out).toHaveLength(2);
     expect(out.every((r) => r.model?.startsWith('coolModel.safetensors'))).toBe(true);
+  });
+
+  it('filters by aspect ratio (portrait and landscape shapes of the same ratio both match)', () => {
+    const history = [
+      mkRecord({ width: 768, height: 1024 }),   // portrait 4:3
+      mkRecord({ width: 1024, height: 768 }),   // landscape 4:3
+      mkRecord({ width: 512, height: 1024 }),   // portrait 2:1
+    ];
+    const out = applyGalleryFilters(history, { ...ALL_NULL, aspectRatio: '4:3' }, []);
+    expect(out).toHaveLength(2);
+    expect(out.map((r) => `${r.width}x${r.height}`).sort()).toEqual(['1024x768', '768x1024']);
+  });
+
+  it('filters by orientation independently of aspect ratio', () => {
+    const history = [
+      mkRecord({ width: 768, height: 1024 }),   // portrait
+      mkRecord({ width: 1024, height: 768 }),   // landscape
+      mkRecord({ width: 512, height: 512 }),    // square (should not match either)
+    ];
+    const out = applyGalleryFilters(history, { ...ALL_NULL, orientation: 'landscape' }, []);
+    expect(out).toHaveLength(1);
+    expect(out[0].width).toBe(1024);
+    expect(out[0].height).toBe(768);
+  });
+
+  it('combines aspect ratio + orientation as AND', () => {
+    const history = [
+      mkRecord({ width: 768, height: 1024 }),   // portrait 4:3 ✓
+      mkRecord({ width: 1024, height: 768 }),   // landscape 4:3 ✗ (wrong orientation)
+      mkRecord({ width: 384, height: 512 }),    // portrait 4:3 (smaller) ✓
+    ];
+    const out = applyGalleryFilters(history, { ...ALL_NULL, aspectRatio: '4:3', orientation: 'portrait' }, []);
+    expect(out).toHaveLength(2);
+    expect(out.every((r) => r.height > r.width)).toBe(true);
+  });
+
+  it('square records match only when neither aspectRatio nor orientation filter (or aspectRatio=1:1) is applied', () => {
+    const history = [mkRecord({ width: 768, height: 768 })];
+    // Square + orientation=landscape → 0 (square isn't landscape)
+    expect(applyGalleryFilters(history, { ...ALL_NULL, orientation: 'landscape' }, [])).toHaveLength(0);
+    // Square + aspectRatio=1:1 → matches
+    expect(applyGalleryFilters(history, { ...ALL_NULL, aspectRatio: '1:1' }, [])).toHaveLength(1);
+    // Square + no filters → matches
+    expect(applyGalleryFilters(history, ALL_NULL, [])).toHaveLength(1);
   });
 
   it('returns empty array when input is empty', () => {
@@ -164,6 +210,34 @@ describe('deriveFilterOptions', () => {
     const opts = deriveFilterOptions(history);
     expect(opts.models).toEqual(['bar.safetensors', 'foo.safetensors']);
   });
+
+  it('extracts distinct aspect ratios sorted widest-first, collapsing portrait/landscape of the same shape', () => {
+    const history = [
+      mkRecord({ width: 768, height: 1024 }),   // portrait 4:3
+      mkRecord({ width: 1024, height: 768 }),   // landscape 4:3 (same key after normalization)
+      mkRecord({ width: 512, height: 512 }),    // 1:1
+      mkRecord({ width: 1920, height: 1080 }),  // 16:9
+    ];
+    const opts = deriveFilterOptions(history);
+    // widest first: 16:9 (1.777), 4:3 (1.333), 1:1 (1.0)
+    expect(opts.aspectRatios).toEqual(['16:9', '4:3', '1:1']);
+  });
+
+  it('extracts distinct orientations excluding square', () => {
+    const history = [
+      mkRecord({ width: 768, height: 1024 }),   // portrait
+      mkRecord({ width: 1024, height: 768 }),   // landscape
+      mkRecord({ width: 512, height: 512 }),    // square (excluded)
+    ];
+    const opts = deriveFilterOptions(history);
+    expect(opts.orientations.sort()).toEqual(['landscape', 'portrait']);
+  });
+
+  it('returns empty orientations when only square records exist', () => {
+    const history = [mkRecord({ width: 768, height: 768 })];
+    const opts = deriveFilterOptions(history);
+    expect(opts.orientations).toEqual([]);
+  });
 });
 
 describe('countActiveFilters', () => {
@@ -175,9 +249,17 @@ describe('countActiveFilters', () => {
     expect(countActiveFilters({ ...ALL_NULL, arch: 'sdxl' })).toBe(1);
     expect(countActiveFilters({ ...ALL_NULL, model: 'x' })).toBe(1);
     expect(countActiveFilters({ ...ALL_NULL, sampler: 'y' })).toBe(1);
+    expect(countActiveFilters({ ...ALL_NULL, aspectRatio: '4:3' })).toBe(1);
+    expect(countActiveFilters({ ...ALL_NULL, orientation: 'landscape' })).toBe(1);
   });
 
-  it('returns 3 when all filters are set', () => {
-    expect(countActiveFilters({ arch: 'sd15', model: 'x', sampler: 'y' })).toBe(3);
+  it('returns 5 when every filter is set', () => {
+    expect(countActiveFilters({
+      arch: 'sd15',
+      model: 'x',
+      sampler: 'y',
+      aspectRatio: '4:3',
+      orientation: 'portrait',
+    })).toBe(5);
   });
 });
