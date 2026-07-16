@@ -531,3 +531,23 @@ input:checked + .slider:before {
     animation: none;
   }
 }
+
+/* Slideshow countdown ring: animated stroke-dashoffset from 0 to full
+   circumference so the border visually "shrinks" over the slideshow tick.
+   The circumference constant matches the SVG circle's r=20 → 2πr ≈ 125.66.
+   Animation duration is supplied inline as `slideshowIntervalMs`ms so it
+   syncs with the JS setInterval that drives the actual auto-advance. The
+   SVG remounts on every advance (via a key on lightboxIndex) so the
+   animation restarts from 0 each tick. */
+@keyframes sumica-slideshow-countdown {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 125.66; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Static full ring instead of an animated shrink — still conveys "playing"
+     without motion sickness for users who opt out of animations. */
+  .sumica-slideshow-countdown-ring {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}

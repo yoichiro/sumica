@@ -44,6 +44,32 @@ type DocumentWithViewTransition = Document & {
   startViewTransition?: (callback: () => void) => { finished: Promise<void>; ready: Promise<void> };
 };
 
+// Slideshow tick presets. Cycled by right-clicking the Slideshow toggle in the
+// lightbox toolbar; the current value drives the setInterval that advances the
+// visible image. Kept at module scope so the presets are shared with the
+// localStorage validator below and never re-allocated on render.
+const SLIDESHOW_INTERVALS_MS = [5000, 15000, 30000, 60000] as const;
+const DEFAULT_SLIDESHOW_INTERVAL_MS = 5000;
+const SLIDESHOW_INTERVAL_STORAGE_KEY = 'sumica.slideshow.intervalMs';
+
+// Read a previously-saved slideshow interval from localStorage. Falls back to
+// the default on any of: missing key, non-numeric value, value not in the
+// preset list, or a localStorage that throws (private-mode Safari, disabled
+// storage). Runs on initial render only via useState's lazy initializer.
+function loadSlideshowIntervalMs(): number {
+  try {
+    const raw = localStorage.getItem(SLIDESHOW_INTERVAL_STORAGE_KEY);
+    if (raw === null) return DEFAULT_SLIDESHOW_INTERVAL_MS;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return DEFAULT_SLIDESHOW_INTERVAL_MS;
+    return (SLIDESHOW_INTERVALS_MS as readonly number[]).includes(parsed)
+      ? parsed
+      : DEFAULT_SLIDESHOW_INTERVAL_MS;
+  } catch {
+    return DEFAULT_SLIDESHOW_INTERVAL_MS;
+  }
+}
+
 export interface GenerationData {
   id?: string;
   originalPrompt: string;
@@ -86,11 +112,12 @@ export interface GenerationData {
 function App() {
   // Form input states
   const [prompt, setPrompt] = useState('');
-  // Slideshow tick interval. Kept as a constant so future UI can vary it in
-  // one place. Also serves as the default for the useEffect that owns the timer.
-  const SLIDESHOW_INTERVAL_MS = 5000;
   const [randomMode, setRandomMode] = useState(false);
   const [slideshowPlaying, setSlideshowPlaying] = useState(false);
+  // Slideshow tick interval, cycled between presets by right-clicking the
+  // Slideshow toggle in the lightbox toolbar. Lazy-initialized from
+  // localStorage so the last-picked pace survives reloads.
+  const [slideshowIntervalMs, setSlideshowIntervalMs] = useState<number>(loadSlideshowIntervalMs);
   const [width, setWidth] = useState(512);
   const [height, setHeight] = useState(512);
   const [steps, setSteps] = useState(20);
@@ -568,10 +595,12 @@ function App() {
 
   // Slideshow: while slideshowPlaying is true and the lightbox is on a gallery-
   // backed item (lightboxIndex >= 0), advance to the next index every
-  // SLIDESHOW_INTERVAL_MS. The `lightboxIndex` dep means any manual ← / →
-  // click resets the timer for free (effect cleans up + re-runs with the new
-  // index). Sequential mode wraps at the end; random mode uses the same
-  // rejection-free draw as randomizeLightbox.
+  // slideshowIntervalMs. The `lightboxIndex` dep means any manual ← / → click
+  // resets the timer for free (effect cleans up + re-runs with the new index).
+  // The `slideshowIntervalMs` dep means right-click cycling the interval also
+  // resets the timer immediately, so the user sees the new pace on the very
+  // next tick instead of waiting out the old one. Sequential mode wraps at the
+  // end; random mode uses the same rejection-free draw as randomizeLightbox.
   useEffect(() => {
     if (!slideshowPlaying) return;
     if (lightboxIndex < 0 || displayedHistory.length < 2) return;
@@ -581,9 +610,9 @@ function App() {
       const target = displayedHistory[nextIdx];
       setMorphSourceKey(itemKey(target));
       setLightboxUrl(target.imageUrl);
-    }, SLIDESHOW_INTERVAL_MS);
+    }, slideshowIntervalMs);
     return () => clearInterval(id);
-  }, [slideshowPlaying, lightboxIndex, randomMode, displayedHistory]);
+  }, [slideshowPlaying, lightboxIndex, randomMode, displayedHistory, slideshowIntervalMs]);
 
   // Any exit from the lightbox (Esc, close button, background click) pauses
   // the slideshow so it never keeps ticking on a hidden surface. The user
@@ -593,6 +622,25 @@ function App() {
       setSlideshowPlaying(false);
     }
   }, [lightboxUrl, slideshowPlaying]);
+
+  // Persist the chosen slideshow pace across reloads. Wrapped in try/catch so
+  // a disabled or over-quota localStorage never crashes the render — the app
+  // just loses the "remember my pace" affordance in that session.
+  useEffect(() => {
+    try {
+      localStorage.setItem(SLIDESHOW_INTERVAL_STORAGE_KEY, String(slideshowIntervalMs));
+    } catch { /* ignore quota / disabled storage */ }
+  }, [slideshowIntervalMs]);
+
+  // Cycle through SLIDESHOW_INTERVALS_MS on right-click. Wraps back to the
+  // first preset after the last, so repeated cycling is monotonic and
+  // predictable rather than random. A value not in the preset list (should
+  // never happen since state is guarded, but be defensive) resets to default.
+  const cycleSlideshowInterval = () => {
+    const idx = SLIDESHOW_INTERVALS_MS.indexOf(slideshowIntervalMs as typeof SLIDESHOW_INTERVALS_MS[number]);
+    const nextIdx = idx < 0 ? 0 : (idx + 1) % SLIDESHOW_INTERVALS_MS.length;
+    setSlideshowIntervalMs(SLIDESHOW_INTERVALS_MS[nextIdx]);
+  };
 
   // Batch-level cancellation signal. Set by requestCancel(), checked at the
   // top of each batch iteration. Needed because the server's cancelRequested
@@ -1882,6 +1930,8 @@ function App() {
         onToggleRandom={() => setRandomMode((v) => !v)}
         slideshowPlaying={slideshowPlaying}
         onToggleSlideshow={() => setSlideshowPlaying((v) => !v)}
+        slideshowIntervalMs={slideshowIntervalMs}
+        onCycleSlideshowInterval={cycleSlideshowInterval}
         onOpenInPreview={() => {
           const item = displayedHistory[lightboxIndex];
           if (!item) return;

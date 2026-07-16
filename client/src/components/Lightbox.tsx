@@ -27,6 +27,11 @@ interface LightboxProps {
   onToggleRandom: () => void;
   slideshowPlaying: boolean;
   onToggleSlideshow: () => void;
+  // Current slideshow tick interval in ms, cycled through presets by
+  // right-clicking the Slideshow toggle. Rendered as a small badge on the
+  // toggle button so the user always knows the current pace at a glance.
+  slideshowIntervalMs: number;
+  onCycleSlideshowInterval: () => void;
   onOpenInPreview: () => void;
   // True while a generation is running (enhancing / generating / saving) —
   // the open-in-preview button is disabled in that window because sending
@@ -53,6 +58,8 @@ export function Lightbox({
   onToggleRandom,
   slideshowPlaying,
   onToggleSlideshow,
+  slideshowIntervalMs,
+  onCycleSlideshowInterval,
   onOpenInPreview,
   openInPreviewDisabled,
   onClose,
@@ -255,14 +262,30 @@ export function Lightbox({
         <Shuffle size={20} />
       </button>
       {/* Slideshow toggle: when ON, advances (via nextSlideshowIndex) every
-          SLIDESHOW_INTERVAL_MS. Whether the advance is sequential or random
+          slideshowIntervalMs. Whether the advance is sequential or random
           depends on the shared randomMode flag above. Same disabled gate as
-          the random toggle. */}
+          the random toggle. Right-clicking the button cycles through interval
+          presets (5s → 15s → 30s → 60s → 5s); the current pace is shown as a
+          small badge on the bottom-right so the user always sees the value
+          without hovering for a tooltip. */}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onToggleSlideshow(); }}
+        onContextMenu={(e) => {
+          // preventDefault suppresses the browser's native context menu so the
+          // right-click can be repurposed for interval cycling. stopPropagation
+          // keeps it from bubbling to the backdrop close handler on <div>.
+          e.preventDefault();
+          e.stopPropagation();
+          if (lightboxIndex < 0 || displayedHistory.length < 2) return;
+          onCycleSlideshowInterval();
+        }}
         disabled={lightboxIndex < 0 || displayedHistory.length < 2}
-        title={slideshowPlaying ? t.lightbox.slideshowStopTooltip : t.lightbox.slideshowStartTooltip}
+        title={
+          slideshowPlaying
+            ? `${t.lightbox.slideshowStopTooltip} · ${t.lightbox.slideshowCycleIntervalHint}`
+            : `${t.lightbox.slideshowStartTooltip(Math.round(slideshowIntervalMs / 1000))} · ${t.lightbox.slideshowCycleIntervalHint}`
+        }
         aria-pressed={slideshowPlaying}
         className={(lightboxIndex < 0 || displayedHistory.length < 2) ? '' : 'scale-hover'}
         style={{
@@ -283,6 +306,78 @@ export function Lightbox({
         }}
       >
         {slideshowPlaying ? <Pause size={20} /> : <Play size={20} />}
+        {/* Countdown ring: an SVG overlay traces the button's circumference as
+            a stroke that shrinks over the current slideshowIntervalMs, giving
+            a visual "time remaining until next auto-advance" cue. The SVG is
+            keyed on both `lightboxIndex` and `slideshowIntervalMs` so it
+            remounts (and the CSS animation restarts from 0) on every tick,
+            every manual ← / → nav, and every interval cycle. Only rendered
+            while the slideshow is active and the disabled gate is clear. */}
+        {slideshowPlaying && lightboxIndex >= 0 && displayedHistory.length >= 2 && (
+          <svg
+            key={`${lightboxIndex}-${slideshowIntervalMs}`}
+            aria-hidden="true"
+            width="44"
+            height="44"
+            viewBox="0 0 44 44"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              pointerEvents: 'none',
+              // Rotate so the stroke starts at 12 o'clock instead of 3
+              // o'clock — matches conventional countdown-ring iconography.
+              transform: 'rotate(-90deg)',
+            }}
+          >
+            <circle
+              className="sumica-slideshow-countdown-ring"
+              cx="22"
+              cy="22"
+              r="20"
+              fill="none"
+              stroke="rgba(255, 255, 255, 0.9)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              // 2πr = 2π·20 ≈ 125.66; matches the keyframe's `to` value in
+              // index.css so the animation empties exactly one full ring.
+              strokeDasharray="125.66"
+              strokeDashoffset="0"
+              style={{
+                animation: `sumica-slideshow-countdown ${slideshowIntervalMs}ms linear forwards`,
+              }}
+            />
+          </svg>
+        )}
+        {/* Interval badge, bottom-right. Positioned outside the icon glyph so
+            the Play/Pause visual stays intact; sized small enough to read but
+            not compete for attention. Rendered even when disabled — a dim
+            preview is still useful context. */}
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            bottom: '-2px',
+            right: '-2px',
+            minWidth: '18px',
+            height: '14px',
+            padding: '0 3px',
+            borderRadius: '7px',
+            background: 'rgba(0, 0, 0, 0.72)',
+            color: '#fff',
+            fontSize: '9px',
+            fontWeight: 800,
+            letterSpacing: 0.3,
+            lineHeight: '14px',
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid rgba(255, 255, 255, 0.35)',
+          }}
+        >
+          {Math.round(slideshowIntervalMs / 1000)}s
+        </span>
       </button>
       {/* Open-in-preview: send the currently displayed gallery item to the
           Preview tab, then close the lightbox. Hidden when the lightbox is
