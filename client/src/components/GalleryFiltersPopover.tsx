@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Filter } from 'lucide-react';
+import { Filter, X } from 'lucide-react';
 import { t } from '../i18n';
 import type { AspectRatioOption, GalleryFilters } from './galleryFilters';
 import { countActiveFilters } from './galleryFilters';
@@ -210,6 +210,28 @@ export function GalleryFilterPanel({
         }}
       >
         {t.gallery.filters.clearButton}
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        title={t.gallery.filters.closeButton}
+        aria-label={t.gallery.filters.closeButton}
+        className="scale-hover"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 28,
+          height: 28,
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          color: 'var(--text-muted)',
+          borderRadius: 8,
+          cursor: 'pointer',
+        }}
+      >
+        <X size={16} />
       </button>
     </div>
   );
