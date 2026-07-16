@@ -28,6 +28,7 @@ import {
 } from './components/presets';
 import { computeLoadIntoFormState, inferSdArchitectureFromTitle, stripHashSuffix } from './components/loadIntoFormState';
 import { resolveLightboxKey } from './components/lightboxKeyboard';
+import { nextSlideshowIndex } from './components/slideshowStep';
 import { flushSync } from 'react-dom';
 import {
   getNotificationSupport,
@@ -85,6 +86,11 @@ export interface GenerationData {
 function App() {
   // Form input states
   const [prompt, setPrompt] = useState('');
+  // Slideshow tick interval. Kept as a constant so future UI can vary it in
+  // one place. Also serves as the default for the useEffect that owns the timer.
+  const SLIDESHOW_INTERVAL_MS = 5000;
+  const [randomMode, setRandomMode] = useState(false);
+  const [slideshowPlaying, setSlideshowPlaying] = useState(false);
   const [width, setWidth] = useState(512);
   const [height, setHeight] = useState(512);
   const [steps, setSteps] = useState(20);
@@ -479,6 +485,10 @@ function App() {
   // Step the lightbox to the prev/next image in the gallery's displayed order
   // (displayedHistory). Clamps at the ends; no-op if the current image isn't listed.
   const navigateLightbox = (delta: number) => {
+    if (randomMode) {
+      randomizeLightbox();
+      return;
+    }
     const idx = displayedHistory.findIndex((it) => itemKey(it) === morphSourceKey || it.imageUrl === lightboxUrl);
     if (idx === -1) return;
     const next = idx + delta;
@@ -555,6 +565,34 @@ function App() {
   useEffect(() => {
     if (lightboxIndex >= 0) prevLightboxIndexRef.current = lightboxIndex;
   }, [lightboxIndex]);
+
+  // Slideshow: while slideshowPlaying is true and the lightbox is on a gallery-
+  // backed item (lightboxIndex >= 0), advance to the next index every
+  // SLIDESHOW_INTERVAL_MS. The `lightboxIndex` dep means any manual ← / →
+  // click resets the timer for free (effect cleans up + re-runs with the new
+  // index). Sequential mode wraps at the end; random mode uses the same
+  // rejection-free draw as randomizeLightbox.
+  useEffect(() => {
+    if (!slideshowPlaying) return;
+    if (lightboxIndex < 0 || displayedHistory.length < 2) return;
+    const id = setInterval(() => {
+      const nextIdx = nextSlideshowIndex(lightboxIndex, displayedHistory.length, randomMode);
+      if (nextIdx === lightboxIndex) return;
+      const target = displayedHistory[nextIdx];
+      setMorphSourceKey(itemKey(target));
+      setLightboxUrl(target.imageUrl);
+    }, SLIDESHOW_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [slideshowPlaying, lightboxIndex, randomMode, displayedHistory]);
+
+  // Any exit from the lightbox (Esc, close button, background click) pauses
+  // the slideshow so it never keeps ticking on a hidden surface. The user
+  // must explicitly restart it after reopening.
+  useEffect(() => {
+    if (!lightboxUrl && slideshowPlaying) {
+      setSlideshowPlaying(false);
+    }
+  }, [lightboxUrl, slideshowPlaying]);
 
   // Batch-level cancellation signal. Set by requestCancel(), checked at the
   // top of each batch iteration. Needed because the server's cancelRequested
@@ -853,9 +891,13 @@ function App() {
           e.preventDefault();
           toggleFavorite(displayedHistory[lightboxIndex]);
           return;
-        case 'randomize':
+        case 'toggleRandom':
           e.preventDefault();
-          randomizeLightbox();
+          setRandomMode((v) => !v);
+          return;
+        case 'toggleSlideshow':
+          e.preventDefault();
+          setSlideshowPlaying((v) => !v);
           return;
       }
     };
@@ -1836,7 +1878,10 @@ function App() {
         onToggleSelect={(idx) => toggleSelected(itemKey(displayedHistory[idx]))}
         onToggleFavorite={(idx) => toggleFavorite(displayedHistory[idx])}
         onNavigate={navigateLightbox}
-        onRandomize={randomizeLightbox}
+        randomMode={randomMode}
+        onToggleRandom={() => setRandomMode((v) => !v)}
+        slideshowPlaying={slideshowPlaying}
+        onToggleSlideshow={() => setSlideshowPlaying((v) => !v)}
         onOpenInPreview={() => {
           const item = displayedHistory[lightboxIndex];
           if (!item) return;
