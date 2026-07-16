@@ -193,46 +193,52 @@ export function GalleryFilterPanel({
         />
       )}
 
-      <button
-        type="button"
-        onClick={clear}
-        className="scale-hover"
-        style={{
-          padding: '5px 10px',
-          borderRadius: '8px',
-          border: '1.5px solid var(--panel-border)',
-          background: 'transparent',
-          color: 'var(--text-secondary)',
-          fontSize: '12px',
-          fontWeight: 800,
-          cursor: 'pointer',
-          marginLeft: 'auto',
-        }}
-      >
-        {t.gallery.filters.clearButton}
-      </button>
-      <button
-        type="button"
-        onClick={onClose}
-        title={t.gallery.filters.closeButton}
-        aria-label={t.gallery.filters.closeButton}
-        className="scale-hover"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 28,
-          height: 28,
-          padding: 0,
-          border: 'none',
-          background: 'transparent',
-          color: 'var(--text-muted)',
-          borderRadius: 8,
-          cursor: 'pointer',
-        }}
-      >
-        <X size={16} />
-      </button>
+      {/* Right-anchored cluster: Clear + X stay together and always slide to
+          the far right (marginLeft: auto). Wrapping them in a single flex
+          child means that when the panel flex-wraps to a narrow width, the
+          pair wraps as one unit and the X button never ends up left-aligned
+          on its own row. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+        <button
+          type="button"
+          onClick={clear}
+          className="scale-hover"
+          style={{
+            padding: '5px 10px',
+            borderRadius: '8px',
+            border: '1.5px solid var(--panel-border)',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            fontSize: '12px',
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          {t.gallery.filters.clearButton}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          title={t.gallery.filters.closeButton}
+          aria-label={t.gallery.filters.closeButton}
+          className="scale-hover"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 28,
+            height: 28,
+            padding: 0,
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--text-muted)',
+            borderRadius: 8,
+            cursor: 'pointer',
+          }}
+        >
+          <X size={16} />
+        </button>
+      </div>
     </div>
   );
 }
