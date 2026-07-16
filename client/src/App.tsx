@@ -1875,6 +1875,15 @@ function App() {
               formatDuration={formatDuration}
               onOpenLightbox={openLightbox}
               onToggleFavorite={toggleFavorite}
+              isSelected={!!currentGeneration && !!currentGeneration.id && selectedIds.has(itemKey(currentGeneration))}
+              onToggleSelect={(item) => {
+                // The gallery selection set is keyed by itemKey (matching the
+                // way HistoryGallery and Lightbox toggle selection). Pre-save
+                // preview state has no id yet — silently no-op in that window
+                // to mirror toggleFavorite's own id-guard.
+                if (!item.id) return;
+                toggleSelected(itemKey(item));
+              }}
               onLoadIntoForm={loadIntoForm}
               onRequestDelete={requestDelete}
               itemKey={itemKey}

@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Cloud, Folder, Trash2, Sparkles, CheckCircle2, AlertTriangle, Star, RotateCcw } from 'lucide-react';
+import { Image as ImageIcon, Cloud, Folder, Trash2, Sparkles, CheckCircle2, Circle, AlertTriangle, Star, RotateCcw } from 'lucide-react';
 import type { GenerationData } from '../App';
 import { t } from '../i18n';
 
@@ -45,6 +45,54 @@ function FavoriteButton({
   );
 }
 
+// Bottom-right "select" toggle, sitting immediately to the left of the
+// FavoriteButton so the two overlays visually pair up. Uses the same
+// CheckCircle2 / Circle iconography as the gallery tile and the lightbox
+// so the selection semantics stay consistent across surfaces.
+function SelectButton({
+  isSelected,
+  onClick,
+  size = 34,
+}: {
+  isSelected: boolean;
+  onClick: (e: React.MouseEvent) => void;
+  size?: number;
+}) {
+  const iconSize = Math.round(size * 0.5);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={isSelected ? t.preview.deselectTitle : t.preview.selectTitle}
+      aria-pressed={isSelected}
+      className="scale-hover"
+      style={{
+        position: 'absolute',
+        bottom: '8px',
+        // FavoriteButton occupies 34px starting at right:8px, so the next slot
+        // begins at 8 + 34 + 8 (gap) = 50px. Keeps the two overlays visually
+        // paired without touching.
+        right: '50px',
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '50%',
+        border: 'none',
+        background: 'rgba(0, 0, 0, 0.55)',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
+      }}
+    >
+      {isSelected
+        ? <CheckCircle2 size={iconSize} fill="var(--pop-blue)" stroke="#fff" />
+        : <Circle size={iconSize} />}
+    </button>
+  );
+}
+
 interface PreviewPanelProps {
   currentGeneration: GenerationData | null;
   morphSourceKey: string | null;
@@ -59,6 +107,10 @@ interface PreviewPanelProps {
   formatDuration: (totalSeconds: number) => string;
   onOpenLightbox: (url: string, sourceKey: string) => void;
   onToggleFavorite: (item: GenerationData) => void;
+  // True when currentGeneration's id is in the shared selectedIds set. When
+  // currentGeneration has no id yet (transient pre-save state), always false.
+  isSelected: boolean;
+  onToggleSelect: (item: GenerationData) => void;
   onLoadIntoForm: (item: GenerationData) => void;
   onRequestDelete: (ids: string[]) => void;
   itemKey: (item: GenerationData) => string;
@@ -79,6 +131,8 @@ export function PreviewPanel({
   formatDuration,
   onOpenLightbox,
   onToggleFavorite,
+  isSelected,
+  onToggleSelect,
   onLoadIntoForm,
   onRequestDelete,
   itemKey,
@@ -107,6 +161,11 @@ export function PreviewPanel({
                 alt="Generated output"
                 onClick={() => onOpenLightbox(currentGeneration.imageUrl, '__preview__')}
                 style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', cursor: 'pointer', viewTransitionName: (morphSourceKey === '__preview__' && !lightboxUrl) ? 'lightbox-morph' : undefined }}
+              />
+              <SelectButton
+                size={34}
+                isSelected={isSelected}
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(currentGeneration); }}
               />
               <FavoriteButton
                 size={34}

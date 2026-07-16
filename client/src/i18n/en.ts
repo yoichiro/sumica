@@ -66,6 +66,8 @@ export const en: typeof ja = {
   preview: {
     favoriteRemoveTitle: 'Remove from favorites',
     favoriteAddTitle: 'Add to favorites',
+    selectTitle: 'Select',
+    deselectTitle: 'Deselect',
     loadIntoFormButton: 'Load into form',
     deleteButton: 'Delete',
     originalPromptLabel: 'Original prompt',
