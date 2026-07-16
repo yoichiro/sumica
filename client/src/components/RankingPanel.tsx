@@ -56,7 +56,7 @@ export default function RankingPanel({
   sdModels,
   onApplyRecipe,
   onApplyRecipeToGalleryFilter,
-  topN = 10,
+  topN = 30,
 }: RankingPanelProps) {
   const ranked = rankRecipes(rollups, topN);
 
