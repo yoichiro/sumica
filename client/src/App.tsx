@@ -180,6 +180,12 @@ function App() {
     aspectRatio: null,
     orientation: null,
   });
+  // Short-lived flag toggled by `applyRecipeToGalleryFilter` so the stale-clear
+  // useEffects below skip their nulling logic for ~600ms after a recipe is
+  // pushed into the gallery filter. Prevents the transient case where the
+  // freshly-set filter value is briefly absent from filterOptions (e.g., rollup
+  // slightly ahead of live favorites) from clearing it before the user sees it.
+  const staleClearSuspendedRef = useRef(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Date filter is always set; defaults to today (local YYYY-MM-DD).
   const [filterDate, setFilterDate] = useState(() => {
@@ -239,33 +245,38 @@ function App() {
   // such that a currently-selected value falls out of its options, null the
   // dangling filter so state and UI stay in sync.
   //
-  // Guard: each effect only clears when the option list is NON-empty (i.e.,
-  // we have data to compare against). An empty list means "no records in
-  // scope" — which can happen transiently between renders when
-  // `applyRecipeToGalleryFilter` flips `favoritesOnly` and swaps the whole
-  // filter set in the same batch; the useMemos re-derive on the first commit
-  // before history has settled, briefly showing empty options. Without the
-  // length>0 guard, that transient triggered a cascade of null-outs that
-  // required a second click to fully reflect the recipe. Preserving intent
-  // when we can't affirmatively refute it is also better UX in general
-  // (e.g., date-swap into an empty day now keeps the user's filter selection
-  // instead of silently dropping it).
+  // Guards:
+  //   1. Each effect only clears when the option list is NON-empty. An empty
+  //      list means "no records in scope" — not "the current value is invalid"
+  //      — and can occur transiently between renders (e.g., signed-in mode
+  //      wipes history to [] before the new subscription lands).
+  //   2. `staleClearSuspendedRef` short-circuits every effect for ~600ms after
+  //      `applyRecipeToGalleryFilter` sets the whole filter set. Without this,
+  //      the specific case where the arch-scoped option list is non-empty but
+  //      simply lacks the recipe's value (e.g., rollup slightly stale versus
+  //      live favorites — landscape favorites exist but the ranked recipe is
+  //      portrait) would silently null the field on the first click, forcing
+  //      a second click to pick it back up.
   useEffect(() => {
+    if (staleClearSuspendedRef.current) return;
     if (galleryFilters.model && availableModels.length > 0 && !availableModels.includes(galleryFilters.model)) {
       setGalleryFilters((f) => ({ ...f, model: null }));
     }
   }, [availableModels, galleryFilters.model]);
   useEffect(() => {
+    if (staleClearSuspendedRef.current) return;
     if (galleryFilters.sampler && filterOptions.samplers.length > 0 && !filterOptions.samplers.includes(galleryFilters.sampler)) {
       setGalleryFilters((f) => ({ ...f, sampler: null }));
     }
   }, [filterOptions.samplers, galleryFilters.sampler]);
   useEffect(() => {
+    if (staleClearSuspendedRef.current) return;
     if (galleryFilters.aspectRatio && filterOptions.aspectRatios.length > 0 && !filterOptions.aspectRatios.some((a) => a.ratio === galleryFilters.aspectRatio)) {
       setGalleryFilters((f) => ({ ...f, aspectRatio: null }));
     }
   }, [filterOptions.aspectRatios, galleryFilters.aspectRatio]);
   useEffect(() => {
+    if (staleClearSuspendedRef.current) return;
     if (galleryFilters.orientation && filterOptions.orientations.length > 0 && !filterOptions.orientations.includes(galleryFilters.orientation)) {
       setGalleryFilters((f) => ({ ...f, orientation: null }));
     }
@@ -1234,6 +1245,11 @@ function App() {
       aspectRatio,
       orientation,
     };
+    // Suspend stale-clear effects for ~600ms so the freshly-set filter values
+    // are not nulled by a transient filterOptions mismatch during the initial
+    // renders (favorites subscribe/refetch, arch-scope recompute, etc.).
+    staleClearSuspendedRef.current = true;
+    setTimeout(() => { staleClearSuspendedRef.current = false; }, 600);
     // Force favoritesOnly=true so the search covers all-time favorites — the
     // recipe was ranked BY favorites in the first place, and staying on the
     // current date scope would clear the extra filters via the stale-clear
