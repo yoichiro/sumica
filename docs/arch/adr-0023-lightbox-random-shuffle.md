@@ -46,7 +46,9 @@
 
 ## Status
 
-承認済み
+置き換え済み（Superseded by [[adr-0040-lightbox-slideshow-and-random-mode-toggle]]）
+
+2026-07-16 に、この 1-shot Shuffle ボタンと R キーの直接動作は「Random モードトグル + Slideshow 自動送り」というより広い設計に置き換えられました。R キーは `randomize` から `toggleRandom` にアクションが変わり、ボタン押下でのランダムジャンプではなく「モードの ON/OFF 切替」を行うようになっています。ランダム抽選アルゴリズム自体（現画像を除外した index-shift 方式）は `randomizeLightbox()` として関数の中に残り、新設計の `navigateLightbox(delta)` から `randomMode === true` のときに呼ばれる形で再利用されています。詳細は後続 ADR を参照してください。
 
 ## Consequences
 
