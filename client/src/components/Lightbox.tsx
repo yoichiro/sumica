@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Info, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, Eye, X } from 'lucide-react';
+import { Info, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, Play, Pause, Eye, X } from 'lucide-react';
 import type { GenerationParams } from '../firebase';
 import { t } from '../i18n';
 
@@ -23,7 +23,10 @@ interface LightboxProps {
   onToggleSelect: (index: number) => void;
   onToggleFavorite: (index: number) => void;
   onNavigate: (delta: number) => void;
-  onRandomize: () => void;
+  randomMode: boolean;
+  onToggleRandom: () => void;
+  slideshowPlaying: boolean;
+  onToggleSlideshow: () => void;
   onOpenInPreview: () => void;
   // True while a generation is running (enhancing / generating / saving) —
   // the open-in-preview button is disabled in that window because sending
@@ -46,7 +49,10 @@ export function Lightbox({
   onToggleSelect,
   onToggleFavorite,
   onNavigate,
-  onRandomize,
+  randomMode,
+  onToggleRandom,
+  slideshowPlaying,
+  onToggleSlideshow,
   onOpenInPreview,
   openInPreviewDisabled,
   onClose,
@@ -219,13 +225,15 @@ export function Lightbox({
       >
         <ChevronRight size={22} />
       </button>
-      {/* Shuffle: jump to a random image (excluding the current one). Only
-          meaningful for gallery-backed lightboxes with at least 2 candidates. */}
+      {/* Random-mode toggle: when ON, both manual ← / → and the slideshow
+          timer pick a random next image (excluding the current one). Same
+          disabled gate as before (needs at least 2 gallery-backed candidates). */}
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); onRandomize(); }}
+        onClick={(e) => { e.stopPropagation(); onToggleRandom(); }}
         disabled={lightboxIndex < 0 || displayedHistory.length < 2}
-        title={t.lightbox.randomTooltip}
+        title={randomMode ? t.lightbox.randomModeToggleOnTooltip : t.lightbox.randomModeToggleOffTooltip}
+        aria-pressed={randomMode}
         className={(lightboxIndex < 0 || displayedHistory.length < 2) ? '' : 'scale-hover'}
         style={{
           position: 'absolute',
@@ -235,7 +243,7 @@ export function Lightbox({
           height: '44px',
           borderRadius: '50%',
           border: 'none',
-          background: 'rgba(255, 255, 255, 0.15)',
+          background: randomMode ? 'var(--pop-blue)' : 'rgba(255, 255, 255, 0.15)',
           color: '#fff',
           display: 'flex',
           alignItems: 'center',
@@ -245,6 +253,36 @@ export function Lightbox({
         }}
       >
         <Shuffle size={20} />
+      </button>
+      {/* Slideshow toggle: when ON, advances (via nextSlideshowIndex) every
+          SLIDESHOW_INTERVAL_MS. Whether the advance is sequential or random
+          depends on the shared randomMode flag above. Same disabled gate as
+          the random toggle. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggleSlideshow(); }}
+        disabled={lightboxIndex < 0 || displayedHistory.length < 2}
+        title={slideshowPlaying ? t.lightbox.slideshowStopTooltip : t.lightbox.slideshowStartTooltip}
+        aria-pressed={slideshowPlaying}
+        className={(lightboxIndex < 0 || displayedHistory.length < 2) ? '' : 'scale-hover'}
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '436px',
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          border: 'none',
+          background: slideshowPlaying ? 'var(--pop-blue)' : 'rgba(255, 255, 255, 0.15)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: (lightboxIndex < 0 || displayedHistory.length < 2) ? 'not-allowed' : 'pointer',
+          opacity: (lightboxIndex < 0 || displayedHistory.length < 2) ? 0.35 : 1,
+        }}
+      >
+        {slideshowPlaying ? <Pause size={20} /> : <Play size={20} />}
       </button>
       {/* Open-in-preview: send the currently displayed gallery item to the
           Preview tab, then close the lightbox. Hidden when the lightbox is
@@ -260,7 +298,7 @@ export function Lightbox({
           style={{
             position: 'absolute',
             top: '20px',
-            right: '436px',
+            right: '488px',
             width: '44px',
             height: '44px',
             borderRadius: '50%',
