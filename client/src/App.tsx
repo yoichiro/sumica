@@ -903,7 +903,7 @@ function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxUrl, morphSourceKey, displayedHistory, lightboxIndex]);
+  }, [lightboxUrl, morphSourceKey, displayedHistory, lightboxIndex, randomMode]);
 
   // "D" hotkey → same as clicking the gallery's 削除 button. Fires only when
   // the gallery tab is active, at least one image is selected, no lightbox /
