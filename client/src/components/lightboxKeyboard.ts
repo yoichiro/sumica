@@ -9,7 +9,8 @@ export type LightboxKeyAction =
   | { type: 'navigate'; delta: number }
   | { type: 'toggleSelection' }
   | { type: 'toggleFavorite' }
-  | { type: 'randomize' }
+  | { type: 'toggleRandom' }
+  | { type: 'toggleSlideshow' }
   | null;
 
 export function resolveLightboxKey(
@@ -35,9 +36,15 @@ export function resolveLightboxKey(
     return lightboxIndex >= 0 ? { type: 'toggleFavorite' } : null;
   }
   if (key === 'r' || key === 'R') {
-    // Randomize only makes sense over a gallery-backed lightbox (index >= 0);
-    // the preview tab's one-off image has nothing to shuffle to.
-    return lightboxIndex >= 0 ? { type: 'randomize' } : null;
+    // Random-mode toggle: flips whether ← / → and the slideshow pick a random
+    // next image or step through the gallery order. Meaningful only for a
+    // gallery-backed lightbox (index >= 0).
+    return lightboxIndex >= 0 ? { type: 'toggleRandom' } : null;
+  }
+  if (key === 'p' || key === 'P') {
+    // Slideshow play/pause toggle. Same gate as random-mode: no-op over the
+    // preview tab's transient image.
+    return lightboxIndex >= 0 ? { type: 'toggleSlideshow' } : null;
   }
   return null;
 }
