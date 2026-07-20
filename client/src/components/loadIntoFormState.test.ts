@@ -192,35 +192,32 @@ describe('computeLoadIntoFormState — unknown model fallback', () => {
 });
 
 describe('computeLoadIntoFormState — loaded enhanced prompt fields', () => {
-  it('populates loadedPositive/loadedNegative/loadedOriginalPromptSnapshot from item', () => {
+  it('populates loadedPositive/loadedNegative from item', () => {
     const s = computeLoadIntoFormState(
       {
         width: 1024, height: 1024,
         model: 'juggernautXL_version6Rundiffusion.safetensors [1fe6c7ec54]',
         enhancedPrompt: 'masterpiece, (round face:1.2), detailed',
         negativePrompt: 'worst quality, blurry',
-        originalPrompt: '丸顔の女性',
       },
       KNOWN,
     );
     expect(s.loadedPositive).toBe('masterpiece, (round face:1.2), detailed');
     expect(s.loadedNegative).toBe('worst quality, blurry');
-    expect(s.loadedOriginalPromptSnapshot).toBe('丸顔の女性');
   });
 
   it('falls back to empty strings when the item lacks enhancedPrompt/negativePrompt', () => {
     // Legacy records saved before the enhanced-prompt-load feature; also
     // externally imported images that never went through the enhance step.
     const s = computeLoadIntoFormState(
-      { width: 512, height: 512, model: 'yayoi_mix_v25-fp16.safetensors [ca28aa4a44]', originalPrompt: '旧レコード' },
+      { width: 512, height: 512, model: 'yayoi_mix_v25-fp16.safetensors [ca28aa4a44]' },
       KNOWN,
     );
     expect(s.loadedPositive).toBe('');
     expect(s.loadedNegative).toBe('');
-    expect(s.loadedOriginalPromptSnapshot).toBe('旧レコード');
   });
 
-  it('falls back to empty string when originalPrompt is missing too', () => {
+  it('falls back to empty string when the item has no fields at all', () => {
     // Theoretical fully-broken record: no fields at all. Should not crash.
     const s = computeLoadIntoFormState(
       { width: 512, height: 512, model: 'yayoi_mix_v25-fp16.safetensors [ca28aa4a44]' },
@@ -228,7 +225,6 @@ describe('computeLoadIntoFormState — loaded enhanced prompt fields', () => {
     );
     expect(s.loadedPositive).toBe('');
     expect(s.loadedNegative).toBe('');
-    expect(s.loadedOriginalPromptSnapshot).toBe('');
   });
 
   it('treats empty-string enhancedPrompt/negativePrompt the same as missing', () => {
@@ -239,12 +235,10 @@ describe('computeLoadIntoFormState — loaded enhanced prompt fields', () => {
         model: 'juggernautXL_version6Rundiffusion.safetensors [1fe6c7ec54]',
         enhancedPrompt: '',
         negativePrompt: '',
-        originalPrompt: '',
       },
       KNOWN,
     );
     expect(s.loadedPositive).toBe('');
     expect(s.loadedNegative).toBe('');
-    expect(s.loadedOriginalPromptSnapshot).toBe('');
   });
 });

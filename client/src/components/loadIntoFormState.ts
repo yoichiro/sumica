@@ -20,7 +20,6 @@ export interface LoadableGenerationItem {
   // and pre-feature imports working without changes.
   enhancedPrompt?: string;
   negativePrompt?: string;
-  originalPrompt?: string;
 }
 
 export interface LoadIntoFormState {
@@ -51,10 +50,6 @@ export interface LoadIntoFormState {
   // then falls back to the normal enhance flow.
   loadedPositive: string;
   loadedNegative: string;
-  // Snapshot of the item's originalPrompt at load time, used to detect
-  // whether the user has since edited the form's prompt field. Empty string
-  // when the item has no originalPrompt (legacy defensive default).
-  loadedOriginalPromptSnapshot: string;
 }
 
 // Strip the trailing ` [xxxxxxxxxx]` short-hash suffix from a checkpoint title
@@ -105,7 +100,6 @@ export function computeLoadIntoFormState(
     sd15Picker: null,
     loadedPositive: '',
     loadedNegative: '',
-    loadedOriginalPromptSnapshot: '',
   };
 
   if (arch === 'sdxl') {
@@ -116,7 +110,6 @@ export function computeLoadIntoFormState(
 
   state.loadedPositive = item.enhancedPrompt || '';
   state.loadedNegative = item.negativePrompt || '';
-  state.loadedOriginalPromptSnapshot = item.originalPrompt || '';
 
   return state;
 }
