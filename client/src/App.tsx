@@ -1579,11 +1579,14 @@ function App() {
     setLoading(true);
     setErrorStep(null);
     setRightTab('preview'); // Surface progress/result even if the gallery tab was open
-    setGenStatus('enhancing');
     setCurrentGeneration(null); // Clear preview on start
-    // Only enter step 1 (enhancing) when actually calling the LLM. When a
-    // loaded enhanced prompt is present we go straight to step 2.
-    if (!loadedPositive) setLoadingStep(1); // Start Step 1: Prompt Enhancement
+    // Only surface step 1 (enhancing) when actually calling the LLM. When
+    // a loaded enhanced prompt is present we go straight to step 2 without
+    // even flashing the "enhancing" status.
+    if (!loadedPositive) {
+      setGenStatus('enhancing');
+      setLoadingStep(1); // Start Step 1: Prompt Enhancement
+    }
 
     let currentStep = 1;
 
@@ -1679,11 +1682,14 @@ function App() {
     setLoading(true);
     setErrorStep(null);
     setRightTab('preview');
-    setGenStatus('enhancing');
     setCurrentGeneration(null);
-    // Only enter step 1 (enhancing) when actually calling the LLM. When a
-    // loaded enhanced prompt is present we go straight to step 2.
-    if (!loadedPositive) setLoadingStep(1);
+    // Only surface step 1 (enhancing) when actually calling the LLM. When
+    // a loaded enhanced prompt is present we go straight to step 2 without
+    // even flashing the "enhancing" status.
+    if (!loadedPositive) {
+      setGenStatus('enhancing');
+      setLoadingStep(1);
+    }
 
     let currentStep = 1;
 
