@@ -112,6 +112,17 @@ export interface GenerationData {
 function App() {
   // Form input states
   const [prompt, setPrompt] = useState('');
+  // Loaded enhanced prompt fields — populated by loadIntoForm when the user
+  // clicks "フォームにロード" on a gallery/ranking item, and cleared by the
+  // dedicated clear button in ControlPanel. When loadedPositive is truthy,
+  // the generate pipeline skips the enhance step entirely and reuses this
+  // exact positive/negative pair, letting the user reproduce the same image
+  // bit-for-bit (given the same seed + all other params). loadedOriginalPrompt
+  // stores the item's originalPrompt at load time so we can detect and warn
+  // when the user has since edited the prompt field.
+  const [loadedPositive, setLoadedPositive] = useState('');
+  const [loadedNegative, setLoadedNegative] = useState('');
+  const [loadedOriginalPrompt, setLoadedOriginalPrompt] = useState('');
   const [randomMode, setRandomMode] = useState(false);
   const [slideshowPlaying, setSlideshowPlaying] = useState(false);
   // Slideshow tick interval, cycled between presets by right-clicking the
@@ -1246,8 +1257,31 @@ function App() {
     // form so the applied settings are actually visible. No-op when already on
     // the form tab (switchControlTab early-returns on same-tab).
     switchControlTab('form');
+    // Populate the loaded-enhanced-prompt fields from the pure function's
+    // result. Empty strings when the item lacks enhancedPrompt/negativePrompt
+    // (legacy records) — in that case the panel stays hidden and the next
+    // generate falls back to the normal enhance flow, unchanged.
+    setLoadedPositive(s.loadedPositive);
+    setLoadedNegative(s.loadedNegative);
+    setLoadedOriginalPrompt(s.loadedOriginalPromptSnapshot);
     addToast(t.toast.loadedIntoForm, 'success');
   };
+
+  // Clear the loaded enhanced prompt fields. Called by ControlPanel's clear
+  // button. After this, the next generate goes through the normal enhance
+  // flow (LLM invoked, positive/negative re-derived from the current prompt).
+  const clearLoadedEnhanced = () => {
+    setLoadedPositive('');
+    setLoadedNegative('');
+    setLoadedOriginalPrompt('');
+  };
+  // TEMPORARY (Task 3 of 5, "Loaded Enhanced Prompt" plan): loadedPositive /
+  // loadedNegative / loadedOriginalPrompt / clearLoadedEnhanced are only
+  // written to at this point — nothing reads them yet, which trips
+  // noUnusedLocals under tsc -b. Task 4 wires all four into ControlPanel
+  // (the loaded-enhanced panel UI) and Task 5 into the generate pipeline;
+  // this line must be deleted once either of those lands.
+  void loadedPositive; void loadedNegative; void loadedOriginalPrompt; void clearLoadedEnhanced;
 
   // Apply a ranked favorite-recipe (from the Ranking tab, RankingPanel's "フォームに
   // 適用" button) back into the form. Mirrors loadIntoForm's architecture/dimension
