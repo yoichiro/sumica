@@ -62,6 +62,11 @@ export const en: typeof ja = {
     batchButtonTitle: 'Batch generate multiple images',
     tabForm: '📝 Form',
     tabRanking: '🏆 Ranking',
+    loadedEnhancedPanelTitle: '📎 Loaded enhanced prompt',
+    loadedEnhancedClearButton: 'Clear',
+    loadedEnhancedPositiveLabel: 'Positive',
+    loadedEnhancedNegativeLabel: 'Negative',
+    loadedEnhancedWarnPromptChanged: '⚠ Original prompt has changed (the loaded enhanced prompt will still be used)',
   },
   preview: {
     favoriteRemoveTitle: 'Remove from favorites',

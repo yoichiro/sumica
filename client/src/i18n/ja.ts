@@ -60,6 +60,11 @@ export const ja = {
     batchButtonTitle: '複数枚をまとめて生成',
     tabForm: '📝 フォーム',
     tabRanking: '🏆 ランキング',
+    loadedEnhancedPanelTitle: '📎 ロード済み拡張プロンプト',
+    loadedEnhancedClearButton: 'クリア',
+    loadedEnhancedPositiveLabel: 'Positive',
+    loadedEnhancedNegativeLabel: 'Negative',
+    loadedEnhancedWarnPromptChanged: '⚠ 原文が変更されています（拡張プロンプトはロード時のまま使用されます）',
   },
   preview: {
     favoriteRemoveTitle: 'お気に入りを解除',
