@@ -66,7 +66,6 @@ export const en: typeof ja = {
     loadedEnhancedClearButton: 'Clear',
     loadedEnhancedPositiveLabel: 'Positive',
     loadedEnhancedNegativeLabel: 'Negative',
-    loadedEnhancedWarnPromptChanged: '⚠ Original prompt has changed (the loaded enhanced prompt will still be used)',
   },
   preview: {
     favoriteRemoveTitle: 'Remove from favorites',
