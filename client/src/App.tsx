@@ -1581,13 +1581,21 @@ function App() {
     setRightTab('preview'); // Surface progress/result even if the gallery tab was open
     setGenStatus('enhancing');
     setCurrentGeneration(null); // Clear preview on start
-    setLoadingStep(1); // Start Step 1: Prompt Enhancement
+    // Only enter step 1 (enhancing) when actually calling the LLM. When a
+    // loaded enhanced prompt is present we go straight to step 2.
+    if (!loadedPositive) setLoadingStep(1); // Start Step 1: Prompt Enhancement
 
     let currentStep = 1;
 
     try {
       // --- Step 1: Enhance prompt via LM Studio ---
-      const { positive, negative } = await enhanceOnce(prompt);
+      // If the user has previously loaded an enhanced prompt from a past
+      // image, reuse it verbatim and skip the LM Studio round-trip entirely.
+      // The generate pipeline's loadingStep is also nudged to step 2 directly
+      // because step 1 (enhancing) is being skipped semantically.
+      const { positive, negative } = loadedPositive
+        ? { positive: loadedPositive, negative: loadedNegative }
+        : await enhanceOnce(prompt);
 
       // --- Transition to Step 2: Image Generation ---
       currentStep = 2;
@@ -1673,13 +1681,20 @@ function App() {
     setRightTab('preview');
     setGenStatus('enhancing');
     setCurrentGeneration(null);
-    setLoadingStep(1);
+    // Only enter step 1 (enhancing) when actually calling the LLM. When a
+    // loaded enhanced prompt is present we go straight to step 2.
+    if (!loadedPositive) setLoadingStep(1);
 
     let currentStep = 1;
 
     try {
       // --- Step 1: enhance ONCE, reuse for every image ---
-      const { positive, negative } = await enhanceOnce(prompt);
+      // Batch generation: reuse loaded enhanced prompt across all jobs when
+      // present. LM Studio is not called even once. When absent, the current
+      // behavior (enhance once, reuse across jobs) is preserved unchanged.
+      const { positive, negative } = loadedPositive
+        ? { positive: loadedPositive, negative: loadedNegative }
+        : await enhanceOnce(prompt);
 
       // --- Step 2: generate sequentially, one image at a time ---
       currentStep = 2;
