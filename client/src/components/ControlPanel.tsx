@@ -111,6 +111,17 @@ export interface ControlPanelProps {
   rollups: RankingRollup[];
   onApplyRecipe: (recipe: RankedRecipe) => void;
   onApplyRecipeToGalleryFilter: (recipe: RankedRecipe) => void;
+
+  // Loaded enhanced prompt panel: rendered inline below the prompt textarea
+  // only when either loadedPositive or loadedNegative is truthy. The 3 fields
+  // are read-only from the panel's perspective — the only user action is
+  // clicking the clear button. loadedOriginalPrompt is a snapshot of the
+  // prompt at load time; when the current `prompt` prop differs, a warning
+  // badge is displayed inside the panel.
+  loadedPositive: string;
+  loadedNegative: string;
+  loadedOriginalPrompt: string;
+  onClearLoadedEnhanced: () => void;
 }
 
 export function ControlPanel(p: ControlPanelProps) {
@@ -148,6 +159,115 @@ export function ControlPanel(p: ControlPanelProps) {
               required
               disabled={p.loading}
             />
+            {(p.loadedPositive || p.loadedNegative) && (
+              <div
+                style={{
+                  marginTop: '8px',
+                  padding: '12px 14px',
+                  background: 'var(--panel-bg-sunk)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                {/* Header row: title + clear button. */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: 0.02 }}>
+                    {t.controlPanel.loadedEnhancedPanelTitle}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={p.onClearLoadedEnhanced}
+                    className="scale-hover"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      background: 'transparent',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--panel-border)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {t.controlPanel.loadedEnhancedClearButton}
+                  </button>
+                </div>
+
+                {/* Warning badge: shown only when the current prompt has drifted from
+                    the snapshot captured at load time. The loaded enhanced prompt is
+                    still what gets used at generate time, but the user should know the
+                    original text no longer matches. */}
+                {p.loadedOriginalPrompt && p.loadedOriginalPrompt !== p.prompt && (
+                  <div
+                    style={{
+                      padding: '6px 10px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#8a6d00',
+                      background: 'rgba(252, 196, 25, 0.16)',
+                      border: '1px solid rgba(252, 196, 25, 0.4)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    {t.controlPanel.loadedEnhancedWarnPromptChanged}
+                  </div>
+                )}
+
+                {/* Positive */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.02 }}>
+                    {t.controlPanel.loadedEnhancedPositiveLabel}
+                  </span>
+                  <textarea
+                    readOnly
+                    value={p.loadedPositive}
+                    style={{
+                      minHeight: '4.5em',
+                      maxHeight: '8em',
+                      resize: 'vertical',
+                      padding: '8px 10px',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: '11px',
+                      lineHeight: 1.4,
+                      color: 'var(--text-primary)',
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--panel-border)',
+                      borderRadius: '8px',
+                      overflowY: 'auto',
+                    }}
+                  />
+                </div>
+
+                {/* Negative */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.02 }}>
+                    {t.controlPanel.loadedEnhancedNegativeLabel}
+                  </span>
+                  <textarea
+                    readOnly
+                    value={p.loadedNegative}
+                    style={{
+                      minHeight: '4.5em',
+                      maxHeight: '8em',
+                      resize: 'vertical',
+                      padding: '8px 10px',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: '11px',
+                      lineHeight: 1.4,
+                      color: 'var(--text-primary)',
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--panel-border)',
+                      borderRadius: '8px',
+                      overflowY: 'auto',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ADVANCED PARAMETERS */}

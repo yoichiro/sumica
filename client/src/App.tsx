@@ -1275,14 +1275,6 @@ function App() {
     setLoadedNegative('');
     setLoadedOriginalPrompt('');
   };
-  // TEMPORARY (Task 3 of 5, "Loaded Enhanced Prompt" plan): loadedPositive /
-  // loadedNegative / loadedOriginalPrompt / clearLoadedEnhanced are only
-  // written to at this point — nothing reads them yet, which trips
-  // noUnusedLocals under tsc -b. Task 4 wires all four into ControlPanel
-  // (the loaded-enhanced panel UI) and Task 5 into the generate pipeline;
-  // this line must be deleted once either of those lands.
-  void loadedPositive; void loadedNegative; void loadedOriginalPrompt; void clearLoadedEnhanced;
-
   // Apply a ranked favorite-recipe (from the Ranking tab, RankingPanel's "フォームに
   // 適用" button) back into the form. Mirrors loadIntoForm's architecture/dimension
   // resolution above, but the source is a rollup's NormalizedParams instead of a
@@ -1851,6 +1843,10 @@ function App() {
           rollups={rollups}
           onApplyRecipe={applyRecipe}
           onApplyRecipeToGalleryFilter={applyRecipeToGalleryFilter}
+          loadedPositive={loadedPositive}
+          loadedNegative={loadedNegative}
+          loadedOriginalPrompt={loadedOriginalPrompt}
+          onClearLoadedEnhanced={clearLoadedEnhanced}
         />
 
         {/* RIGHT COLUMN: PREVIEW & HISTORY GRID (tabbed) */}
