@@ -16,6 +16,11 @@ export interface LoadableGenerationItem {
   width: number;
   height: number;
   model?: string | null;
+  // Loaded enhanced prompt fields — all optional to keep legacy records
+  // and pre-feature imports working without changes.
+  enhancedPrompt?: string;
+  negativePrompt?: string;
+  originalPrompt?: string;
 }
 
 export interface LoadIntoFormState {
@@ -40,6 +45,16 @@ export interface LoadIntoFormState {
     orientation: SdxlOrientation;
     size: SdxlSize;
   } | null;
+  // Loaded enhanced prompt to seed the form's read-only panel and skip the
+  // enhance step on the next generate. Empty strings when the item has no
+  // enhanced prompt saved (legacy records / external imports) — the caller
+  // then falls back to the normal enhance flow.
+  loadedPositive: string;
+  loadedNegative: string;
+  // Snapshot of the item's originalPrompt at load time, used to detect
+  // whether the user has since edited the form's prompt field. Empty string
+  // when the item has no originalPrompt (legacy defensive default).
+  loadedOriginalPromptSnapshot: string;
 }
 
 // Strip the trailing ` [xxxxxxxxxx]` short-hash suffix from a checkpoint title
@@ -88,6 +103,9 @@ export function computeLoadIntoFormState(
     height: item.height,
     sdxlPicker: null,
     sd15Picker: null,
+    loadedPositive: '',
+    loadedNegative: '',
+    loadedOriginalPromptSnapshot: '',
   };
 
   if (arch === 'sdxl') {
@@ -95,6 +113,10 @@ export function computeLoadIntoFormState(
   } else if (arch === 'sd15') {
     state.sd15Picker = findSd15Selection(item.width, item.height);
   }
+
+  state.loadedPositive = item.enhancedPrompt || '';
+  state.loadedNegative = item.negativePrompt || '';
+  state.loadedOriginalPromptSnapshot = item.originalPrompt || '';
 
   return state;
 }
