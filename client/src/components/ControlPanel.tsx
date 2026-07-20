@@ -113,14 +113,11 @@ export interface ControlPanelProps {
   onApplyRecipeToGalleryFilter: (recipe: RankedRecipe) => void;
 
   // Loaded enhanced prompt panel: rendered inline below the prompt textarea
-  // only when either loadedPositive or loadedNegative is truthy. The 3 fields
+  // only when either loadedPositive or loadedNegative is truthy. The 2 fields
   // are read-only from the panel's perspective — the only user action is
-  // clicking the clear button. loadedOriginalPrompt is a snapshot of the
-  // prompt at load time; when the current `prompt` prop differs, a warning
-  // badge is displayed inside the panel.
+  // clicking the clear button.
   loadedPositive: string;
   loadedNegative: string;
-  loadedOriginalPrompt: string;
   onClearLoadedEnhanced: () => void;
 }
 
@@ -147,18 +144,22 @@ export function ControlPanel(p: ControlPanelProps) {
         }}>
           {/* PROMPT AREA */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', flex: 1, minHeight: 0 }}>
-            <label style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-              {t.controlPanel.promptLabel}
-            </label>
-            <textarea
-              className="input-field"
-              placeholder={t.controlPanel.promptPlaceholder}
-              value={p.prompt}
-              onChange={(e) => p.setPrompt(e.target.value)}
-              style={{ flex: 1, minHeight: 0, resize: 'none', lineHeight: '1.4', borderRadius: '12px' }}
-              required
-              disabled={p.loading}
-            />
+            {!(p.loadedPositive || p.loadedNegative) && (
+              <>
+                <label style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>
+                  {t.controlPanel.promptLabel}
+                </label>
+                <textarea
+                  className="input-field"
+                  placeholder={t.controlPanel.promptPlaceholder}
+                  value={p.prompt}
+                  onChange={(e) => p.setPrompt(e.target.value)}
+                  style={{ flex: 1, minHeight: 0, resize: 'none', lineHeight: '1.4', borderRadius: '12px' }}
+                  required
+                  disabled={p.loading}
+                />
+              </>
+            )}
             {(p.loadedPositive || p.loadedNegative) && (
               <div
                 style={{
@@ -196,26 +197,6 @@ export function ControlPanel(p: ControlPanelProps) {
                     {t.controlPanel.loadedEnhancedClearButton}
                   </button>
                 </div>
-
-                {/* Warning badge: shown only when the current prompt has drifted from
-                    the snapshot captured at load time. The loaded enhanced prompt is
-                    still what gets used at generate time, but the user should know the
-                    original text no longer matches. */}
-                {p.loadedOriginalPrompt && p.loadedOriginalPrompt !== p.prompt && (
-                  <div
-                    style={{
-                      padding: '6px 10px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: '#8a6d00',
-                      background: 'rgba(252, 196, 25, 0.16)',
-                      border: '1px solid rgba(252, 196, 25, 0.4)',
-                      borderRadius: '8px',
-                    }}
-                  >
-                    {t.controlPanel.loadedEnhancedWarnPromptChanged}
-                  </div>
-                )}
 
                 {/* Positive */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -918,7 +899,7 @@ export function ControlPanel(p: ControlPanelProps) {
           <button
             type="submit"
             className="btn-neon"
-            disabled={p.loading || !p.prompt.trim()}
+            disabled={p.loading || !(p.prompt.trim() || p.loadedPositive)}
             style={{
               flex: 1,
               padding: '16px',

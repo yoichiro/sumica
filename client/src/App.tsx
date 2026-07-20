@@ -117,12 +117,9 @@ function App() {
   // dedicated clear button in ControlPanel. When loadedPositive is truthy,
   // the generate pipeline skips the enhance step entirely and reuses this
   // exact positive/negative pair, letting the user reproduce the same image
-  // bit-for-bit (given the same seed + all other params). loadedOriginalPrompt
-  // stores the item's originalPrompt at load time so we can detect and warn
-  // when the user has since edited the prompt field.
+  // bit-for-bit (given the same seed + all other params).
   const [loadedPositive, setLoadedPositive] = useState('');
   const [loadedNegative, setLoadedNegative] = useState('');
-  const [loadedOriginalPrompt, setLoadedOriginalPrompt] = useState('');
   const [randomMode, setRandomMode] = useState(false);
   const [slideshowPlaying, setSlideshowPlaying] = useState(false);
   // Slideshow tick interval, cycled between presets by right-clicking the
@@ -1263,7 +1260,6 @@ function App() {
     // generate falls back to the normal enhance flow, unchanged.
     setLoadedPositive(s.loadedPositive);
     setLoadedNegative(s.loadedNegative);
-    setLoadedOriginalPrompt(s.loadedOriginalPromptSnapshot);
     addToast(t.toast.loadedIntoForm, 'success');
   };
 
@@ -1273,7 +1269,6 @@ function App() {
   const clearLoadedEnhanced = () => {
     setLoadedPositive('');
     setLoadedNegative('');
-    setLoadedOriginalPrompt('');
   };
   // Apply a ranked favorite-recipe (from the Ranking tab, RankingPanel's "フォームに
   // 適用" button) back into the form. Mirrors loadIntoForm's architecture/dimension
@@ -1866,7 +1861,6 @@ function App() {
           onApplyRecipeToGalleryFilter={applyRecipeToGalleryFilter}
           loadedPositive={loadedPositive}
           loadedNegative={loadedNegative}
-          loadedOriginalPrompt={loadedOriginalPrompt}
           onClearLoadedEnhanced={clearLoadedEnhanced}
         />
 
