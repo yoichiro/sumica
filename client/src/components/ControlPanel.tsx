@@ -899,7 +899,7 @@ export function ControlPanel(p: ControlPanelProps) {
           <button
             type="submit"
             className="btn-neon"
-            disabled={p.loading || !(p.prompt.trim() || p.loadedPositive)}
+            disabled={p.loading || !(p.prompt.trim() || p.loadedPositive || p.loadedNegative)}
             style={{
               flex: 1,
               padding: '16px',
@@ -928,7 +928,7 @@ export function ControlPanel(p: ControlPanelProps) {
           <button
             type="button"
             onClick={p.onOpenBatchModal}
-            disabled={p.loading || !(p.prompt.trim() || p.loadedPositive)}
+            disabled={p.loading || !(p.prompt.trim() || p.loadedPositive || p.loadedNegative)}
             className="scale-hover"
             title={t.controlPanel.batchButtonTitle}
             aria-label={t.controlPanel.batchButtonTitle}
@@ -942,8 +942,8 @@ export function ControlPanel(p: ControlPanelProps) {
               background: 'var(--panel-bg)',
               color: 'var(--pop-blue)',
               border: '2px solid var(--pop-blue)',
-              cursor: (p.loading || !(p.prompt.trim() || p.loadedPositive)) ? 'not-allowed' : 'pointer',
-              opacity: (p.loading || !(p.prompt.trim() || p.loadedPositive)) ? 0.5 : 1,
+              cursor: (p.loading || !(p.prompt.trim() || p.loadedPositive || p.loadedNegative)) ? 'not-allowed' : 'pointer',
+              opacity: (p.loading || !(p.prompt.trim() || p.loadedPositive || p.loadedNegative)) ? 0.5 : 1,
               // Share the `view-transition-name` with the modal panel so the
               // browser interpolates the button rect → modal rect on open (and
               // reverses on close). Drop the name while the modal is open so
