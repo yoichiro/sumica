@@ -928,7 +928,7 @@ export function ControlPanel(p: ControlPanelProps) {
           <button
             type="button"
             onClick={p.onOpenBatchModal}
-            disabled={p.loading || !p.prompt.trim()}
+            disabled={p.loading || !(p.prompt.trim() || p.loadedPositive)}
             className="scale-hover"
             title={t.controlPanel.batchButtonTitle}
             aria-label={t.controlPanel.batchButtonTitle}
