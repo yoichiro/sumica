@@ -942,8 +942,8 @@ export function ControlPanel(p: ControlPanelProps) {
               background: 'var(--panel-bg)',
               color: 'var(--pop-blue)',
               border: '2px solid var(--pop-blue)',
-              cursor: (p.loading || !p.prompt.trim()) ? 'not-allowed' : 'pointer',
-              opacity: (p.loading || !p.prompt.trim()) ? 0.5 : 1,
+              cursor: (p.loading || !(p.prompt.trim() || p.loadedPositive)) ? 'not-allowed' : 'pointer',
+              opacity: (p.loading || !(p.prompt.trim() || p.loadedPositive)) ? 0.5 : 1,
               // Share the `view-transition-name` with the modal panel so the
               // browser interpolates the button rect → modal rect on open (and
               // reverses on close). Drop the name while the modal is open so
