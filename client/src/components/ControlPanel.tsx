@@ -137,7 +137,14 @@ export function ControlPanel(p: ControlPanelProps) {
           minHeight: 0,
           overflow: 'hidden',
           display: 'grid',
-          gridTemplateRows: 'minmax(0, 4fr) minmax(0, 6fr)',
+          // Grid row template flips with the exclusive UI: when a loaded
+          // enhanced prompt is showing, the panel is naturally sized so the
+          // first row goes `auto` (no reserved 4fr) and the rest of the form
+          // fills the remaining space. Otherwise the original 4:6 ratio
+          // gives the prompt textarea a generous editing area.
+          gridTemplateRows: (p.loadedPositive || p.loadedNegative)
+            ? 'auto minmax(0, 1fr)'
+            : 'minmax(0, 4fr) minmax(0, 6fr)',
           gap: '20px',
           paddingRight: '6px',
           marginBottom: '16px'
