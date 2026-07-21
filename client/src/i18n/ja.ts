@@ -62,8 +62,8 @@ export const ja = {
     tabRanking: '🏆 ランキング',
     loadedEnhancedPanelTitle: '📎 ロード済み拡張プロンプト',
     loadedEnhancedClearButton: 'クリア',
-    loadedEnhancedPositiveLabel: 'Positive',
-    loadedEnhancedNegativeLabel: 'Negative',
+    loadedEnhancedPositiveLabel: '拡張プロンプト (ポジティブ)',
+    loadedEnhancedNegativeLabel: '❌ ネガティブプロンプト',
   },
   preview: {
     favoriteRemoveTitle: 'お気に入りを解除',

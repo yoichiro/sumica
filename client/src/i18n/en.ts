@@ -64,8 +64,8 @@ export const en: typeof ja = {
     tabRanking: '🏆 Ranking',
     loadedEnhancedPanelTitle: '📎 Loaded enhanced prompt',
     loadedEnhancedClearButton: 'Clear',
-    loadedEnhancedPositiveLabel: 'Positive',
-    loadedEnhancedNegativeLabel: 'Negative',
+    loadedEnhancedPositiveLabel: 'Enhanced prompt (positive)',
+    loadedEnhancedNegativeLabel: '❌ Negative prompt',
   },
   preview: {
     favoriteRemoveTitle: 'Remove from favorites',

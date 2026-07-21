@@ -207,8 +207,8 @@ export function ControlPanel(p: ControlPanelProps) {
 
                 {/* Positive */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.02 }}>
-                    {t.controlPanel.loadedEnhancedPositiveLabel}
+                  <span style={{ fontSize: '11px', color: 'var(--pop-blue)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
+                    <Sparkles size={11} /> {t.controlPanel.loadedEnhancedPositiveLabel}
                   </span>
                   <textarea
                     readOnly
@@ -232,7 +232,7 @@ export function ControlPanel(p: ControlPanelProps) {
 
                 {/* Negative */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.02 }}>
+                  <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
                     {t.controlPanel.loadedEnhancedNegativeLabel}
                   </span>
                   <textarea
