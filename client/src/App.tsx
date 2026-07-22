@@ -858,6 +858,8 @@ function App() {
   // to refresh with the same toggle value still selected. width/height are read
   // via closure at the moment of the flip; they must not be dependencies or the
   // effect would fire on every dimension change and clobber the picker state.
+  // Same reasoning for the *UserOverride flags read below (steps/cfg/sampler/
+  // scheduler reset) — they must not retrigger this effect on every override change.
   useEffect(() => {
     setSelectedModel((prev) => (sdModels.some((m) => m.type === modelTypeFilter && m.title === prev) ? prev : (sdModels.find((m) => m.type === modelTypeFilter)?.title ?? '')));
 
@@ -876,6 +878,20 @@ function App() {
         setWidth(1024);
         setHeight(1024);
       }
+      // Reset steps/cfg/sampler/scheduler to sane SD defaults so leftover
+      // Flux-specific values (steps=4, cfg=1.0, Euler/Simple — Task 9 Scenario 8
+      // found these visibly under-denoising the next SDXL render) don't survive a
+      // switch away from Flux. Guarded by the override flags so a value just
+      // deliberately set in this same batch (loadIntoForm, applyRecipe) is left
+      // untouched; the flags are then cleared like the Flux branch below does.
+      if (!stepsUserOverride) setSteps(20);
+      if (!cfgUserOverride) setCfgScale(7);
+      if (!samplerUserOverride) setSelectedSampler('Euler a');
+      if (!schedulerUserOverride) setSelectedScheduler('');
+      setStepsUserOverride(false);
+      setCfgUserOverride(false);
+      setSamplerUserOverride(false);
+      setSchedulerUserOverride(false);
       return;
     }
 
@@ -898,6 +914,16 @@ function App() {
       // generation doesn't carry a stale SDXL refiner pick.
       setSelectedRefiner('');
       setSelectedVae('');
+      // Reset steps/cfg/sampler/scheduler to sane SD defaults — same reasoning
+      // as the SDXL branch above (leftover Flux values must not survive the switch).
+      if (!stepsUserOverride) setSteps(20);
+      if (!cfgUserOverride) setCfgScale(7);
+      if (!samplerUserOverride) setSelectedSampler('Euler a');
+      if (!schedulerUserOverride) setSelectedScheduler('');
+      setStepsUserOverride(false);
+      setCfgUserOverride(false);
+      setSamplerUserOverride(false);
+      setSchedulerUserOverride(false);
     } else if (modelTypeFilter === 'flux') {
       // Seed the Flux picker from the current width/height. If nothing matches,
       // fall back to 1:1 M (1024x1024).
@@ -923,6 +949,7 @@ function App() {
       setSelectedRefiner('');
       setSelectedVae('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelTypeFilter]);
 
   // SDXL picker → width/height projection. Whenever the ratio/orientation/size
@@ -1570,6 +1597,9 @@ function App() {
         } : {}),
         ...(modelTypeFilter === 'sdxl' && selectedVae ? { vae: selectedVae } : {}),
         modelArchitecture: modelTypeFilter,
+        // Ground-truth architecture for this request — lets the server keep Flux's
+        // empty negative prompt empty instead of falling back to the SD default.
+        arch: modelTypeFilter,
         clientPersist: !!user
       })
     });

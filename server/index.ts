@@ -282,13 +282,16 @@ async function generateImage(
   denoisingStrength = 0.7,
   refiner = '',
   refinerSwitchAt = 0.8,
-  vae = ''
+  vae = '',
+  arch: Architecture = 'sd15'
 ): Promise<{ image: string; seed: number }> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
     const payload: Record<string, unknown> = {
       prompt,
-      negative_prompt: negativePrompt || 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry',
+      // Flux doesn't use a negative prompt (ADR-42) — respect an explicitly empty
+      // negativePrompt for 'flux' instead of silently falling back to the SD default.
+      negative_prompt: arch === 'flux' ? negativePrompt : (negativePrompt || 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry'),
       steps,
       cfg_scale: cfgScale,
       width,
@@ -461,6 +464,10 @@ app.post('/api/generate', async (req: Request, res: Response) => {
   // persistence entirely — the client already has modelTypeFilter in scope for
   // its own Firebase write).
   const { modelArchitecture } = req.body as { modelArchitecture?: Architecture };
+  // Ground-truth architecture for this generation request, sent alongside
+  // modelArchitecture (Task 7). Used here to keep Flux's empty negative prompt
+  // empty end-to-end instead of falling back to the SD default negative.
+  const { arch } = req.body as { arch?: Architecture };
   cancelRequested = false; // defensive reset — clears any stale flag from an unrelated, already-finished request
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
@@ -474,7 +481,9 @@ app.post('/api/generate', async (req: Request, res: Response) => {
 
   const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
   let finalPrompt = prompt;
-  let finalNegativePrompt = negativePrompt || defaultNegative;
+  // Flux doesn't use a negative prompt (ADR-42) — an explicitly empty negativePrompt
+  // for 'flux' must stay empty here, not get silently upgraded to the SD default.
+  let finalNegativePrompt = negativePrompt || (arch === 'flux' ? '' : defaultNegative);
   const finalOriginalPrompt = originalPrompt || prompt;
 
   try {
@@ -514,7 +523,8 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7,
       refiner || '',
       refinerSwitchAt !== undefined ? parseFloat(refinerSwitchAt) : 0.8,
-      vae || ''
+      vae || '',
+      arch || 'sd15'
     );
 
     // If the user cancelled while SD was still rendering, generateImage() resolves
