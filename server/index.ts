@@ -35,6 +35,11 @@ if (!fs.existsSync(outputsDir)) {
 }
 
 
+// Architecture union shared across the server API surface. Values match
+// client/src/components/presets.ts's Architecture union.
+type Architecture = 'sd15' | 'sdxl' | 'flux';
+type FluxVariant = 'schnell' | 'dev';
+
 // Shape of a single generation record persisted to Firestore or local metadata.json
 interface GenerationMetadata {
   id?: string;
@@ -341,16 +346,19 @@ function toWslPath(windowsPath: string): string {
   return `/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`;
 }
 
-// Detect whether a checkpoint is SDXL-based by reading the .safetensors header (an 8-byte
-// little-endian length prefix followed by that many bytes of JSON tensor metadata) without
-// loading any tensor data. SDXL's GeneralConditioner wraps its text encoder(s) under keys
-// named "conditioner.embedders.N" — present for both the base checkpoint (2 encoders) and the
-// refiner checkpoint (1 encoder, so a "dual encoder" check alone would miss it) — whereas SD1.5
-// uses "cond_stage_model.*" and other architectures (e.g. Flux) use neither, so this check
-// naturally leaves them un-excluded. Falls back to the old name-based heuristic if the file
-// can't be read (e.g. filename missing, or an unreachable path), so a filesystem hiccup
-// degrades gracefully instead of breaking the model list.
-async function isSdxlCheckpoint(filename: string | undefined, title: string): Promise<boolean> {
+// Classify a checkpoint into 'sd15' / 'sdxl' / 'flux' by reading the .safetensors
+// header (an 8-byte little-endian length prefix followed by that many bytes of
+// JSON tensor metadata) without loading any tensor data. Detection order:
+//   1) model.diffusion_model.double_blocks.* (Flux DiT). Then peek at
+//      __metadata__ for a flux1-dev reference; default to schnell otherwise.
+//   2) conditioner.embedders.* (SDXL — both base and refiner).
+//   3) Fallback → sd15.
+// Falls back to a name heuristic on read failure so the model list keeps
+// working even if the file path is unreachable.
+async function classifyCheckpointArch(
+  filename: string | undefined,
+  title: string,
+): Promise<{ type: Architecture; fluxVariant?: FluxVariant }> {
   if (filename) {
     try {
       const handle = await fs.promises.open(toWslPath(filename), 'r');
@@ -360,8 +368,17 @@ async function isSdxlCheckpoint(filename: string | undefined, title: string): Pr
         const headerLength = Number(lengthBuffer.readBigUInt64LE(0));
         const headerBuffer = Buffer.alloc(headerLength);
         await handle.read(headerBuffer, 0, headerLength, 8);
-        const keys = Object.keys(JSON.parse(headerBuffer.toString('utf-8')));
-        return keys.some((k) => k.startsWith('conditioner.embedders.'));
+        const header = JSON.parse(headerBuffer.toString('utf-8')) as Record<string, unknown>;
+        const keys = Object.keys(header).filter((k) => k !== '__metadata__');
+        if (keys.some((k) => k.startsWith('model.diffusion_model.double_blocks.'))) {
+          const metaStr = JSON.stringify(header.__metadata__ ?? {});
+          const fluxVariant: FluxVariant = /flux1?[-_]?dev/i.test(metaStr) ? 'dev' : 'schnell';
+          return { type: 'flux', fluxVariant };
+        }
+        if (keys.some((k) => k.startsWith('conditioner.embedders.'))) {
+          return { type: 'sdxl' };
+        }
+        return { type: 'sd15' };
       } finally {
         await handle.close();
       }
@@ -369,7 +386,12 @@ async function isSdxlCheckpoint(filename: string | undefined, title: string): Pr
       console.error(`Failed to read safetensors header for ${title}, falling back to name heuristic:`, (error as Error).message);
     }
   }
-  return title.toLowerCase().includes('xl');
+  const lower = title.toLowerCase();
+  if (lower.includes('flux')) {
+    return { type: 'flux', fluxVariant: lower.includes('dev') ? 'dev' : 'schnell' };
+  }
+  if (lower.includes('xl')) return { type: 'sdxl' };
+  return { type: 'sd15' };
 }
 
 // Serve local outputs statically
@@ -640,7 +662,7 @@ app.get('/api/sd-models', async (_req: Request, res: Response) => {
         .filter((m): m is { title: string; filename?: string } => Boolean(m.title))
         .map(async (m) => ({
           title: m.title,
-          type: (await isSdxlCheckpoint(m.filename, m.title)) ? 'sdxl' as const : 'sd15' as const,
+          ...(await classifyCheckpointArch(m.filename, m.title)),
         }))
     );
     const activeCheckpoint = optionsRes.data?.sd_model_checkpoint ?? null;
@@ -693,8 +715,12 @@ app.get('/api/sd-schedulers', async (_req: Request, res: Response) => {
 // field some older trainers write instead. Returns 'unknown' when neither is present, or
 // when present but naming a third architecture (e.g. Flux, HunyuanVideo) — a large
 // fraction of LoRAs in practice, so callers must not treat 'unknown' as "incompatible".
-function classifyLoraArchitecture(metadata: Record<string, unknown> | undefined): 'sd15' | 'sdxl' | 'unknown' {
+function classifyLoraArchitecture(metadata: Record<string, unknown> | undefined): Architecture | 'unknown' {
   const arch = String(metadata?.['modelspec.architecture'] ?? metadata?.['ss_base_model_version'] ?? '').toLowerCase();
+  // Flux markers precede SDXL because 'flux1-schnell' does not contain 'xl'
+  // but SDXL merges based on Flux naming conventions may exist elsewhere;
+  // ordering keeps genuine Flux LoRAs correctly typed.
+  if (arch.includes('flux') || arch.startsWith('flux1')) return 'flux';
   if (arch.includes('xl')) return 'sdxl';
   if (arch.includes('stable-diffusion-v1') || arch.startsWith('sd_v1') || arch.startsWith('sd_1')) return 'sd15';
   return 'unknown';
