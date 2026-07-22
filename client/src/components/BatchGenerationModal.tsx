@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { type Dispatch, type SetStateAction } from 'react';
 import { Layers, X, CheckCircle2, Circle } from 'lucide-react';
 import { t } from '../i18n';
 import {
@@ -60,6 +60,13 @@ interface BatchGenerationModalProps {
   selectedSd15BatchSizes: Set<SdxlSize>;
   setSelectedSd15BatchSizes: Dispatch<SetStateAction<Set<SdxlSize>>>;
 
+  selectedFluxBatchRatios: Set<FluxRatio>;
+  setSelectedFluxBatchRatios: Dispatch<SetStateAction<Set<FluxRatio>>>;
+  selectedFluxBatchOrientations: Set<SdxlOrientation>;
+  setSelectedFluxBatchOrientations: Dispatch<SetStateAction<Set<SdxlOrientation>>>;
+  selectedFluxBatchSizes: Set<FluxSize>;
+  setSelectedFluxBatchSizes: Dispatch<SetStateAction<Set<FluxSize>>>;
+
   selectedBatchModels: Set<string>;
   setSelectedBatchModels: Dispatch<SetStateAction<Set<string>>>;
   toggleBatchModel: (name: string) => void;
@@ -86,21 +93,12 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
     selectedSd15BatchRatios, setSelectedSd15BatchRatios,
     selectedSd15BatchOrientations, setSelectedSd15BatchOrientations,
     selectedSd15BatchSizes, setSelectedSd15BatchSizes,
+    selectedFluxBatchRatios, setSelectedFluxBatchRatios,
+    selectedFluxBatchOrientations, setSelectedFluxBatchOrientations,
+    selectedFluxBatchSizes, setSelectedFluxBatchSizes,
     selectedBatchModels, setSelectedBatchModels, toggleBatchModel,
     onStartBatch,
   } = props;
-
-  // Flux batch selection state. Unlike the SDXL/SD1.5 counterparts (which are
-  // lifted to App.tsx and passed down as props so they survive modal
-  // close/reopen alongside the rest of the batch form), Flux's selection is
-  // kept local to this component — it defaults to "everything selected" every
-  // time the modal mounts, which is an acceptable simplification for now.
-  const [selectedFluxBatchRatios, setSelectedFluxBatchRatios] =
-    useState<Set<FluxRatio>>(new Set(FLUX_PRESETS.map(p => p.ratio)));
-  const [selectedFluxBatchOrientations, setSelectedFluxBatchOrientations] =
-    useState<Set<SdxlOrientation>>(new Set(['landscape', 'portrait']));
-  const [selectedFluxBatchSizes, setSelectedFluxBatchSizes] =
-    useState<Set<FluxSize>>(new Set(FLUX_SIZES));
 
   if (!open) return null;
 

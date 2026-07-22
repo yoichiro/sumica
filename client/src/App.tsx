@@ -16,6 +16,7 @@ import {
   SDXL_SIZES,
   SD15_PRESETS,
   FLUX_PRESETS,
+  FLUX_SIZES,
   resolveSdxlDimensions,
   resolveSd15Dimensions,
   resolveFluxDimensions,
@@ -766,6 +767,11 @@ function App() {
   const [selectedSd15BatchRatios, setSelectedSd15BatchRatios] = useState<Set<Sd15Ratio>>(new Set(SD15_PRESETS.map(p => p.ratio)));
   const [selectedSd15BatchOrientations, setSelectedSd15BatchOrientations] = useState<Set<'landscape' | 'portrait'>>(new Set(['landscape', 'portrait']));
   const [selectedSd15BatchSizes, setSelectedSd15BatchSizes] = useState<Set<SdxlSize>>(new Set(SDXL_SIZES));
+  // Flux batch dialog: same 3-axis shape as SDXL/SD1.5's, lifted here for the
+  // same reason — the selection survives modal close/reopen.
+  const [selectedFluxBatchRatios, setSelectedFluxBatchRatios] = useState<Set<FluxRatio>>(new Set(FLUX_PRESETS.map(p => p.ratio)));
+  const [selectedFluxBatchOrientations, setSelectedFluxBatchOrientations] = useState<Set<SdxlOrientation>>(new Set(['landscape', 'portrait']));
+  const [selectedFluxBatchSizes, setSelectedFluxBatchSizes] = useState<Set<FluxSize>>(new Set(FLUX_SIZES));
   // Models picked for model-cycling batch. Reset to "all selected" each time the
   // modal opens (via openBatchModal) so the default is always the full available
   // list — the user opts OUT of specific models for that one batch.
@@ -2133,6 +2139,12 @@ function App() {
         setSelectedSd15BatchOrientations={setSelectedSd15BatchOrientations}
         selectedSd15BatchSizes={selectedSd15BatchSizes}
         setSelectedSd15BatchSizes={setSelectedSd15BatchSizes}
+        selectedFluxBatchRatios={selectedFluxBatchRatios}
+        setSelectedFluxBatchRatios={setSelectedFluxBatchRatios}
+        selectedFluxBatchOrientations={selectedFluxBatchOrientations}
+        setSelectedFluxBatchOrientations={setSelectedFluxBatchOrientations}
+        selectedFluxBatchSizes={selectedFluxBatchSizes}
+        setSelectedFluxBatchSizes={setSelectedFluxBatchSizes}
         selectedBatchModels={selectedBatchModels}
         setSelectedBatchModels={setSelectedBatchModels}
         toggleBatchModel={toggleBatchModel}
