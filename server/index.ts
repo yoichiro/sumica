@@ -133,17 +133,9 @@ interface EnhancedPrompt {
   negative: string;
 }
 
-// Helper: Translate and enhance prompt via LM Studio, returning positive and negative prompts in XML format
-async function enhancePrompt(userPrompt: string): Promise<EnhancedPrompt> {
-  const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
-  try {
-    console.log(`Sending prompt to LM Studio (${lmStudioUrl}/v1/chat/completions)...`);
-    const response = await axios.post(`${lmStudioUrl}/v1/chat/completions`, {
-      model: lmStudioModel || undefined,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert prompt engineer for Stable Diffusion. Your task is to translate any non-English concept to English and generate both the detailed positive prompt and the negative prompt to achieve the best quality image.
+// System prompt for Stable Diffusion (SD1.5 / SDXL) prompt enhancement. Extracted
+// verbatim from the previous inline template literal — content unchanged.
+const SD_SYSTEM_PROMPT = `You are an expert prompt engineer for Stable Diffusion. Your task is to translate any non-English concept to English and generate both the detailed positive prompt and the negative prompt to achieve the best quality image.
 
 ## Emphasis handling — CRITICAL
 
@@ -198,7 +190,48 @@ You MUST encapsulate your prompts using the following XML tags:
   <negative>detailed negative prompt words, comma-separated...</negative>
 </prompts>
 
-Do not include any introductory or concluding text, explanations, or notes. Reply ONLY with the XML structure.`
+Do not include any introductory or concluding text, explanations, or notes. Reply ONLY with the XML structure.`;
+
+// Flux uses a T5 text encoder and does not honor SD-style (phrase:weight)
+// emphasis, and its distilled variants ignore negative prompts. This system
+// prompt tells the LLM to output natural-language prose and an empty negative.
+const FLUX_SYSTEM_PROMPT = `You are an expert prompt engineer for FLUX image generation.
+
+Flux uses a T5 text encoder which understands NATURAL LANGUAGE prompts.
+Do NOT use Stable Diffusion emphasis syntax like (phrase:weight) — that
+syntax does not exist in Flux and will be treated as literal text.
+
+Instead, translate the user's concept into fluent, descriptive English
+sentences that read like natural writing. Include the subject, action,
+setting, lighting, mood, and camera / composition / style as prose.
+Prefer 2–5 sentences over a comma-separated tag list.
+
+Emphasis: when the user uses natural-language emphasis cues in Japanese
+(かなり / めっちゃ / とびっきり / 強く / 極めて / 完全に etc.) or
+English (very / strongly / extremely / prominently), express strength
+through wording — repeat / rephrase the concept, use a strong adjective,
+or lead the sentence with the emphasized element. Do NOT wrap anything
+in parentheses with a numeric weight.
+
+Negative prompt: Flux models do not use negative prompts effectively.
+Always return an EMPTY <negative></negative> tag.
+
+Output format:
+<prompts><positive>your natural-language prompt</positive><negative></negative></prompts>
+Reply ONLY with the XML structure — no introduction, no explanation.`;
+
+// Helper: Translate and enhance prompt via LM Studio, returning positive and negative prompts in XML format
+async function enhancePrompt(userPrompt: string, arch: Architecture = 'sd15'): Promise<EnhancedPrompt> {
+  const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
+  const systemPrompt = arch === 'flux' ? FLUX_SYSTEM_PROMPT : SD_SYSTEM_PROMPT;
+  try {
+    console.log(`Sending prompt to LM Studio (${lmStudioUrl}/v1/chat/completions)...`);
+    const response = await axios.post(`${lmStudioUrl}/v1/chat/completions`, {
+      model: lmStudioModel || undefined,
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
         },
         {
           role: 'user',
@@ -401,12 +434,12 @@ app.use('/api/outputs', express.static(outputsDir));
 
 // 1. New Prompt Enhance Endpoint
 app.post('/api/enhance', async (req: Request, res: Response) => {
-  const { prompt } = req.body;
+  const { prompt, arch } = req.body as { prompt: string; arch?: Architecture };
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
   }
   try {
-    const enhanced = await enhancePrompt(prompt);
+    const enhanced = await enhancePrompt(prompt, arch);
     res.json({
       success: true,
       positive: enhanced.positive,
