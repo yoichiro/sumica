@@ -1449,6 +1449,11 @@ function App() {
       setSelectedSd15Orientation(s.sd15Picker.orientation);
       setSelectedSd15Size(s.sd15Picker.size);
     }
+    if (s.fluxPicker) {
+      setSelectedFluxRatio(s.fluxPicker.ratio);
+      setSelectedFluxOrientation(s.fluxPicker.orientation);
+      setSelectedFluxSize(s.fluxPicker.size);
+    }
     // rp.model is already stripped of its "[hash]" suffix (normalizeParams strips
     // it before hashing); resolve back to the currently-loaded checkpoint's full
     // title (with hash) so the model <select> shows a matching option.
@@ -1484,7 +1489,7 @@ function App() {
     const w = Number(wStr);
     const h = Number(hStr);
     const inferredArch = inferSdArchitectureFromTitle(rp.model, sdModels);
-    const arch: GalleryFilters['arch'] = inferredArch === 'sdxl' || inferredArch === 'sd15' ? inferredArch : null;
+    const arch: GalleryFilters['arch'] = inferredArch;
     const aspectRatio = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0
       ? computeAspectRatio(w, h)
       : null;

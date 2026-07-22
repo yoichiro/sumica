@@ -80,6 +80,33 @@ describe('applyGalleryFilters', () => {
     expect(out[0].model).toContain('mengxMixReal');
   });
 
+  it('filters by arch=flux using sdModels', () => {
+    const knownModelsWithFlux: SdModel[] = [
+      ...KNOWN_MODELS,
+      { title: 'fluxDev.safetensors [fff]', type: 'flux' },
+    ];
+    const history = [
+      mkRecord({ model: 'juggernautXL.safetensors [abc]' }),
+      mkRecord({ model: 'fluxDev.safetensors [fff]' }),
+    ];
+    const out = applyGalleryFilters(history, { ...ALL_NULL, arch: 'flux' }, knownModelsWithFlux);
+    expect(out).toHaveLength(1);
+    expect(out[0].model).toContain('fluxDev');
+  });
+
+  it('prefers persisted modelArchitecture over title inference when present', () => {
+    // A record's modelArchitecture is ground truth recorded at generation time
+    // (ADR 16 / ADR 42); it should win even if the checkpoint title/known-model
+    // lookup would otherwise resolve differently (e.g. a renamed or unlisted model).
+    const history = [
+      mkRecord({ model: 'renamedCheckpoint.safetensors', modelArchitecture: 'flux' }),
+      mkRecord({ model: 'renamedCheckpoint.safetensors' }),
+    ];
+    const out = applyGalleryFilters(history, { ...ALL_NULL, arch: 'flux' }, []);
+    expect(out).toHaveLength(1);
+    expect(out[0].modelArchitecture).toBe('flux');
+  });
+
   it('falls back to xl-in-name heuristic when sdModels is empty', () => {
     const history = [
       mkRecord({ model: 'someXLModel.safetensors' }),

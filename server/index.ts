@@ -489,7 +489,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
   try {
     // Step 1: Enhance prompt using LM Studio if not skipped
     if (!skipEnhance) {
-      const enhanced = await enhancePrompt(prompt);
+      const enhanced = await enhancePrompt(prompt, arch);
       finalPrompt = enhanced.positive;
       finalNegativePrompt = enhanced.negative;
       console.log(`Original: "${prompt}" -> Enhanced Positive: "${finalPrompt}" | Enhanced Negative: "${finalNegativePrompt}"`);

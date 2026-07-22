@@ -1,7 +1,7 @@
 import { RotateCcw, Filter } from 'lucide-react';
 import { rankRecipes, type RankingRollup, type RankedRecipe } from '../utils/rankingAnalysis';
 import { t } from '../i18n';
-import type { SdModel } from './presets';
+import { getArchLabel, type SdModel } from './presets';
 import { AspectRatioRect } from './AspectRatioRect';
 import { inferSdArchitectureFromTitle } from './loadIntoFormState';
 
@@ -133,7 +133,7 @@ function RankingRow({
   // heuristic when the model isn't in `sdModels` (e.g. SD disconnected or the
   // checkpoint was renamed). No chip renders when arch is null.
   const arch = inferSdArchitectureFromTitle(params.model, sdModels);
-  const archLabel = arch === 'sdxl' ? 'SDXL' : arch === 'sd15' ? 'SD1.5' : null;
+  const archLabel = arch ? getArchLabel(arch) : null;
 
   return (
     <div
@@ -211,7 +211,7 @@ function RankingRow({
                 letterSpacing: 0.3,
                 padding: '2px 6px',
                 borderRadius: 6,
-                background: arch === 'sdxl' ? 'var(--pop-blue)' : 'var(--text-muted)',
+                background: arch === 'sdxl' || arch === 'flux' ? 'var(--pop-blue)' : 'var(--text-muted)',
                 color: '#fff',
                 flexShrink: 0,
               }}

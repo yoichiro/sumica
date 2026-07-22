@@ -7,6 +7,7 @@ import {
   SD15_PRESETS,
   FLUX_PRESETS,
   FLUX_SIZES,
+  getArchLabel,
   type SdxlRatio,
   type SdxlSize,
   type SdxlOrientation,
@@ -935,7 +936,7 @@ export function ControlPanel(p: ControlPanelProps) {
                     const mismatched = l.type !== 'unknown' && l.type !== p.modelTypeFilter;
                     return (
                       <option key={l.name} value={l.name}>
-                        {l.name}{mismatched ? t.controlPanel.loraTypeMismatch(l.type === 'sdxl' ? 'SDXL' : 'SD1.5') : ''}
+                        {l.name}{mismatched ? t.controlPanel.loraTypeMismatch(getArchLabel(l.type as Architecture)) : ''}
                       </option>
                     );
                   })}

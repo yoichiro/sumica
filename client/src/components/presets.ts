@@ -3,10 +3,23 @@
 // about the ratio/orientation/size axes. See ADR 10 (SDXL) and ADR 14 (SD1.5)
 // for the design rationale and quality assumptions behind each entry.
 
+import { t } from '../i18n';
+
 export type Architecture = 'sd15' | 'sdxl' | 'flux';
 export type FluxVariant = 'schnell' | 'dev';
 export type SdModel = { title: string; type: Architecture; fluxVariant?: FluxVariant };
 export type SdLora = { name: string; type: Architecture | 'unknown' };
+
+// Single source of truth for the 3-way architecture display label, shared by
+// every UI surface that badges a model/LoRA/recipe with its arch (ControlPanel's
+// LoRA mismatch badge, RankingPanel's arch chip, BatchGenerationModal's
+// noModelsOfType message). SDXL/SD1.5 stay as open-coded literals (matches the
+// rest of the codebase's convention); Flux goes through i18n per ADR-42.
+export function getArchLabel(arch: Architecture): string {
+  if (arch === 'sdxl') return 'SDXL';
+  if (arch === 'flux') return t.controlPanel.archFluxLabel;
+  return 'SD1.5';
+}
 
 // ---- SDXL ----
 

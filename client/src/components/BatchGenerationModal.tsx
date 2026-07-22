@@ -10,6 +10,7 @@ import {
   resolveSdxlDimensions,
   resolveSd15Dimensions,
   resolveFluxDimensions,
+  getArchLabel,
   type SdxlRatio,
   type SdxlSize,
   type Sd15Ratio,
@@ -665,11 +666,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
               <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-orange)', background: 'var(--warning-bg)', borderRadius: '10px', padding: '14px' }}>
                 {sdModels.length === 0
                   ? t.batchModal.noModelsFetched
-                  : t.batchModal.noModelsOfType(
-                      modelTypeFilter === 'sdxl' ? 'SDXL'
-                      : modelTypeFilter === 'flux' ? 'Flux'
-                      : 'SD'
-                    )}
+                  : t.batchModal.noModelsOfType(getArchLabel(modelTypeFilter))}
               </div>
             ); })()}
           </>

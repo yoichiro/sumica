@@ -1,5 +1,5 @@
 import type { GenerationData } from '../App';
-import type { SdModel } from './presets';
+import type { Architecture, SdModel } from './presets';
 import { inferSdArchitectureFromTitle, stripHashSuffix } from './loadIntoFormState';
 
 // Pure helpers backing the gallery filter popover. Kept as pure functions
@@ -14,7 +14,7 @@ import { inferSdArchitectureFromTitle, stripHashSuffix } from './loadIntoFormSta
 export type GalleryOrientation = 'landscape' | 'portrait' | 'square';
 
 export interface GalleryFilters {
-  arch: 'sdxl' | 'sd15' | null;
+  arch: Architecture | null;
   model: string | null;
   sampler: string | null;
   // Aspect ratio in "larger:smaller" canonical form (e.g., "4:3"). Portrait
@@ -65,7 +65,7 @@ export function applyGalleryFilters(
     if (filters.model && stripHashSuffix(it.model ?? '') !== filters.model) return false;
     if (filters.sampler && it.sampler !== filters.sampler) return false;
     if (filters.arch) {
-      const arch = inferSdArchitectureFromTitle(it.model ?? '', sdModels);
+      const arch = it.modelArchitecture ?? inferSdArchitectureFromTitle(it.model ?? '', sdModels);
       if (arch !== filters.arch) return false;
     }
     if (filters.aspectRatio && computeAspectRatio(it.width, it.height) !== filters.aspectRatio) return false;
