@@ -15,17 +15,24 @@ import {
   SDXL_PRESETS,
   SDXL_SIZES,
   SD15_PRESETS,
+  FLUX_PRESETS,
   resolveSdxlDimensions,
   resolveSd15Dimensions,
+  resolveFluxDimensions,
   findSdxlSelection,
   findSd15Selection,
+  findFluxSelection,
   type SdxlRatio,
   type SdxlSize,
   type SdxlOrientation,
   type Sd15Ratio,
+  type FluxRatio,
+  type FluxSize,
   type SdModel,
   type SdLora,
+  type Architecture,
 } from './components/presets';
+import { computeFluxDefaults } from './components/fluxDefaults';
 import { computeLoadIntoFormState, inferSdArchitectureFromTitle, stripHashSuffix } from './components/loadIntoFormState';
 import { resolveLightboxKey } from './components/lightboxKeyboard';
 import { nextSlideshowIndex } from './components/slideshowStep';
@@ -172,7 +179,7 @@ function App() {
   // filter, the width/height option sets, and which models "モデル切替" batch
   // mode cycles through. Initializes from SD's actual active checkpoint the
   // first time fetchSdModels() succeeds (see modelTypeInitialized below).
-  const [modelTypeFilter, setModelTypeFilter] = useState<'sd15' | 'sdxl'>('sd15');
+  const [modelTypeFilter, setModelTypeFilter] = useState<Architecture>('sd15');
   const modelTypeInitialized = useRef(false);
   const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
   const [sdUpscalers, setSdUpscalers] = useState<string[]>([]);
@@ -734,6 +741,20 @@ function App() {
   const [selectedSd15Ratio, setSelectedSd15Ratio] = useState<Sd15Ratio>('1:1');
   const [selectedSd15Orientation, setSelectedSd15Orientation] = useState<SdxlOrientation>('square');
   const [selectedSd15Size, setSelectedSd15Size] = useState<SdxlSize>('S');
+  // Flux picker state — mirrors the SDXL trio. Resolved to (width, height)
+  // by the same useEffect chain when modelTypeFilter === 'flux'.
+  const [selectedFluxRatio, setSelectedFluxRatio] = useState<FluxRatio>('1:1');
+  const [selectedFluxOrientation, setSelectedFluxOrientation] = useState<SdxlOrientation>('square');
+  const [selectedFluxSize, setSelectedFluxSize] = useState<FluxSize>('M');
+
+  // Per-field override flags for Flux defaults. Flip to true on the
+  // corresponding onChange (steps, cfg, sampler, scheduler). Cleared when
+  // modelTypeFilter changes or when the active Flux model's variant changes,
+  // so the arch/variant defaults reapply cleanly.
+  const [stepsUserOverride, setStepsUserOverride] = useState(false);
+  const [cfgUserOverride, setCfgUserOverride] = useState(false);
+  const [samplerUserOverride, setSamplerUserOverride] = useState(false);
+  const [schedulerUserOverride, setSchedulerUserOverride] = useState(false);
   // SDXL batch dialog: three multi-select axes whose cross product forms BatchJob[].
   const [selectedBatchRatios, setSelectedBatchRatios] = useState<Set<SdxlRatio>>(new Set(SDXL_PRESETS.map(p => p.ratio)));
   // 'square' is implicit for 1:1 ratio and never appears in the UI toggle here;
@@ -849,24 +870,50 @@ function App() {
       return;
     }
 
-    // SD1.5 branch: seed the SD1.5 picker from the current width/height if they
-    // map to a preset; otherwise fall back to 1:1 S (512×512, SD1.5's native).
-    const foundSd15 = findSd15Selection(width, height);
-    if (foundSd15) {
-      setSelectedSd15Ratio(foundSd15.ratio);
-      setSelectedSd15Orientation(foundSd15.orientation);
-      setSelectedSd15Size(foundSd15.size);
-    } else {
-      setSelectedSd15Ratio('1:1');
-      setSelectedSd15Orientation('square');
-      setSelectedSd15Size('S');
-      setWidth(512);
-      setHeight(512);
+    if (modelTypeFilter === 'sd15') {
+      // SD1.5 branch: seed the SD1.5 picker from the current width/height if they
+      // map to a preset; otherwise fall back to 1:1 S (512×512, SD1.5's native).
+      const foundSd15 = findSd15Selection(width, height);
+      if (foundSd15) {
+        setSelectedSd15Ratio(foundSd15.ratio);
+        setSelectedSd15Orientation(foundSd15.orientation);
+        setSelectedSd15Size(foundSd15.size);
+      } else {
+        setSelectedSd15Ratio('1:1');
+        setSelectedSd15Orientation('square');
+        setSelectedSd15Size('S');
+        setWidth(512);
+        setHeight(512);
+      }
+      // Refiner/VAE are SDXL-only concepts; clear them so a subsequent SD1.5
+      // generation doesn't carry a stale SDXL refiner pick.
+      setSelectedRefiner('');
+      setSelectedVae('');
+    } else if (modelTypeFilter === 'flux') {
+      // Seed the Flux picker from the current width/height. If nothing matches,
+      // fall back to 1:1 M (1024x1024).
+      const found = findFluxSelection(width, height);
+      if (found) {
+        setSelectedFluxRatio(found.ratio);
+        setSelectedFluxOrientation(found.orientation);
+        setSelectedFluxSize(found.size);
+      } else {
+        setSelectedFluxRatio('1:1');
+        setSelectedFluxOrientation('square');
+        setSelectedFluxSize('M');
+        setWidth(1024);
+        setHeight(1024);
+      }
+      // Clear override flags so Flux defaults reapply on model select
+      setStepsUserOverride(false);
+      setCfgUserOverride(false);
+      setSamplerUserOverride(false);
+      setSchedulerUserOverride(false);
+      // Refiner/VAE are SDXL-only concepts; clear them so a subsequent Flux
+      // generation doesn't carry a stale SDXL refiner pick.
+      setSelectedRefiner('');
+      setSelectedVae('');
     }
-    // Refiner/VAE are SDXL-only concepts; clear them so a subsequent SD1.5
-    // generation doesn't carry a stale SDXL refiner pick.
-    setSelectedRefiner('');
-    setSelectedVae('');
   }, [modelTypeFilter]);
 
   // SDXL picker → width/height projection. Whenever the ratio/orientation/size
@@ -891,6 +938,16 @@ function App() {
     setHeight(dims.height);
   }, [modelTypeFilter, selectedSd15Ratio, selectedSd15Orientation, selectedSd15Size]);
 
+  // Flux picker → width/height projection. Same pattern as the SDXL effect above.
+  useEffect(() => {
+    if (modelTypeFilter !== 'flux') return;
+    const preset = FLUX_PRESETS.find(p => p.ratio === selectedFluxRatio);
+    if (!preset) return;
+    const { width: w, height: h } = resolveFluxDimensions(preset, selectedFluxOrientation, selectedFluxSize);
+    setWidth(w);
+    setHeight(h);
+  }, [modelTypeFilter, selectedFluxRatio, selectedFluxOrientation, selectedFluxSize]);
+
   // Handler for the SDXL ratio chip. Clicking 1:1 forces orientation to 'square';
   // clicking any other ratio from a square state defaults orientation to
   // 'landscape' so there's always a valid pair.
@@ -914,6 +971,39 @@ function App() {
       setSelectedSd15Orientation('landscape');
     }
   };
+
+  // Apply schnell/dev variant defaults (steps/cfg/sampler/scheduler) whenever a
+  // Flux model becomes active. Per-field override flags let the user's manual
+  // edits stick instead of being clobbered on every re-run of this effect.
+  useEffect(() => {
+    if (modelTypeFilter !== 'flux') return;
+    const activeModel = sdModels.find(m => m.title === selectedModel);
+    if (!activeModel || activeModel.type !== 'flux') return;
+    const next = computeFluxDefaults(
+      activeModel.fluxVariant,
+      { stepsUserOverride, cfgUserOverride, samplerUserOverride, schedulerUserOverride },
+      { steps, cfg: cfgScale, sampler: selectedSampler, scheduler: selectedScheduler },
+    );
+    if (next.steps !== steps) setSteps(next.steps);
+    if (next.cfg !== cfgScale) setCfgScale(next.cfg);
+    if (next.sampler !== selectedSampler) setSelectedSampler(next.sampler);
+    if (next.scheduler !== selectedScheduler) setSelectedScheduler(next.scheduler);
+    // Note: intentionally NOT depending on the current values of the fields
+    // being computed — we want this to re-fire ONLY when the model changes
+    // (or arch toggles clear the overrides).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelTypeFilter, selectedModel, stepsUserOverride, cfgUserOverride, samplerUserOverride, schedulerUserOverride]);
+
+  // User-driven setters for steps/cfg/sampler/scheduler — these flip the
+  // corresponding override flag so the Flux-defaults effect above stops
+  // clobbering the field once the user has touched it themselves. Passed to
+  // ControlPanel in place of the raw setters; internal sync paths (loadIntoForm,
+  // applyRecipe, the initial sampler/scheduler fetch) keep using the raw
+  // setters directly since those aren't "the user changing a field".
+  const setStepsFromUser = (v: number) => { setSteps(v); setStepsUserOverride(true); };
+  const setCfgFromUser = (v: number) => { setCfgScale(v); setCfgUserOverride(true); };
+  const setSamplerFromUser = (v: string) => { setSelectedSampler(v); setSamplerUserOverride(true); };
+  const setSchedulerFromUser = (v: string) => { setSelectedScheduler(v); setSchedulerUserOverride(true); };
 
   // Lightbox keyboard control. The key→action mapping lives in
   // `lightboxKeyboard.ts` as a pure function (unit-tested); this effect only
@@ -1260,6 +1350,13 @@ function App() {
     // generate falls back to the normal enhance flow, unchanged.
     setLoadedPositive(s.loadedPositive);
     setLoadedNegative(s.loadedNegative);
+    // Mark every Flux-defaults field as user-overridden so a loaded Flux image's
+    // steps/cfg/sampler/scheduler (just set above) aren't immediately clobbered
+    // by the Flux-defaults effect reapplying the variant's defaults.
+    setStepsUserOverride(true);
+    setCfgUserOverride(true);
+    setSamplerUserOverride(true);
+    setSchedulerUserOverride(true);
     addToast(t.toast.loadedIntoForm, 'success');
   };
 
@@ -1406,7 +1503,7 @@ function App() {
     const enhanceRes = await fetch(`${API_BASE}/enhance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: promptText })
+      body: JSON.stringify({ prompt: promptText, arch: modelTypeFilter })
     });
     if (!enhanceRes.ok) {
       const errData = await enhanceRes.json();
@@ -1801,10 +1898,10 @@ function App() {
           setSelectedModel={setSelectedModel}
           sdModels={sdModels}
           selectedSampler={selectedSampler}
-          setSelectedSampler={setSelectedSampler}
+          setSelectedSampler={setSamplerFromUser}
           sdSamplers={sdSamplers}
           selectedScheduler={selectedScheduler}
-          setSelectedScheduler={setSelectedScheduler}
+          setSelectedScheduler={setSchedulerFromUser}
           sdSchedulers={sdSchedulers}
           selectedRatio={selectedRatio}
           handleRatioChange={handleRatioChange}
@@ -1818,12 +1915,18 @@ function App() {
           setSelectedSd15Orientation={setSelectedSd15Orientation}
           selectedSd15Size={selectedSd15Size}
           setSelectedSd15Size={setSelectedSd15Size}
+          selectedFluxRatio={selectedFluxRatio}
+          setSelectedFluxRatio={setSelectedFluxRatio}
+          selectedFluxOrientation={selectedFluxOrientation}
+          setSelectedFluxOrientation={setSelectedFluxOrientation}
+          selectedFluxSize={selectedFluxSize}
+          setSelectedFluxSize={setSelectedFluxSize}
           width={width}
           height={height}
           steps={steps}
-          setSteps={setSteps}
+          setSteps={setStepsFromUser}
           cfgScale={cfgScale}
-          setCfgScale={setCfgScale}
+          setCfgScale={setCfgFromUser}
           hiresFixEnabled={hiresFixEnabled}
           setHiresFixEnabled={setHiresFixEnabled}
           selectedUpscaler={selectedUpscaler}
@@ -2010,7 +2113,11 @@ function App() {
       <BatchGenerationModal
         open={showBatchModal}
         onClose={closeBatchModal}
-        modelTypeFilter={modelTypeFilter}
+        // Type-only narrowing cast: BatchGenerationModal's own prop type is
+        // still 'sd15' | 'sdxl' — widening it to Architecture (adding Flux
+        // batch support) is Task 6's job. The runtime value passed through is
+        // unchanged; this just satisfies the compiler until Task 6 lands.
+        modelTypeFilter={modelTypeFilter as 'sd15' | 'sdxl'}
         sdModels={sdModels}
         width={width}
         height={height}
