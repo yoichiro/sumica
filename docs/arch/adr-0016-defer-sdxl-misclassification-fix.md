@@ -51,7 +51,7 @@ Case 1 (exact title in server-classified sd15):
 
 ## Status
 
-承認済み
+置き換え済み（[[adr-0042-flux-support-3way-architecture]] により置き換え）。本 ADR で保留していた「案 A: 生成時に arch を metadata に永続化」の実装が ADR-42 の Flux 対応と同時に行われました。新規生成レコードは `modelArchitecture` を保存するため本 ADR の症状は起きません。ただし ADR-42 以前に生成された既存レコードにはフィールドが無いため、そちらでは引き続き本 ADR のワークアラウンド（トグルの手動切替）が有効です。
 
 ## Consequences
 
