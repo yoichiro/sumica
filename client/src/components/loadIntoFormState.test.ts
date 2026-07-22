@@ -10,6 +10,8 @@ const KNOWN: SdModel[] = [
   { title: 'mengxMixReal_v2.safetensors [a012959261]',    type: 'sd15' },
   { title: 'juggernautXL_version6Rundiffusion.safetensors [1fe6c7ec54]', type: 'sdxl' },
   { title: 'voidnoisecorexl_r1892.safetensors [e297822f59]',              type: 'sdxl' },
+  { title: 'sd_xl_base_1.0.safetensors [31e35c80fc]', type: 'sdxl' },
+  { title: '2758FluxAsianUtopian_v60SchnellFp8Noclip.safetensors [ed2bd39653]', type: 'flux', fluxVariant: 'schnell' },
 ];
 
 describe('inferSdArchitectureFromTitle', () => {
@@ -240,5 +242,41 @@ describe('computeLoadIntoFormState — loaded enhanced prompt fields', () => {
     );
     expect(s.loadedPositive).toBe('');
     expect(s.loadedNegative).toBe('');
+  });
+});
+
+describe('Flux records', () => {
+  it('trusts modelArchitecture: flux and populates fluxPicker from dimensions', () => {
+    const item = {
+      width: 1024, height: 1024,
+      model: '2758FluxAsianUtopian_v60SchnellFp8Noclip.safetensors [ed2bd39653]',
+      modelArchitecture: 'flux' as const,
+    };
+    const s = computeLoadIntoFormState(item, KNOWN);
+    expect(s.archToSet).toBe('flux');
+    expect(s.fluxPicker).toEqual({ ratio: '1:1', orientation: 'square', size: 'M' });
+    expect(s.sdxlPicker).toBeNull();
+    expect(s.sd15Picker).toBeNull();
+  });
+
+  it('falls back to inferSdArchitectureFromTitle when modelArchitecture is absent (legacy record)', () => {
+    const item = {
+      width: 1024, height: 1024,
+      model: 'sd_xl_base_1.0.safetensors [31e35c80fc]',
+      // no modelArchitecture
+    };
+    const s = computeLoadIntoFormState(item, KNOWN);
+    expect(s.archToSet).toBe('sdxl');
+  });
+
+  it('fluxPicker is null for non-preset Flux dimensions and falls through to defaults', () => {
+    const item = {
+      width: 999, height: 999,
+      model: 'some-flux.safetensors',
+      modelArchitecture: 'flux' as const,
+    };
+    const s = computeLoadIntoFormState(item, KNOWN);
+    expect(s.archToSet).toBe('flux');
+    expect(s.fluxPicker).toBeNull(); // Caller applies Flux default (1:1 M)
   });
 });

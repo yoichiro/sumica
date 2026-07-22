@@ -112,6 +112,9 @@ export interface GenerationData {
   refinerSwitchAt?: number;
   vae?: string;
   isFavorite?: boolean;
+  // Ground-truth architecture from the user's toggle at generation time.
+  // Absent on legacy records; loadIntoForm falls back to name/title heuristics.
+  modelArchitecture?: Architecture;
 }
 
 
@@ -1323,6 +1326,11 @@ function App() {
       setSelectedSd15Orientation(s.sd15Picker.orientation);
       setSelectedSd15Size(s.sd15Picker.size);
     }
+    if (s.fluxPicker) {
+      setSelectedFluxRatio(s.fluxPicker.ratio);
+      setSelectedFluxOrientation(s.fluxPicker.orientation);
+      setSelectedFluxSize(s.fluxPicker.size);
+    }
     setSteps(item.steps);
     setCfgScale(item.cfgScale);
     setSelectedModel(item.model || '');
@@ -1561,6 +1569,7 @@ function App() {
           refinerSwitchAt,
         } : {}),
         ...(modelTypeFilter === 'sdxl' && selectedVae ? { vae: selectedVae } : {}),
+        modelArchitecture: modelTypeFilter,
         clientPersist: !!user
       })
     });
@@ -1578,7 +1587,11 @@ function App() {
   // Throws on cloud-save failure (caller decides recovery).
   const persistResult = async (result: GenResult): Promise<GenerationData> => {
     if (user && result.image && result.params) {
-      return await saveGeneration(user.uid, result.image, result.params) as unknown as GenerationData;
+      // The server's clientPersist response doesn't carry modelArchitecture
+      // (it never persists on that path) — the client already knows the
+      // active architecture via modelTypeFilter, so merge it in here.
+      const paramsWithArch: GenerationParams = { ...result.params, modelArchitecture: modelTypeFilter };
+      return await saveGeneration(user.uid, result.image, paramsWithArch) as unknown as GenerationData;
     }
     return result.data as GenerationData;
   };

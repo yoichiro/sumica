@@ -31,6 +31,7 @@ import {
 import { generateThumbnail } from './utils/thumbnail';
 import { normalizeParams, buildRollupKey } from './utils/rankingRollup';
 import type { RankingRollup } from './utils/rankingAnalysis';
+import type { Architecture } from './components/presets';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -89,6 +90,9 @@ export type GenerationParams = {
   // External VAE override. Absent or 'Automatic' means SD keeps its current setting
   // (usually the checkpoint's baked-in VAE).
   vae?: string;
+  // Ground-truth architecture from the user's toggle at generation time.
+  // Absent on legacy records; loadIntoForm falls back to name/title heuristics.
+  modelArchitecture?: Architecture;
 };
 
 // Keep this shape in sync with GenerationData in App.tsx.

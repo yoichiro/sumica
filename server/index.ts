@@ -80,6 +80,9 @@ interface GenerationMetadata {
   // VAE setting alone", which is usually "Automatic".
   vae?: string;
   isFavorite?: boolean;
+  // Ground-truth architecture from the user's toggle at generation time.
+  // Absent on legacy records; loadIntoForm falls back to name/title heuristics.
+  modelArchitecture?: Architecture;
 }
 
 // Thumbnail spec — 256px max dimension, WebP quality 80. Aspect ratio preserved
@@ -453,6 +456,11 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
 // 2. Generate Image Pipeline (Updated to support pre-enhanced prompts)
 app.post('/api/generate', async (req: Request, res: Response) => {
   const { prompt, negativePrompt, originalPrompt, width, height, steps, cfgScale, skipEnhance, model, seed, sampler, scheduler, loras, enableHr, hrUpscaler, hrScale, hrSecondPassSteps, denoisingStrength, refiner, refinerSwitchAt, vae, clientPersist } = req.body;
+  // Ground-truth architecture sent by the client's toggle at generation time.
+  // Only consumed on the local-save path below (clientPersist skips server-side
+  // persistence entirely — the client already has modelTypeFilter in scope for
+  // its own Firebase write).
+  const { modelArchitecture } = req.body as { modelArchitecture?: Architecture };
   cancelRequested = false; // defensive reset — clears any stale flag from an unrelated, already-finished request
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
@@ -600,6 +608,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
         } : {}),
         ...(vae && vae !== 'Automatic' ? { vae } : {}),
         loras: loraList,
+        modelArchitecture,
         imageUrl,
         thumbnailUrl,
         localPath: localFilePath,

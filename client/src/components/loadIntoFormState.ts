@@ -5,11 +5,15 @@
 import {
   findSdxlSelection,
   findSd15Selection,
+  findFluxSelection,
   type SdxlRatio,
   type SdxlSize,
   type SdxlOrientation,
   type Sd15Ratio,
+  type FluxRatio,
+  type FluxSize,
   type SdModel,
+  type Architecture,
 } from './presets';
 
 export interface LoadableGenerationItem {
@@ -20,13 +24,17 @@ export interface LoadableGenerationItem {
   // and pre-feature imports working without changes.
   enhancedPrompt?: string;
   negativePrompt?: string;
+  // Ground-truth architecture from the user's toggle at generation time.
+  // Absent on legacy records — computeLoadIntoFormState then falls back to
+  // inferSdArchitectureFromTitle.
+  modelArchitecture?: Architecture;
 }
 
 export interface LoadIntoFormState {
   // Which architecture the model belongs to. null when the item carries no
   // model info (older records) — in that case the caller leaves the toggle
   // alone.
-  archToSet: 'sd15' | 'sdxl' | null;
+  archToSet: Architecture | null;
   // Concrete pixel dimensions to apply.
   width: number;
   height: number;
@@ -43,6 +51,14 @@ export interface LoadIntoFormState {
     ratio: Sd15Ratio;
     orientation: SdxlOrientation;
     size: SdxlSize;
+  } | null;
+  // Same shape for Flux. null when arch is not 'flux' or when the dimensions
+  // don't map to any Flux preset (the caller then keeps/defaults the current
+  // Flux picker state, e.g. 1:1 M).
+  fluxPicker: {
+    ratio: FluxRatio;
+    orientation: SdxlOrientation;
+    size: FluxSize;
   } | null;
   // Loaded enhanced prompt to seed the form's read-only panel and skip the
   // enhance step on the next generate. Empty strings when the item has no
@@ -77,7 +93,7 @@ export function stripHashSuffix(title: string): string {
 export function inferSdArchitectureFromTitle(
   title: string,
   knownModels: SdModel[],
-): 'sd15' | 'sdxl' | null {
+): Architecture | null {
   if (!title) return null;
   const base = stripHashSuffix(title);
   const known = knownModels.find(m => stripHashSuffix(m.title) === base);
@@ -90,7 +106,10 @@ export function computeLoadIntoFormState(
   item: LoadableGenerationItem,
   knownModels: SdModel[],
 ): LoadIntoFormState {
-  const arch = inferSdArchitectureFromTitle(item.model || '', knownModels);
+  // Precedence: trust item.modelArchitecture when present (ground truth
+  // recorded at generation time — see ADR 16); otherwise fall back to the
+  // existing name/title heuristic for legacy records that predate it.
+  const arch: Architecture | null = item.modelArchitecture ?? inferSdArchitectureFromTitle(item.model || '', knownModels);
 
   const state: LoadIntoFormState = {
     archToSet: arch,
@@ -98,11 +117,14 @@ export function computeLoadIntoFormState(
     height: item.height,
     sdxlPicker: null,
     sd15Picker: null,
+    fluxPicker: null,
     loadedPositive: '',
     loadedNegative: '',
   };
 
-  if (arch === 'sdxl') {
+  if (arch === 'flux') {
+    state.fluxPicker = findFluxSelection(item.width, item.height);
+  } else if (arch === 'sdxl') {
     state.sdxlPicker = findSdxlSelection(item.width, item.height);
   } else if (arch === 'sd15') {
     state.sd15Picker = findSd15Selection(item.width, item.height);
