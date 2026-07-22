@@ -187,6 +187,7 @@ export const en: typeof ja = {
     countRangeLabel: (n) => `${n} images`,
     sizeSdxlDescription: 'Generates one image for each combination (cross product) of the selected aspect ratios, orientations, and sizes. 1:1 counts as a single image regardless of orientation selection.',
     sizeSd15Description: 'Generates one image for each combination (cross product) of the selected aspect ratios, orientations, and sizes. Only 1:1 varies by size; other ratios are fixed at M and only orientation can be chosen.',
+    sizeFluxDescription: 'Generates one image for each combination (cross product) of the selected aspect ratios, orientations, and sizes. 1:1 counts as a single image regardless of orientation selection.',
     sd15SizeLabel: 'Size (1:1 only):',
     jobCountLabel: (n) => `${n} combinations`,
     modelDescription: (width, height) => `Cycles through the available models, generating one image per model. Uses the current form size (${width}×${height}).`,

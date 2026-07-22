@@ -185,6 +185,7 @@ export const ja = {
     countRangeLabel: (n: number) => `${n}枚`,
     sizeSdxlDescription: '選んだアスペクト比・向き・サイズの組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。1:1 は向き選択に関わらず1枚扱いです。',
     sizeSd15Description: '選んだアスペクト比・向き・サイズの組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。1:1 のみサイズ違いを生成し、他の比率は M 固定・向きだけ選べます。',
+    sizeFluxDescription: '選んだアスペクト比・向き・サイズの組み合わせ（掛け合わせ）ごとに1枚ずつ生成します。1:1 は向き選択に関わらず1枚扱いです。',
     sd15SizeLabel: 'サイズ (1:1 のみ有効):',
     jobCountLabel: (n: number) => `${n}通り生成`,
     modelDescription: (width: number, height: number) => `利用可能なモデルを順番に切り替えながら、1モデルにつき1枚ずつ生成します。サイズは現在のフォーム設定（${width}×${height}）を使用します。`,

@@ -2113,11 +2113,7 @@ function App() {
       <BatchGenerationModal
         open={showBatchModal}
         onClose={closeBatchModal}
-        // Type-only narrowing cast: BatchGenerationModal's own prop type is
-        // still 'sd15' | 'sdxl' — widening it to Architecture (adding Flux
-        // batch support) is Task 6's job. The runtime value passed through is
-        // unchanged; this just satisfies the compiler until Task 6 lands.
-        modelTypeFilter={modelTypeFilter as 'sd15' | 'sdxl'}
+        modelTypeFilter={modelTypeFilter}
         sdModels={sdModels}
         width={width}
         height={height}
