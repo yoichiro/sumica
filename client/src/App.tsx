@@ -1420,6 +1420,15 @@ function App() {
     const w = Number(wStr);
     const h = Number(hStr);
     const s = computeLoadIntoFormState({ width: w, height: h, model: rp.model }, sdModels);
+    // Mark every Flux-defaults field as user-overridden BEFORE flipping
+    // modelTypeFilter, mirroring loadIntoForm above, so the recipe's
+    // steps/cfg/sampler/scheduler (set below) survive the modelTypeFilter
+    // useEffect's arch-switch reset instead of being clobbered back to
+    // generic SD defaults.
+    setStepsUserOverride(true);
+    setCfgUserOverride(true);
+    setSamplerUserOverride(true);
+    setSchedulerUserOverride(true);
     // Flip the SD/SDXL toggle BEFORE setting width/height, same ordering
     // reasoning as loadIntoForm: the modelTypeFilter effect resolves the
     // picker from whichever width/height land in the same render batch.
