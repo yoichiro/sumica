@@ -26,14 +26,14 @@ const SCHNELL_DEFAULTS: FluxCurrentValues = {
   steps: 4,
   cfg: 1.0,
   sampler: 'Euler',
-  scheduler: 'Simple',
+  scheduler: 'simple',
 };
 
 const DEV_DEFAULTS: FluxCurrentValues = {
   steps: 25,
   cfg: 3.5,
   sampler: 'Euler',
-  scheduler: 'Simple',
+  scheduler: 'simple',
 };
 
 // Computes what steps/cfg/sampler/scheduler should be when a Flux model is
