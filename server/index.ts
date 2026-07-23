@@ -388,8 +388,11 @@ function toWslPath(windowsPath: string): string {
 // Classify a checkpoint into 'sd15' / 'sdxl' / 'flux' by reading the .safetensors
 // header (an 8-byte little-endian length prefix followed by that many bytes of
 // JSON tensor metadata) without loading any tensor data. Detection order:
-//   1) model.diffusion_model.double_blocks.* (Flux DiT). Then peek at
-//      __metadata__ for a flux1-dev reference; default to schnell otherwise.
+//   1) double_blocks.* (bare/raw layout — official flux1-schnell/-dev and
+//      derivatives) OR model.diffusion_model.double_blocks.* (ComfyUI-wrapped
+//      layout — typical of merges/finetunes redistributed via ComfyUI). Then
+//      peek at __metadata__ for a flux1-dev reference; default to schnell
+//      otherwise.
 //   2) conditioner.embedders.* (SDXL — both base and refiner).
 //   3) Fallback → sd15.
 // Falls back to a name heuristic on read failure so the model list keeps
@@ -409,7 +412,10 @@ async function classifyCheckpointArch(
         await handle.read(headerBuffer, 0, headerLength, 8);
         const header = JSON.parse(headerBuffer.toString('utf-8')) as Record<string, unknown>;
         const keys = Object.keys(header).filter((k) => k !== '__metadata__');
-        if (keys.some((k) => k.startsWith('model.diffusion_model.double_blocks.'))) {
+        if (keys.some((k) =>
+          k.startsWith('double_blocks.') ||
+          k.startsWith('model.diffusion_model.double_blocks.')
+        )) {
           const metaStr = JSON.stringify(header.__metadata__ ?? {});
           const fluxVariant: FluxVariant = /flux1?[-_]?dev/i.test(metaStr) ? 'dev' : 'schnell';
           return { type: 'flux', fluxVariant };
