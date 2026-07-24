@@ -325,6 +325,36 @@ async function generateImage(
     const overrides: Record<string, unknown> = {};
     if (model) overrides.sd_model_checkpoint = model;
     if (vae && vae !== 'Automatic') overrides.sd_vae = vae;
+    // Forge Neo Preset synchronization. Forge stores preset-scoped module
+    // lists (forge_additional_modules_flux / _xl / _sd) and applies the active
+    // preset's modules to every checkpoint load. Without this sync, e.g. an
+    // SDXL checkpoint arriving while forge_preset stays on 'flux' triggers a
+    // state_dict shape mismatch (Flux VAE has 16-channel latents, SD/SDXL 4).
+    // Sending forge_preset + forge_additional_modules in override_settings
+    // scopes the switch to this request (persistent options stay unchanged).
+    // AUTOMATIC1111 (non-Forge) silently ignores unknown override keys, so the
+    // same payload is safe on both backends.
+    if (arch === 'flux') {
+      // Fetch the persistent Flux module list from Forge's options so we can
+      // include it in the override. If Forge isn't the backend (no such key
+      // in options) the injection is skipped and the request behaves as before.
+      try {
+        const optRes = await axios.get(`${stableDiffusionUrl}/sdapi/v1/options`, { timeout: 4000 });
+        const fluxModules = optRes.data?.forge_additional_modules_flux;
+        if (Array.isArray(fluxModules) && fluxModules.length > 0) {
+          overrides.forge_preset = 'flux';
+          overrides.forge_additional_modules = fluxModules;
+        }
+      } catch (error) {
+        console.error('Failed to fetch forge_additional_modules_flux, continuing without preset sync:', (error as Error).message);
+      }
+    } else if (arch === 'sdxl') {
+      overrides.forge_preset = 'xl';
+      overrides.forge_additional_modules = [];
+    } else if (arch === 'sd15') {
+      overrides.forge_preset = 'sd';
+      overrides.forge_additional_modules = [];
+    }
     if (Object.keys(overrides).length > 0) {
       payload.override_settings = overrides;
     }
