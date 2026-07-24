@@ -34,7 +34,7 @@ import {
   type Architecture,
 } from './components/presets';
 import { computeFluxDefaults } from './components/fluxDefaults';
-import { computeLoadIntoFormState, inferSdArchitectureFromTitle, stripHashSuffix } from './components/loadIntoFormState';
+import { computeLoadIntoFormState, inferSdArchitectureFromTitle, resolveSelectedModel } from './components/loadIntoFormState';
 import { resolveLightboxKey } from './components/lightboxKeyboard';
 import { nextSlideshowIndex } from './components/slideshowStep';
 import { flushSync } from 'react-dom';
@@ -861,7 +861,13 @@ function App() {
   // Same reasoning for the *UserOverride flags read below (steps/cfg/sampler/
   // scheduler reset) — they must not retrigger this effect on every override change.
   useEffect(() => {
-    setSelectedModel((prev) => (sdModels.some((m) => m.type === modelTypeFilter && m.title === prev) ? prev : (sdModels.find((m) => m.type === modelTypeFilter)?.title ?? '')));
+    // Rebind the selected model to the current sdModels entry for this arch.
+    // Uses stripHashSuffix-based matching (via resolveSelectedModel) so a
+    // history record whose "[hash]" drifted since save still resolves back to
+    // the same base filename's current title — otherwise loadIntoForm's
+    // setSelectedModel(item.model) would fall through to the first-of-arch
+    // fallback on any hash mismatch.
+    setSelectedModel((prev) => resolveSelectedModel(prev, modelTypeFilter, sdModels));
 
     if (modelTypeFilter === 'sdxl') {
       // Seed the SDXL picker from the current width/height if they map to a preset;
@@ -1360,7 +1366,9 @@ function App() {
     }
     setSteps(item.steps);
     setCfgScale(item.cfgScale);
-    setSelectedModel(item.model || '');
+    // Rebind item.model (which carries the hash it had at save time) to the
+    // currently-loaded sdModels title. See resolveSelectedModel's docstring.
+    setSelectedModel(resolveSelectedModel(item.model || '', s.archToSet, sdModels));
     setSelectedSampler(item.sampler || '');
     setSelectedScheduler(item.scheduler || '');
     setSelectedLoras(item.loras || []);
@@ -1456,9 +1464,10 @@ function App() {
     }
     // rp.model is already stripped of its "[hash]" suffix (normalizeParams strips
     // it before hashing); resolve back to the currently-loaded checkpoint's full
-    // title (with hash) so the model <select> shows a matching option.
-    const fullTitle = sdModels.find((m) => stripHashSuffix(m.title) === rp.model)?.title;
-    setSelectedModel(fullTitle ?? rp.model);
+    // title (with hash) so the model <select> shows a matching option. Uses the
+    // shared resolveSelectedModel helper so any future hash-normalization tweaks
+    // apply to loadIntoForm, applyRecipe, and the modelTypeFilter effect at once.
+    setSelectedModel(resolveSelectedModel(rp.model, s.archToSet, sdModels));
     setSelectedSampler(rp.sampler);
     setSelectedScheduler(rp.scheduler);
     setSteps(rp.steps);

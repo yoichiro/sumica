@@ -82,6 +82,41 @@ export function stripHashSuffix(title: string): string {
   return title.replace(/\s*\[[^\]]+\]\s*$/, '').trim();
 }
 
+// Resolve a stored/candidate checkpoint identifier to the current sdModels
+// title (with hash) it should map to. Callers pass whatever they have — a
+// full "name.safetensors [hash]" from a persisted history record, a bare
+// "name.safetensors" from a normalized ranking recipe, or an empty string.
+//
+// Matching is done on the base filename (hash suffix stripped, see
+// stripHashSuffix's docstring for why history records may carry a stale or
+// missing hash). When targetArch is given, the base match is scoped to
+// models of that architecture — this fixes the bug where switching arch on
+// loadIntoForm dropped the model back to the first model of the arch just
+// because the equality-checked title was still the pre-flip one.
+//
+// Returns:
+//   - candidate's current sdModels title when a base match is found in
+//     targetArch (this is the fix: same file, hash may have changed)
+//   - the first sdModels entry of targetArch as a fallback when no base match
+//   - '' when there are no models of targetArch and no candidate to preserve
+export function resolveSelectedModel(
+  candidate: string,
+  targetArch: Architecture | null,
+  knownModels: SdModel[],
+): string {
+  const base = candidate ? stripHashSuffix(candidate) : '';
+  if (base) {
+    const matched = targetArch
+      ? knownModels.find(m => m.type === targetArch && stripHashSuffix(m.title) === base)
+      : knownModels.find(m => stripHashSuffix(m.title) === base);
+    if (matched) return matched.title;
+  }
+  if (targetArch) {
+    return knownModels.find(m => m.type === targetArch)?.title ?? '';
+  }
+  return candidate;
+}
+
 // Infer SDXL vs SD1.5 from a checkpoint title. Prefers the known-models list
 // (populated by the safetensors header analysis in ADR 9); falls back to the
 // "xl"-in-name heuristic (ADR 3) when the model isn't currently loaded.

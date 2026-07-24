@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeLoadIntoFormState,
   inferSdArchitectureFromTitle,
+  resolveSelectedModel,
 } from './loadIntoFormState';
 import type { SdModel } from './presets';
 
@@ -278,5 +279,67 @@ describe('Flux records', () => {
     const s = computeLoadIntoFormState(item, KNOWN);
     expect(s.archToSet).toBe('flux');
     expect(s.fluxPicker).toBeNull(); // Caller applies Flux default (1:1 M)
+  });
+});
+
+// Regression tests for the "loadIntoForm doesn't restore model name" bug: SD's
+// /sdapi/v1/sd-models returns titles with a "[hash]" suffix, but the same file
+// can carry a different hash between the record's save time and now. The
+// arch-toggle useEffect and loadIntoForm's own model set used strict equality
+// against sdModels titles, so any hash drift silently fell back to the first
+// model of the target arch. resolveSelectedModel normalizes on stripHashSuffix
+// and rebinds to the current sdModels entry so the dropdown reflects the
+// stored model.
+describe('resolveSelectedModel', () => {
+  it('preserves the current title when the candidate matches on hash', () => {
+    // Same title as sdModels → returned verbatim.
+    expect(
+      resolveSelectedModel('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]', 'sd15', KNOWN),
+    ).toBe('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]');
+  });
+
+  it('rebinds to the current sdModels title when the candidate has a stale hash', () => {
+    // Candidate has an old/different hash — the base filename matches sdModels'
+    // yayoi entry, so the returned value MUST be sdModels' current title, not
+    // the candidate itself (otherwise the <select> value has no matching option).
+    expect(
+      resolveSelectedModel('yayoi_mix_v25-fp16.safetensors [OLDHASH]', 'sd15', KNOWN),
+    ).toBe('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]');
+  });
+
+  it('rebinds to the current sdModels title when the candidate has no hash at all', () => {
+    // Ranking recipes strip the hash (normalizeParams before hashing) — bare
+    // filenames must still resolve to the currently-loaded checkpoint.
+    expect(
+      resolveSelectedModel('juggernautXL_version6Rundiffusion.safetensors', 'sdxl', KNOWN),
+    ).toBe('juggernautXL_version6Rundiffusion.safetensors [1fe6c7ec54]');
+  });
+
+  it('falls back to the first model of the target arch when no base match exists', () => {
+    // Candidate names a checkpoint that isn't loaded any more — return the
+    // first sdModels entry of targetArch. Order of KNOWN puts yayoi first for sd15.
+    expect(
+      resolveSelectedModel('some_uninstalled_model.safetensors [abc]', 'sd15', KNOWN),
+    ).toBe('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]');
+  });
+
+  it('scopes the base match to the target arch (does not cross architectures)', () => {
+    // A model whose base filename only exists under sd15 must NOT be resolved
+    // when targetArch is 'flux' — the caller just flipped to Flux, so the
+    // fallback must land on a Flux model, never on the sd15 file.
+    expect(
+      resolveSelectedModel('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]', 'flux', KNOWN),
+    ).toBe('2758FluxAsianUtopian_v60SchnellFp8Noclip.safetensors [ed2bd39653]');
+  });
+
+  it('returns the first target-arch model when the candidate is empty', () => {
+    expect(resolveSelectedModel('', 'flux', KNOWN)).toBe(
+      '2758FluxAsianUtopian_v60SchnellFp8Noclip.safetensors [ed2bd39653]',
+    );
+  });
+
+  it('returns empty when no target-arch models exist and the candidate is empty', () => {
+    // Empty sdModels — nothing to fall back to.
+    expect(resolveSelectedModel('', 'flux', [])).toBe('');
   });
 });
