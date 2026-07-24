@@ -954,6 +954,12 @@ function App() {
       // generation doesn't carry a stale SDXL refiner pick.
       setSelectedRefiner('');
       setSelectedVae('');
+      // Hires.fix is unsupported in Flux (ADR-42). Forcibly disable the flag
+      // here so a stale enableHr=true from a prior SD1.5/SDXL loadIntoForm
+      // cannot survive the switch to Flux — the UI hides the panel but the
+      // boolean state would otherwise still flow into the generate payload
+      // and trigger Forge Neo's TypeError on hr_additional_modules.
+      setHiresFixEnabled(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelTypeFilter]);

@@ -306,12 +306,27 @@ async function generateImage(
     }
     // Hires.fix fields are only meaningful (and only sent) when enabled, so a
     // disabled request produces a payload identical to pre-Hires.fix behavior.
-    if (enableHr) {
+    // Flux does not support Hires.fix ([[adr-0042]], [[adr-0052]]) so we
+    // defensively skip enable_hr for arch === 'flux' even when the client sends
+    // enableHr=true — this happens when a user loads-into-form a prior SD1.5/
+    // SDXL record (which had Hires.fix on) and then toggles to Flux; the client
+    // hides the Hires.fix panel but leaves the boolean state as-is, and Forge
+    // Neo's hires path then crashes with TypeError on hr_additional_modules.
+    const shouldUseHiresFix = enableHr && arch !== 'flux';
+    if (shouldUseHiresFix) {
       payload.enable_hr = true;
       payload.hr_scale = hrScale;
       payload.denoising_strength = denoisingStrength;
       if (hrUpscaler) payload.hr_upscaler = hrUpscaler;
       if (hrSecondPassSteps) payload.hr_second_pass_steps = hrSecondPassSteps;
+      // Forge Neo requires hr_additional_modules to be set on the request or the
+      // hires path crashes with `TypeError: argument of type 'NoneType' is not
+      // iterable` (line 1405 of Forge Neo's processing.py). It cannot be sent
+      // through override_settings (that raises KeyError — the option is not
+      // registered as a settings key). Sent as a top-level payload field.
+      // "Use same choices" is the sentinel meaning "reuse the main pass's VAE
+      // and text encoders", which is exactly what SD1.5/SDXL Hires.fix wants.
+      payload.hr_additional_modules = ['Use same choices'];
     }
     // SDXL Refiner: only send both fields when a refiner checkpoint is chosen,
     // so opt-out requests keep the exact pre-refiner payload shape.
