@@ -5,13 +5,10 @@
 import {
   findSdxlSelection,
   findSd15Selection,
-  findFluxSelection,
   type SdxlRatio,
   type SdxlSize,
   type SdxlOrientation,
   type Sd15Ratio,
-  type FluxRatio,
-  type FluxSize,
   type SdModel,
   type Architecture,
 } from './presets';
@@ -51,14 +48,6 @@ export interface LoadIntoFormState {
     ratio: Sd15Ratio;
     orientation: SdxlOrientation;
     size: SdxlSize;
-  } | null;
-  // Same shape for Flux. null when arch is not 'flux' or when the dimensions
-  // don't map to any Flux preset (the caller then keeps/defaults the current
-  // Flux picker state, e.g. 1:1 M).
-  fluxPicker: {
-    ratio: FluxRatio;
-    orientation: SdxlOrientation;
-    size: FluxSize;
   } | null;
   // Loaded enhanced prompt to seed the form's read-only panel and skip the
   // enhance step on the next generate. Empty strings when the item has no
@@ -152,14 +141,11 @@ export function computeLoadIntoFormState(
     height: item.height,
     sdxlPicker: null,
     sd15Picker: null,
-    fluxPicker: null,
     loadedPositive: '',
     loadedNegative: '',
   };
 
-  if (arch === 'flux') {
-    state.fluxPicker = findFluxSelection(item.width, item.height);
-  } else if (arch === 'sdxl') {
+  if (arch === 'sdxl') {
     state.sdxlPicker = findSdxlSelection(item.width, item.height);
   } else if (arch === 'sd15') {
     state.sd15Picker = findSd15Selection(item.width, item.height);

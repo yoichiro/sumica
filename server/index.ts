@@ -37,8 +37,7 @@ if (!fs.existsSync(outputsDir)) {
 
 // Architecture union shared across the server API surface. Values match
 // client/src/components/presets.ts's Architecture union.
-type Architecture = 'sd15' | 'sdxl' | 'flux';
-type FluxVariant = 'schnell' | 'dev';
+type Architecture = 'sd15' | 'sdxl';
 
 // Shape of a single generation record persisted to Firestore or local metadata.json
 interface GenerationMetadata {
@@ -195,38 +194,10 @@ You MUST encapsulate your prompts using the following XML tags:
 
 Do not include any introductory or concluding text, explanations, or notes. Reply ONLY with the XML structure.`;
 
-// Flux uses a T5 text encoder and does not honor SD-style (phrase:weight)
-// emphasis, and its distilled variants ignore negative prompts. This system
-// prompt tells the LLM to output natural-language prose and an empty negative.
-const FLUX_SYSTEM_PROMPT = `You are an expert prompt engineer for FLUX image generation.
-
-Flux uses a T5 text encoder which understands NATURAL LANGUAGE prompts.
-Do NOT use Stable Diffusion emphasis syntax like (phrase:weight) — that
-syntax does not exist in Flux and will be treated as literal text.
-
-Instead, translate the user's concept into fluent, descriptive English
-sentences that read like natural writing. Include the subject, action,
-setting, lighting, mood, and camera / composition / style as prose.
-Prefer 2–5 sentences over a comma-separated tag list.
-
-Emphasis: when the user uses natural-language emphasis cues in Japanese
-(かなり / めっちゃ / とびっきり / 強く / 極めて / 完全に etc.) or
-English (very / strongly / extremely / prominently), express strength
-through wording — repeat / rephrase the concept, use a strong adjective,
-or lead the sentence with the emphasized element. Do NOT wrap anything
-in parentheses with a numeric weight.
-
-Negative prompt: Flux models do not use negative prompts effectively.
-Always return an EMPTY <negative></negative> tag.
-
-Output format:
-<prompts><positive>your natural-language prompt</positive><negative></negative></prompts>
-Reply ONLY with the XML structure — no introduction, no explanation.`;
-
 // Helper: Translate and enhance prompt via LM Studio, returning positive and negative prompts in XML format
-async function enhancePrompt(userPrompt: string, arch: Architecture = 'sd15'): Promise<EnhancedPrompt> {
+async function enhancePrompt(userPrompt: string): Promise<EnhancedPrompt> {
   const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
-  const systemPrompt = arch === 'flux' ? FLUX_SYSTEM_PROMPT : SD_SYSTEM_PROMPT;
+  const systemPrompt = SD_SYSTEM_PROMPT;
   try {
     console.log(`Sending prompt to LM Studio (${lmStudioUrl}/v1/chat/completions)...`);
     const response = await axios.post(`${lmStudioUrl}/v1/chat/completions`, {
@@ -282,16 +253,13 @@ async function generateImage(
   denoisingStrength = 0.7,
   refiner = '',
   refinerSwitchAt = 0.8,
-  vae = '',
-  arch: Architecture = 'sd15'
+  vae = ''
 ): Promise<{ image: string; seed: number }> {
   try {
     console.log(`Sending generation request to Stable Diffusion (${stableDiffusionUrl}/sdapi/v1/txt2img)...`);
     const payload: Record<string, unknown> = {
       prompt,
-      // Flux doesn't use a negative prompt (ADR-42) — respect an explicitly empty
-      // negativePrompt for 'flux' instead of silently falling back to the SD default.
-      negative_prompt: arch === 'flux' ? negativePrompt : (negativePrompt || 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry'),
+      negative_prompt: negativePrompt || 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry',
       steps,
       cfg_scale: cfgScale,
       width,
@@ -299,34 +267,19 @@ async function generateImage(
       sampler_name: sampler,
       seed,
     };
-    // The `scheduler` field is only present on AUTOMATIC1111 ≥1.9 / recent Forge —
-    // omit it entirely on older SD builds so the API doesn't reject the payload.
+    // The `scheduler` field is only present on AUTOMATIC1111 ≥1.9 — omit it
+    // entirely on older builds so the API doesn't reject the payload.
     if (scheduler) {
       payload.scheduler = scheduler;
     }
     // Hires.fix fields are only meaningful (and only sent) when enabled, so a
     // disabled request produces a payload identical to pre-Hires.fix behavior.
-    // Flux does not support Hires.fix ([[adr-0042]], [[adr-0052]]) so we
-    // defensively skip enable_hr for arch === 'flux' even when the client sends
-    // enableHr=true — this happens when a user loads-into-form a prior SD1.5/
-    // SDXL record (which had Hires.fix on) and then toggles to Flux; the client
-    // hides the Hires.fix panel but leaves the boolean state as-is, and Forge
-    // Neo's hires path then crashes with TypeError on hr_additional_modules.
-    const shouldUseHiresFix = enableHr && arch !== 'flux';
-    if (shouldUseHiresFix) {
+    if (enableHr) {
       payload.enable_hr = true;
       payload.hr_scale = hrScale;
       payload.denoising_strength = denoisingStrength;
       if (hrUpscaler) payload.hr_upscaler = hrUpscaler;
       if (hrSecondPassSteps) payload.hr_second_pass_steps = hrSecondPassSteps;
-      // Forge Neo requires hr_additional_modules to be set on the request or the
-      // hires path crashes with `TypeError: argument of type 'NoneType' is not
-      // iterable` (line 1405 of Forge Neo's processing.py). It cannot be sent
-      // through override_settings (that raises KeyError — the option is not
-      // registered as a settings key). Sent as a top-level payload field.
-      // "Use same choices" is the sentinel meaning "reuse the main pass's VAE
-      // and text encoders", which is exactly what SD1.5/SDXL Hires.fix wants.
-      payload.hr_additional_modules = ['Use same choices'];
     }
     // SDXL Refiner: only send both fields when a refiner checkpoint is chosen,
     // so opt-out requests keep the exact pre-refiner payload shape.
@@ -340,36 +293,6 @@ async function generateImage(
     const overrides: Record<string, unknown> = {};
     if (model) overrides.sd_model_checkpoint = model;
     if (vae && vae !== 'Automatic') overrides.sd_vae = vae;
-    // Forge Neo Preset synchronization. Forge stores preset-scoped module
-    // lists (forge_additional_modules_flux / _xl / _sd) and applies the active
-    // preset's modules to every checkpoint load. Without this sync, e.g. an
-    // SDXL checkpoint arriving while forge_preset stays on 'flux' triggers a
-    // state_dict shape mismatch (Flux VAE has 16-channel latents, SD/SDXL 4).
-    // Sending forge_preset + forge_additional_modules in override_settings
-    // scopes the switch to this request (persistent options stay unchanged).
-    // AUTOMATIC1111 (non-Forge) silently ignores unknown override keys, so the
-    // same payload is safe on both backends.
-    if (arch === 'flux') {
-      // Fetch the persistent Flux module list from Forge's options so we can
-      // include it in the override. If Forge isn't the backend (no such key
-      // in options) the injection is skipped and the request behaves as before.
-      try {
-        const optRes = await axios.get(`${stableDiffusionUrl}/sdapi/v1/options`, { timeout: 4000 });
-        const fluxModules = optRes.data?.forge_additional_modules_flux;
-        if (Array.isArray(fluxModules) && fluxModules.length > 0) {
-          overrides.forge_preset = 'flux';
-          overrides.forge_additional_modules = fluxModules;
-        }
-      } catch (error) {
-        console.error('Failed to fetch forge_additional_modules_flux, continuing without preset sync:', (error as Error).message);
-      }
-    } else if (arch === 'sdxl') {
-      overrides.forge_preset = 'xl';
-      overrides.forge_additional_modules = [];
-    } else if (arch === 'sd15') {
-      overrides.forge_preset = 'sd';
-      overrides.forge_additional_modules = [];
-    }
     if (Object.keys(overrides).length > 0) {
       payload.override_settings = overrides;
     }
@@ -430,22 +353,16 @@ function toWslPath(windowsPath: string): string {
   return `/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`;
 }
 
-// Classify a checkpoint into 'sd15' / 'sdxl' / 'flux' by reading the .safetensors
+// Classify a checkpoint into 'sd15' / 'sdxl' by reading the .safetensors
 // header (an 8-byte little-endian length prefix followed by that many bytes of
-// JSON tensor metadata) without loading any tensor data. Detection order:
-//   1) double_blocks.* (bare/raw layout — official flux1-schnell/-dev and
-//      derivatives) OR model.diffusion_model.double_blocks.* (ComfyUI-wrapped
-//      layout — typical of merges/finetunes redistributed via ComfyUI). Then
-//      peek at __metadata__ for a flux1-dev reference; default to schnell
-//      otherwise.
-//   2) conditioner.embedders.* (SDXL — both base and refiner).
-//   3) Fallback → sd15.
-// Falls back to a name heuristic on read failure so the model list keeps
-// working even if the file path is unreachable.
+// JSON tensor metadata) without loading any tensor data. SDXL is detected by
+// the `conditioner.embedders.*` prefix (both base and refiner variants share
+// it); anything else falls back to sd15. On read failure a name heuristic
+// keeps the model list working even if the file path is unreachable.
 async function classifyCheckpointArch(
   filename: string | undefined,
   title: string,
-): Promise<{ type: Architecture; fluxVariant?: FluxVariant }> {
+): Promise<{ type: Architecture }> {
   if (filename) {
     try {
       const handle = await fs.promises.open(toWslPath(filename), 'r');
@@ -457,14 +374,6 @@ async function classifyCheckpointArch(
         await handle.read(headerBuffer, 0, headerLength, 8);
         const header = JSON.parse(headerBuffer.toString('utf-8')) as Record<string, unknown>;
         const keys = Object.keys(header).filter((k) => k !== '__metadata__');
-        if (keys.some((k) =>
-          k.startsWith('double_blocks.') ||
-          k.startsWith('model.diffusion_model.double_blocks.')
-        )) {
-          const metaStr = JSON.stringify(header.__metadata__ ?? {});
-          const fluxVariant: FluxVariant = /flux1?[-_]?dev/i.test(metaStr) ? 'dev' : 'schnell';
-          return { type: 'flux', fluxVariant };
-        }
         if (keys.some((k) => k.startsWith('conditioner.embedders.'))) {
           return { type: 'sdxl' };
         }
@@ -477,9 +386,6 @@ async function classifyCheckpointArch(
     }
   }
   const lower = title.toLowerCase();
-  if (lower.includes('flux')) {
-    return { type: 'flux', fluxVariant: lower.includes('dev') ? 'dev' : 'schnell' };
-  }
   if (lower.includes('xl')) return { type: 'sdxl' };
   return { type: 'sd15' };
 }
@@ -491,12 +397,12 @@ app.use('/api/outputs', express.static(outputsDir));
 
 // 1. New Prompt Enhance Endpoint
 app.post('/api/enhance', async (req: Request, res: Response) => {
-  const { prompt, arch } = req.body as { prompt: string; arch?: Architecture };
+  const { prompt } = req.body as { prompt: string };
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
   }
   try {
-    const enhanced = await enhancePrompt(prompt, arch);
+    const enhanced = await enhancePrompt(prompt);
     res.json({
       success: true,
       positive: enhanced.positive,
@@ -515,10 +421,6 @@ app.post('/api/generate', async (req: Request, res: Response) => {
   // persistence entirely — the client already has modelTypeFilter in scope for
   // its own Firebase write).
   const { modelArchitecture } = req.body as { modelArchitecture?: Architecture };
-  // Ground-truth architecture for this generation request, sent alongside
-  // modelArchitecture (Task 7). Used here to keep Flux's empty negative prompt
-  // empty end-to-end instead of falling back to the SD default negative.
-  const { arch } = req.body as { arch?: Architecture };
   cancelRequested = false; // defensive reset — clears any stale flag from an unrelated, already-finished request
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
@@ -532,15 +434,13 @@ app.post('/api/generate', async (req: Request, res: Response) => {
 
   const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
   let finalPrompt = prompt;
-  // Flux doesn't use a negative prompt (ADR-42) — an explicitly empty negativePrompt
-  // for 'flux' must stay empty here, not get silently upgraded to the SD default.
-  let finalNegativePrompt = negativePrompt || (arch === 'flux' ? '' : defaultNegative);
+  let finalNegativePrompt = negativePrompt || defaultNegative;
   const finalOriginalPrompt = originalPrompt || prompt;
 
   try {
     // Step 1: Enhance prompt using LM Studio if not skipped
     if (!skipEnhance) {
-      const enhanced = await enhancePrompt(prompt, arch);
+      const enhanced = await enhancePrompt(prompt);
       finalPrompt = enhanced.positive;
       finalNegativePrompt = enhanced.negative;
       console.log(`Original: "${prompt}" -> Enhanced Positive: "${finalPrompt}" | Enhanced Negative: "${finalNegativePrompt}"`);
@@ -574,8 +474,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       denoisingStrength !== undefined ? parseFloat(denoisingStrength) : 0.7,
       refiner || '',
       refinerSwitchAt !== undefined ? parseFloat(refinerSwitchAt) : 0.8,
-      vae || '',
-      arch || 'sd15'
+      vae || ''
     );
 
     // If the user cancelled while SD was still rendering, generateImage() resolves
@@ -812,18 +711,14 @@ app.get('/api/sd-schedulers', async (_req: Request, res: Response) => {
   }
 });
 
-// Classify a LoRA's base architecture from the training metadata AUTOMATIC1111/Forge
+// Classify a LoRA's base architecture from the training metadata AUTOMATIC1111
 // already parses and returns via /sdapi/v1/loras. Prefers the modelspec.sai_model_spec
 // convention's `modelspec.architecture` field; falls back to the looser `ss_base_model_version`
 // field some older trainers write instead. Returns 'unknown' when neither is present, or
-// when present but naming a third architecture (e.g. Flux, HunyuanVideo) — a large
-// fraction of LoRAs in practice, so callers must not treat 'unknown' as "incompatible".
+// when present but naming a non-SD architecture — a large fraction of LoRAs in
+// practice, so callers must not treat 'unknown' as "incompatible".
 function classifyLoraArchitecture(metadata: Record<string, unknown> | undefined): Architecture | 'unknown' {
   const arch = String(metadata?.['modelspec.architecture'] ?? metadata?.['ss_base_model_version'] ?? '').toLowerCase();
-  // Flux markers precede SDXL because 'flux1-schnell' does not contain 'xl'
-  // but SDXL merges based on Flux naming conventions may exist elsewhere;
-  // ordering keeps genuine Flux LoRAs correctly typed.
-  if (arch.includes('flux') || arch.startsWith('flux1')) return 'flux';
   if (arch.includes('xl')) return 'sdxl';
   if (arch.includes('stable-diffusion-v1') || arch.startsWith('sd_v1') || arch.startsWith('sd_1')) return 'sd15';
   return 'unknown';

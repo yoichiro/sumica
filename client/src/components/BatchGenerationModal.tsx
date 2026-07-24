@@ -5,20 +5,14 @@ import {
   SDXL_PRESETS,
   SDXL_SIZES,
   SD15_PRESETS,
-  FLUX_PRESETS,
-  FLUX_SIZES,
   resolveSdxlDimensions,
   resolveSd15Dimensions,
-  resolveFluxDimensions,
   getArchLabel,
   type SdxlRatio,
   type SdxlSize,
   type Sd15Ratio,
   type SdModel,
   type Architecture,
-  type FluxRatio,
-  type FluxSize,
-  type SdxlOrientation,
 } from './presets';
 
 export type BatchMode = 'count' | 'size' | 'model';
@@ -61,13 +55,6 @@ interface BatchGenerationModalProps {
   selectedSd15BatchSizes: Set<SdxlSize>;
   setSelectedSd15BatchSizes: Dispatch<SetStateAction<Set<SdxlSize>>>;
 
-  selectedFluxBatchRatios: Set<FluxRatio>;
-  setSelectedFluxBatchRatios: Dispatch<SetStateAction<Set<FluxRatio>>>;
-  selectedFluxBatchOrientations: Set<SdxlOrientation>;
-  setSelectedFluxBatchOrientations: Dispatch<SetStateAction<Set<SdxlOrientation>>>;
-  selectedFluxBatchSizes: Set<FluxSize>;
-  setSelectedFluxBatchSizes: Dispatch<SetStateAction<Set<FluxSize>>>;
-
   selectedBatchModels: Set<string>;
   setSelectedBatchModels: Dispatch<SetStateAction<Set<string>>>;
   toggleBatchModel: (name: string) => void;
@@ -94,9 +81,6 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
     selectedSd15BatchRatios, setSelectedSd15BatchRatios,
     selectedSd15BatchOrientations, setSelectedSd15BatchOrientations,
     selectedSd15BatchSizes, setSelectedSd15BatchSizes,
-    selectedFluxBatchRatios, setSelectedFluxBatchRatios,
-    selectedFluxBatchOrientations, setSelectedFluxBatchOrientations,
-    selectedFluxBatchSizes, setSelectedFluxBatchSizes,
     selectedBatchModels, setSelectedBatchModels, toggleBatchModel,
     onStartBatch,
   } = props;
@@ -129,38 +113,6 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
       for (const orient of selectedBatchOrientations) {
         for (const size of selectedBatchSizes) {
           push(resolveSdxlDimensions(preset, orient, size));
-        }
-      }
-    }
-    return jobs;
-  };
-
-  // Flux counterpart of buildSdxlBatchJobs. Flux presets have no ratio/size
-  // "native bucket" hard requirement the way SDXL does, but the (ratio ×
-  // orientation × size) cross-product shape is identical: 1:1 collapses
-  // orientation (one job per selected size); non-square ratios cross-product
-  // each selected orientation with each selected size.
-  const buildFluxBatchJobs = (): BatchJob[] => {
-    const jobs: BatchJob[] = [];
-    const seen = new Set<string>();
-    const push = (dims: { width: number; height: number }) => {
-      const key = `${dims.width}x${dims.height}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      jobs.push({ width: dims.width, height: dims.height });
-    };
-    for (const ratio of selectedFluxBatchRatios) {
-      const preset = FLUX_PRESETS.find(p => p.ratio === ratio);
-      if (!preset) continue;
-      if (preset.isSquare) {
-        for (const size of selectedFluxBatchSizes) {
-          push(resolveFluxDimensions(preset, 'square', size));
-        }
-        continue;
-      }
-      for (const orient of selectedFluxBatchOrientations) {
-        for (const size of selectedFluxBatchSizes) {
-          push(resolveFluxDimensions(preset, orient, size));
         }
       }
     }
@@ -402,104 +354,6 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                 </div>
               </>
             );
-          })() : modelTypeFilter === 'flux' ? (() => {
-            const fluxJobs = buildFluxBatchJobs();
-            return (
-              <>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                  {t.batchModal.sizeFluxDescription}
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.controlPanel.aspectRatioLabel}:</span>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {FLUX_PRESETS.map((preset) => {
-                        const active = selectedFluxBatchRatios.has(preset.ratio);
-                        return (
-                          <button
-                            key={preset.ratio}
-                            type="button"
-                            onClick={() => toggleInSet(setSelectedFluxBatchRatios, preset.ratio)}
-                            className="scale-hover"
-                            style={{
-                              padding: '8px 12px',
-                              borderRadius: '10px',
-                              border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                              background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                              color: active ? '#fff' : 'var(--text-secondary)',
-                              fontWeight: 800,
-                              cursor: 'pointer',
-                              fontSize: '13px',
-                            }}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.controlPanel.orientationLabel}:</span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      {(['landscape', 'portrait'] as const).map((o) => {
-                        const active = selectedFluxBatchOrientations.has(o);
-                        return (
-                          <button
-                            key={o}
-                            type="button"
-                            onClick={() => toggleInSet<SdxlOrientation>(setSelectedFluxBatchOrientations, o)}
-                            className="scale-hover"
-                            style={{
-                              flex: 1,
-                              padding: '10px',
-                              borderRadius: '10px',
-                              border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                              background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                              color: active ? '#fff' : 'var(--text-secondary)',
-                              fontWeight: 800,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {o === 'landscape' ? t.controlPanel.orientationLandscape : t.controlPanel.orientationPortrait}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{t.controlPanel.sizeLabel}:</span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      {FLUX_SIZES.map((s) => {
-                        const active = selectedFluxBatchSizes.has(s);
-                        return (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => toggleInSet(setSelectedFluxBatchSizes, s)}
-                            className="scale-hover"
-                            style={{
-                              flex: 1,
-                              padding: '10px',
-                              borderRadius: '10px',
-                              border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                              background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                              color: active ? '#fff' : 'var(--text-secondary)',
-                              fontWeight: 800,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {s}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, textAlign: 'center', color: 'var(--pop-blue)' }}>
-                    {t.batchModal.jobCountLabel(fluxJobs.length)}
-                  </div>
-                </div>
-              </>
-            );
           })() : (() => {
             const sd15Jobs = buildSd15BatchJobs();
             return (
@@ -683,9 +537,7 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
           </button>
           {(() => {
             const sizeJobs = batchMode === 'size'
-              ? (modelTypeFilter === 'flux' ? buildFluxBatchJobs()
-                 : modelTypeFilter === 'sdxl' ? buildSdxlBatchJobs()
-                 : buildSd15BatchJobs())
+              ? (modelTypeFilter === 'sdxl' ? buildSdxlBatchJobs() : buildSd15BatchJobs())
               : [];
             const sizeModeInvalid = sizeJobs.length === 0;
             return (

@@ -113,7 +113,6 @@ export function GalleryFilterPanel({
     { value: null, label: t.gallery.filters.archAll },
     { value: 'sdxl', label: 'SDXL' },
     { value: 'sd15', label: 'SD1.5' },
-    { value: 'flux', label: t.controlPanel.archFluxLabel },
   ];
 
   return (

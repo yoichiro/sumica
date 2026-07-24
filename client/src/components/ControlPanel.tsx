@@ -5,15 +5,11 @@ import {
   SDXL_PRESETS,
   SDXL_SIZES,
   SD15_PRESETS,
-  FLUX_PRESETS,
-  FLUX_SIZES,
   getArchLabel,
   type SdxlRatio,
   type SdxlSize,
   type SdxlOrientation,
   type Sd15Ratio,
-  type FluxRatio,
-  type FluxSize,
   type SdModel,
   type SdLora,
   type Architecture,
@@ -60,14 +56,6 @@ export interface ControlPanelProps {
   setSelectedSd15Orientation: (v: SdxlOrientation) => void;
   selectedSd15Size: SdxlSize;
   setSelectedSd15Size: (v: SdxlSize) => void;
-
-  // Resolution picker state — Flux side
-  selectedFluxRatio: FluxRatio;
-  setSelectedFluxRatio: (v: FluxRatio) => void;
-  selectedFluxOrientation: SdxlOrientation;
-  setSelectedFluxOrientation: (v: SdxlOrientation) => void;
-  selectedFluxSize: FluxSize;
-  setSelectedFluxSize: (v: FluxSize) => void;
 
   width: number;
   height: number;
@@ -244,14 +232,12 @@ export function ControlPanel(p: ControlPanelProps) {
                   />
                 </div>
 
-                {/* Negative — disabled for Flux, which has no negative-prompt conditioning */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
                     {t.controlPanel.loadedEnhancedNegativeLabel}
                   </span>
                   <textarea
                     readOnly
-                    disabled={p.modelTypeFilter === 'flux'}
                     value={p.loadedNegative}
                     style={{
                       minHeight: '4.5em',
@@ -261,18 +247,13 @@ export function ControlPanel(p: ControlPanelProps) {
                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                       fontSize: '11px',
                       lineHeight: 1.4,
-                      color: p.modelTypeFilter === 'flux' ? 'var(--text-muted)' : 'var(--text-primary)',
-                      background: p.modelTypeFilter === 'flux' ? 'var(--panel-bg-sunk)' : 'var(--input-bg)',
+                      color: 'var(--text-primary)',
+                      background: 'var(--input-bg)',
                       border: '1px solid var(--panel-border)',
                       borderRadius: '8px',
                       overflowY: 'auto',
                     }}
                   />
-                  {p.modelTypeFilter === 'flux' && (
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {t.controlPanel.fluxNegativeDisabledNote}
-                    </span>
-                  )}
                 </div>
               </div>
             )}
@@ -326,7 +307,7 @@ export function ControlPanel(p: ControlPanelProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
               <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.modelLabel}</label>
               <div style={{ display: 'flex', gap: '6px', background: 'var(--panel-bg-sunk)', borderRadius: '10px', padding: '3px' }}>
-                {(['sd15', 'sdxl', 'flux'] as const).map((modelType) => (
+                {(['sd15', 'sdxl'] as const).map((modelType) => (
                   <button
                     key={modelType}
                     type="button"
@@ -344,7 +325,7 @@ export function ControlPanel(p: ControlPanelProps) {
                       color: p.modelTypeFilter === modelType ? '#fff' : 'var(--text-secondary)',
                     }}
                   >
-                    {modelType === 'sd15' ? 'SD' : modelType === 'sdxl' ? 'SDXL' : t.controlPanel.archFluxLabel}
+                    {modelType === 'sd15' ? 'SD' : 'SDXL'}
                   </button>
                 ))}
               </div>
@@ -361,8 +342,6 @@ export function ControlPanel(p: ControlPanelProps) {
                     {modelsInScope.map((m) => (
                       <option key={m.title} value={m.title}>
                         {m.title}
-                        {m.type === 'flux' && m.fluxVariant === 'schnell' ? ` [${t.controlPanel.fluxVariantSchnellBadge}]` : ''}
-                        {m.type === 'flux' && m.fluxVariant === 'dev' ? ` [${t.controlPanel.fluxVariantDevBadge}]` : ''}
                       </option>
                     ))}
                   </select>
@@ -372,7 +351,6 @@ export function ControlPanel(p: ControlPanelProps) {
                       {p.sdModels.length === 0
                         ? t.controlPanel.modelsUnavailable
                         : p.modelTypeFilter === 'sdxl' ? t.controlPanel.noSdxlModelsFound
-                        : p.modelTypeFilter === 'flux' ? t.controlPanel.noFluxModelsFound
                         : t.controlPanel.noSd15ModelsFound}
                     </option>
                   </select>
@@ -549,130 +527,6 @@ export function ControlPanel(p: ControlPanelProps) {
                 </div>
               );
             })()
-            : p.modelTypeFilter === 'flux' ? (() => {
-              const currentPreset = FLUX_PRESETS.find(pp => pp.ratio === p.selectedFluxRatio) ?? FLUX_PRESETS[0];
-              const isSquare = currentPreset.isSquare;
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.aspectRatioLabel}</label>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {FLUX_PRESETS.map((preset) => {
-                        const active = p.selectedFluxRatio === preset.ratio;
-                        const [rwRaw, rhRaw] = preset.ratio.split(':').map(Number);
-                        // The rect flips with the current orientation so the picker
-                        // previews the actual generated shape, mirroring the SDXL picker.
-                        const isPortrait = p.selectedFluxOrientation === 'portrait';
-                        const rw = isPortrait ? rhRaw : rwRaw;
-                        const rh = isPortrait ? rwRaw : rhRaw;
-                        return (
-                          <button
-                            key={preset.ratio}
-                            type="button"
-                            onClick={() => p.setSelectedFluxRatio(preset.ratio)}
-                            disabled={p.loading}
-                            className="scale-hover"
-                            style={{
-                              padding: '8px 12px',
-                              borderRadius: '8px',
-                              border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                              background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                              color: active ? '#fff' : 'var(--text-secondary)',
-                              fontWeight: 800,
-                              cursor: 'pointer',
-                              fontSize: '13px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                            }}
-                          >
-                            <AspectRatioRect
-                              width={rw}
-                              height={rh}
-                              maxEdge={20}
-                              borderColor={active ? '#fff' : 'var(--pop-blue)'}
-                              background={active ? 'rgba(255, 255, 255, 0.22)' : 'rgba(51, 154, 240, 0.12)'}
-                            />
-                            <span>{preset.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: isSquare ? '1fr' : '1fr 1fr', gap: '8px' }}>
-                    {!isSquare && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.orientationLabel}</label>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          {(['landscape', 'portrait'] as const).map((o) => {
-                            const active = p.selectedFluxOrientation === o;
-                            return (
-                              <button
-                                key={o}
-                                type="button"
-                                onClick={() => p.setSelectedFluxOrientation(o)}
-                                disabled={p.loading}
-                                className="scale-hover"
-                                style={{
-                                  flex: 1,
-                                  padding: '8px',
-                                  borderRadius: '8px',
-                                  border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                  background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                  color: active ? '#fff' : 'var(--text-secondary)',
-                                  fontWeight: 800,
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                }}
-                              >
-                                {o === 'landscape' ? t.controlPanel.orientationLandscape : t.controlPanel.orientationPortrait}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>{t.controlPanel.sizeLabel}</label>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        {FLUX_SIZES.map((s) => {
-                          const active = p.selectedFluxSize === s;
-                          const spec = currentPreset.sizes[s];
-                          return (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() => p.setSelectedFluxSize(s)}
-                              disabled={p.loading}
-                              className="scale-hover"
-                              style={{
-                                flex: 1,
-                                padding: '8px',
-                                borderRadius: '8px',
-                                border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
-                                background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
-                                color: active ? '#fff' : 'var(--text-secondary)',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                                fontSize: '13px',
-                              }}
-                            >
-                              {s}{spec.isFluxNative ? ' ⭐' : ''}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>
-                    → {p.width} × {p.height} px ({((p.width * p.height) / 1_000_000).toFixed(2)} MP)
-                  </div>
-                </div>
-              );
-            })()
             : (() => {
               const currentSd15Preset = SD15_PRESETS.find(pp => pp.ratio === p.selectedSd15Ratio) ?? SD15_PRESETS[0];
               const isSquare = currentSd15Preset.isSquare;
@@ -833,8 +687,7 @@ export function ControlPanel(p: ControlPanelProps) {
               />
             </div>
 
-            {/* Hires.fix — not applicable to Flux (no Hires.fix pass for Flux models) */}
-            {p.modelTypeFilter !== 'flux' && (
+            {/* Hires.fix */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: p.loading ? 'default' : 'pointer', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
                 <input
@@ -918,7 +771,6 @@ export function ControlPanel(p: ControlPanelProps) {
                 </div>
               )}
             </div>
-            )}
 
             {/* LoRA */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>

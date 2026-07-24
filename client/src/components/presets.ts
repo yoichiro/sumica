@@ -3,21 +3,12 @@
 // about the ratio/orientation/size axes. See ADR 10 (SDXL) and ADR 14 (SD1.5)
 // for the design rationale and quality assumptions behind each entry.
 
-import { t } from '../i18n';
-
-export type Architecture = 'sd15' | 'sdxl' | 'flux';
-export type FluxVariant = 'schnell' | 'dev';
-export type SdModel = { title: string; type: Architecture; fluxVariant?: FluxVariant };
+export type Architecture = 'sd15' | 'sdxl';
+export type SdModel = { title: string; type: Architecture };
 export type SdLora = { name: string; type: Architecture | 'unknown' };
 
-// Single source of truth for the 3-way architecture display label, shared by
-// every UI surface that badges a model/LoRA/recipe with its arch (ControlPanel's
-// LoRA mismatch badge, RankingPanel's arch chip, BatchGenerationModal's
-// noModelsOfType message). SDXL/SD1.5 stay as open-coded literals (matches the
-// rest of the codebase's convention); Flux goes through i18n per ADR-42.
 export function getArchLabel(arch: Architecture): string {
   if (arch === 'sdxl') return 'SDXL';
-  if (arch === 'flux') return t.controlPanel.archFluxLabel;
   return 'SD1.5';
 }
 
@@ -251,125 +242,3 @@ export function findSd15Selection(
   return null;
 }
 
-// ---- Flux ----
-
-export type FluxRatio = '1:1' | '4:3' | '9:7' | '3:2' | '16:9' | '21:9' | '3:1';
-export type FluxSize = 'S' | 'M' | 'L';
-
-export interface FluxSizeSpec {
-  width: number;   // landscape width (or square side length)
-  height: number;  // landscape height (or square side length)
-  // Marks the ≈1MP recommendation. Flux was not trained with aspect-ratio
-  // buckets like SDXL, so this is a soft quality hint rather than a hard
-  // bucket identifier.
-  isFluxNative: boolean;
-}
-
-export interface FluxPreset {
-  ratio: FluxRatio;
-  label: string;
-  isSquare: boolean;
-  sizes: Record<FluxSize, FluxSizeSpec>;
-}
-
-export const FLUX_SIZES: readonly FluxSize[] = ['S', 'M', 'L'];
-
-export const FLUX_PRESETS: readonly FluxPreset[] = [
-  {
-    ratio: '1:1', label: '1:1', isSquare: true,
-    sizes: {
-      S: { width: 768,  height: 768,  isFluxNative: false },
-      M: { width: 1024, height: 1024, isFluxNative: true  },
-      L: { width: 1216, height: 1216, isFluxNative: false },
-    },
-  },
-  {
-    ratio: '4:3', label: '4:3', isSquare: false,
-    sizes: {
-      S: { width: 768,  height: 576,  isFluxNative: false },
-      M: { width: 1152, height: 832,  isFluxNative: true  },
-      L: { width: 1344, height: 1024, isFluxNative: false },
-    },
-  },
-  {
-    ratio: '9:7', label: '9:7', isSquare: false,
-    sizes: {
-      S: { width: 896,  height: 768,  isFluxNative: false },
-      M: { width: 1152, height: 896,  isFluxNative: true  },
-      L: { width: 1408, height: 1088, isFluxNative: false },
-    },
-  },
-  {
-    ratio: '3:2', label: '3:2', isSquare: false,
-    sizes: {
-      S: { width: 1152, height: 768,  isFluxNative: false },
-      M: { width: 1216, height: 832,  isFluxNative: true  },
-      L: { width: 1344, height: 896,  isFluxNative: false },
-    },
-  },
-  {
-    ratio: '16:9', label: '16:9', isSquare: false,
-    sizes: {
-      S: { width: 1024, height: 576,  isFluxNative: false },
-      M: { width: 1344, height: 768,  isFluxNative: true  },
-      L: { width: 1600, height: 896,  isFluxNative: false },
-    },
-  },
-  {
-    ratio: '21:9', label: '21:9', isSquare: false,
-    sizes: {
-      S: { width: 1344, height: 576,  isFluxNative: false },
-      M: { width: 1536, height: 640,  isFluxNative: true  },
-      L: { width: 1792, height: 768,  isFluxNative: false },
-    },
-  },
-  {
-    ratio: '3:1', label: '3:1', isSquare: false,
-    sizes: {
-      S: { width: 1344, height: 448,  isFluxNative: false },
-      M: { width: 1728, height: 576,  isFluxNative: true  },
-      L: { width: 1920, height: 640,  isFluxNative: false },
-    },
-  },
-];
-
-// (ratio, orientation, size) → concrete (width, height). Portrait swaps landscape's
-// width/height; square ignores orientation. Mirrors resolveSdxlDimensions.
-export function resolveFluxDimensions(
-  preset: FluxPreset,
-  orientation: SdxlOrientation,
-  size: FluxSize,
-): { width: number; height: number; isFluxNative: boolean } {
-  const spec = preset.sizes[size];
-  if (preset.isSquare || orientation !== 'portrait') {
-    return { width: spec.width, height: spec.height, isFluxNative: spec.isFluxNative };
-  }
-  return { width: spec.height, height: spec.width, isFluxNative: spec.isFluxNative };
-}
-
-// Reverse-map a raw (width, height) back to Flux picker coordinates. Used to seed
-// the Flux picker on architecture switches and loadIntoForm. Returns null when
-// no preset matches — the caller falls back to a default (1:1 / square / M).
-export function findFluxSelection(
-  width: number,
-  height: number,
-): { ratio: FluxRatio; orientation: SdxlOrientation; size: FluxSize } | null {
-  for (const preset of FLUX_PRESETS) {
-    for (const size of FLUX_SIZES) {
-      const spec = preset.sizes[size];
-      if (preset.isSquare) {
-        if (spec.width === width && spec.height === height) {
-          return { ratio: preset.ratio, orientation: 'square', size };
-        }
-      } else {
-        if (spec.width === width && spec.height === height) {
-          return { ratio: preset.ratio, orientation: 'landscape', size };
-        }
-        if (spec.height === width && spec.width === height) {
-          return { ratio: preset.ratio, orientation: 'portrait', size };
-        }
-      }
-    }
-  }
-  return null;
-}

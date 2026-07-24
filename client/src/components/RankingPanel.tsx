@@ -211,7 +211,7 @@ function RankingRow({
                 letterSpacing: 0.3,
                 padding: '2px 6px',
                 borderRadius: 6,
-                background: arch === 'sdxl' || arch === 'flux' ? 'var(--pop-blue)' : 'var(--text-muted)',
+                background: arch === 'sdxl' ? 'var(--pop-blue)' : 'var(--text-muted)',
                 color: '#fff',
                 flexShrink: 0,
               }}

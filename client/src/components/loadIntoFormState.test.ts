@@ -12,7 +12,6 @@ const KNOWN: SdModel[] = [
   { title: 'juggernautXL_version6Rundiffusion.safetensors [1fe6c7ec54]', type: 'sdxl' },
   { title: 'voidnoisecorexl_r1892.safetensors [e297822f59]',              type: 'sdxl' },
   { title: 'sd_xl_base_1.0.safetensors [31e35c80fc]', type: 'sdxl' },
-  { title: '2758FluxAsianUtopian_v60SchnellFp8Noclip.safetensors [ed2bd39653]', type: 'flux', fluxVariant: 'schnell' },
 ];
 
 describe('inferSdArchitectureFromTitle', () => {
@@ -246,21 +245,8 @@ describe('computeLoadIntoFormState — loaded enhanced prompt fields', () => {
   });
 });
 
-describe('Flux records', () => {
-  it('trusts modelArchitecture: flux and populates fluxPicker from dimensions', () => {
-    const item = {
-      width: 1024, height: 1024,
-      model: '2758FluxAsianUtopian_v60SchnellFp8Noclip.safetensors [ed2bd39653]',
-      modelArchitecture: 'flux' as const,
-    };
-    const s = computeLoadIntoFormState(item, KNOWN);
-    expect(s.archToSet).toBe('flux');
-    expect(s.fluxPicker).toEqual({ ratio: '1:1', orientation: 'square', size: 'M' });
-    expect(s.sdxlPicker).toBeNull();
-    expect(s.sd15Picker).toBeNull();
-  });
-
-  it('falls back to inferSdArchitectureFromTitle when modelArchitecture is absent (legacy record)', () => {
+describe('legacy record fallback', () => {
+  it('falls back to inferSdArchitectureFromTitle when modelArchitecture is absent', () => {
     const item = {
       width: 1024, height: 1024,
       model: 'sd_xl_base_1.0.safetensors [31e35c80fc]',
@@ -268,17 +254,6 @@ describe('Flux records', () => {
     };
     const s = computeLoadIntoFormState(item, KNOWN);
     expect(s.archToSet).toBe('sdxl');
-  });
-
-  it('fluxPicker is null for non-preset Flux dimensions and falls through to defaults', () => {
-    const item = {
-      width: 999, height: 999,
-      model: 'some-flux.safetensors',
-      modelArchitecture: 'flux' as const,
-    };
-    const s = computeLoadIntoFormState(item, KNOWN);
-    expect(s.archToSet).toBe('flux');
-    expect(s.fluxPicker).toBeNull(); // Caller applies Flux default (1:1 M)
   });
 });
 
@@ -325,21 +300,21 @@ describe('resolveSelectedModel', () => {
 
   it('scopes the base match to the target arch (does not cross architectures)', () => {
     // A model whose base filename only exists under sd15 must NOT be resolved
-    // when targetArch is 'flux' — the caller just flipped to Flux, so the
-    // fallback must land on a Flux model, never on the sd15 file.
+    // when targetArch is 'sdxl' — the caller just flipped to SDXL, so the
+    // fallback must land on an SDXL model, never on the sd15 file.
     expect(
-      resolveSelectedModel('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]', 'flux', KNOWN),
-    ).toBe('2758FluxAsianUtopian_v60SchnellFp8Noclip.safetensors [ed2bd39653]');
+      resolveSelectedModel('yayoi_mix_v25-fp16.safetensors [ca28aa4a44]', 'sdxl', KNOWN),
+    ).toBe('juggernautXL_version6Rundiffusion.safetensors [1fe6c7ec54]');
   });
 
   it('returns the first target-arch model when the candidate is empty', () => {
-    expect(resolveSelectedModel('', 'flux', KNOWN)).toBe(
-      '2758FluxAsianUtopian_v60SchnellFp8Noclip.safetensors [ed2bd39653]',
+    expect(resolveSelectedModel('', 'sdxl', KNOWN)).toBe(
+      'juggernautXL_version6Rundiffusion.safetensors [1fe6c7ec54]',
     );
   });
 
   it('returns empty when no target-arch models exist and the candidate is empty', () => {
     // Empty sdModels — nothing to fall back to.
-    expect(resolveSelectedModel('', 'flux', [])).toBe('');
+    expect(resolveSelectedModel('', 'sdxl', [])).toBe('');
   });
 });
