@@ -2033,10 +2033,7 @@ function App() {
         }}
         openInPreviewDisabled={genStatus === 'enhancing' || genStatus === 'generating' || genStatus === 'saving'}
         onClose={closeLightbox}
-        onDownload={() => {
-          const item = displayedHistory[lightboxIndex];
-          if (item) handleDownload(item);
-        }}
+        onDownload={() => { if (lightboxMeta) handleDownload(lightboxMeta); }}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
       />
