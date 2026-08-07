@@ -23,20 +23,12 @@ export function formatDownloadFilename(timestamp: number | undefined): string {
   return `sumica_${yyyy}${mm}${dd}_${hh}${mi}${ss}.png`;
 }
 
-// Trigger a browser download of a remote image using the fetch → Blob →
-// objectURL → <a download> → revoke pattern. This bypasses the browser's
-// habit of ignoring the `download` attribute on cross-origin anchor URLs
-// (both Firebase Storage tokenized URLs and the local /api/outputs/*
-// hostname:port combination are effectively cross-origin from the Vite
-// dev server), and lets us set an arbitrary filename regardless of the
-// server-side name. Throws on network / decode failure; callers surface
-// the error via the existing Toast system.
-export async function downloadImage(url: string, filename: string): Promise<void> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${res.statusText}`);
-  }
-  const blob = await res.blob();
+// Trigger a browser download of a Blob using the objectURL → <a download> →
+// revoke pattern. This lets callers pick their own Blob source (fetch for
+// same-origin URLs, Firebase Storage SDK's getBlob for cross-origin Firebase
+// URLs the fetch API cannot reach without bucket CORS configuration) and
+// hand the final Blob here for the actual save step.
+export function saveBlobAs(blob: Blob, filename: string): void {
   const objectUrl = URL.createObjectURL(blob);
   try {
     const a = document.createElement('a');
@@ -48,4 +40,19 @@ export async function downloadImage(url: string, filename: string): Promise<void
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+}
+
+// Fetch a remote image URL and trigger a browser download. Used for
+// same-origin URLs (local /api/outputs/*) and any URL whose response
+// carries CORS headers. Firebase Storage tokenized URLs do NOT ship with
+// permissive CORS by default — callers holding a Firebase storagePath
+// should use the SDK's getBlob path instead of this helper (see
+// firebase.ts:getStorageBlob). Throws on network/decode failure.
+export async function downloadImage(url: string, filename: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  }
+  const blob = await res.blob();
+  saveBlobAs(blob, filename);
 }

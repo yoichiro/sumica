@@ -617,6 +617,49 @@ app.post('/api/generate/interrupt', async (_req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// Proxy a Firebase Storage tokenized URL to sidestep the browser CORS gate.
+// The URL is self-authenticated (its `?token=...` query is a signed short-lived
+// access token issued by getDownloadURL), so this endpoint does NOT require
+// firebase-admin — the same design constraint that keeps the runtime server
+// Firebase-free (CLAUDE.md). To keep this from acting as an open web proxy:
+//   1) parse with new URL() and require hostname === 'firebasestorage.googleapis.com'
+//      (a strict host match, not a prefix check that a crafted userinfo /
+//      subdomain could dodge);
+//   2) `maxRedirects: 0` — axios will NOT auto-follow a 3xx to an attacker-
+//      controlled host, which is the SSRF-via-redirect vector that a prefix
+//      check alone cannot close.
+app.get('/api/download-proxy', async (req: Request, res: Response) => {
+  const rawUrl = req.query.url;
+  if (typeof rawUrl !== 'string') {
+    return res.status(400).json({ error: 'url query parameter is required' });
+  }
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    return res.status(400).json({ error: 'url is not a valid URL' });
+  }
+  if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'firebasestorage.googleapis.com') {
+    return res.status(400).json({ error: 'Only Firebase Storage URLs are accepted' });
+  }
+  try {
+    const upstream = await axios.get(rawUrl, { responseType: 'stream', timeout: 30000, maxRedirects: 0 });
+    if (upstream.headers['content-type']) {
+      res.setHeader('Content-Type', String(upstream.headers['content-type']));
+    }
+    res.setHeader('Content-Disposition', 'attachment');
+    upstream.data.pipe(res);
+  } catch (err) {
+    const status = axios.isAxiosError(err) && err.response ? err.response.status : 502;
+    console.error('download-proxy upstream failed:', (err as Error).message);
+    if (!res.headersSent) {
+      res.status(status).json({ error: `Upstream fetch failed: ${(err as Error).message}` });
+    } else {
+      res.end();
+    }
+  }
+});
+
 // 2. Retrieve History
 app.get('/api/history', async (_req: Request, res: Response) => {
   try {

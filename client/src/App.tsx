@@ -554,14 +554,22 @@ function App() {
     setLightboxUrl(target.imageUrl);
   };
 
-  // Trigger a browser download for the given gallery item. Reads the image
-  // from item.imageUrl (Firebase Storage tokenized URL when signed in, local
-  // /api/outputs/*.png when signed out) and saves it under a JST timestamp
-  // filename. Surfaces success/failure via the existing Toast system.
+  // Trigger a browser download for the given gallery item. Signed-in items
+  // carry a Firebase Storage `storagePath`; direct fetch from the browser to
+  // firebasestorage.googleapis.com is blocked by CORS (the SDK's getBlob is
+  // subject to the same policy — Firebase Storage buckets ship with no CORS
+  // headers by default), so we route those via our /api/download-proxy which
+  // tunnels the tokenized URL server-side. Signed-out items serve from
+  // localhost:5000/api/outputs/* which the server's CORS config already
+  // allows, so they go through the plain fetch path unchanged.
   const handleDownload = async (item: GenerationData) => {
-    if (!item?.imageUrl) return;
+    if (!item.imageUrl) return;
+    const filename = formatDownloadFilename(item.timestamp);
+    const fetchUrl = item.storagePath
+      ? `${API_BASE}/download-proxy?url=${encodeURIComponent(item.imageUrl)}`
+      : item.imageUrl;
     try {
-      await downloadImage(item.imageUrl, formatDownloadFilename(item.timestamp));
+      await downloadImage(fetchUrl, filename);
       addToast(t.toast.imageDownloaded, 'success');
     } catch (e) {
       addToast(t.toast.imageDownloadFailed((e as Error).message), 'error');
