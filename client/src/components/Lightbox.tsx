@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Info, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, Play, Pause, Eye, X } from 'lucide-react';
+import { Info, Download, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, Play, Pause, Eye, X } from 'lucide-react';
 import type { GenerationParams } from '../firebase';
 import { t } from '../i18n';
 
@@ -38,6 +38,7 @@ interface LightboxProps {
   // a history image to the preview would clobber the live progress UI.
   openInPreviewDisabled: boolean;
   onClose: () => void;
+  onDownload: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
 }
@@ -63,6 +64,7 @@ export function Lightbox({
   onOpenInPreview,
   openInPreviewDisabled,
   onClose,
+  onDownload,
   isFullscreen,
   onToggleFullscreen,
 }: LightboxProps) {
@@ -378,6 +380,33 @@ export function Lightbox({
         >
           {Math.round(slideshowIntervalMs / 1000)}s
         </span>
+      </button>
+      {/* Download button — save the currently displayed image to disk with a
+          human-readable JST timestamp filename. Mirrors the Info button's
+          shape/positioning; opts out of the toggled/pressed styling since
+          it's a one-shot action. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onDownload(); }}
+        title={t.lightbox.downloadTooltip}
+        className="scale-hover"
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '540px',
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          border: 'none',
+          background: 'rgba(255, 255, 255, 0.15)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+        }}
+      >
+        <Download size={22} />
       </button>
       {/* Open-in-preview: send the currently displayed gallery item to the
           Preview tab, then close the lightbox. Hidden when the lightbox is
