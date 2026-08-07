@@ -141,6 +141,7 @@ export const en: typeof ja = {
   },
   lightbox: {
     imageAlt: 'Enlarged view',
+    downloadTooltip: 'Download image',
     infoShowTooltip: 'Show details',
     infoHideTooltip: 'Hide details',
     selectTooltip: 'Select (Space)',
@@ -239,6 +240,8 @@ export const en: typeof ja = {
       `Generated ${ok} of ${total} (${fail} failed).\n\nMake sure LM Studio and Stable Diffusion are running locally.`,
     batchAllSuccess: (n) => `Generated ${n} images! 🎨⚡️`,
     batchStarted: 'Batch generation started ⚡️',
+    imageDownloaded: 'Image downloaded 💾',
+    imageDownloadFailed: (details: string) => `Image download failed.\n\nDetails: ${details}`,
   },
   tabs: {
     preview: '🎨 Preview & progress',

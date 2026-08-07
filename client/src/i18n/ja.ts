@@ -139,6 +139,7 @@ export const ja = {
   },
   lightbox: {
     imageAlt: '拡大表示',
+    downloadTooltip: '画像をダウンロード',
     infoShowTooltip: '詳細情報を表示',
     infoHideTooltip: '詳細情報を隠す',
     selectTooltip: '選択 (Space)',
@@ -238,6 +239,8 @@ export const ja = {
       `${total}枚中${ok}枚を生成しました（${fail}枚失敗）。\n\nLM Studio や Stable Diffusion がローカルで正常に起動しているか確認してください。`,
     batchAllSuccess: (n: number) => `${n}枚の画像を生成しました！🎨⚡️`,
     batchStarted: 'バッチ生成を開始しました⚡️',
+    imageDownloaded: '画像をダウンロードしました 💾',
+    imageDownloadFailed: (details: string) => `画像のダウンロードに失敗しました。\n\n詳細: ${details}`,
   },
   tabs: {
     preview: '🎨 プレビュー＆進捗',
