@@ -710,6 +710,7 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
     // 3. Stream ComfyUI progress events over SSE while waiting for completion
     const history = await waitForCompletion(
       promptId,
+      clientId,
       (evt: WsEvent) => sse('progress', { stage: 'comfy', evt }),
       () => videoCancelRequested,
     );

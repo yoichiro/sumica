@@ -158,11 +158,16 @@ export async function extractPoster(mp4: Buffer): Promise<Buffer> {
 
 export async function waitForCompletion(
   promptId: string,
+  clientId: string,
   onProgress: (evt: WsEvent) => void,
   isCancelled: () => boolean,
 ): Promise<HistoryEntry> {
   return new Promise<HistoryEntry>((resolve, reject) => {
-    const ws = new WebSocket(`${wsBase()}/ws?clientId=${encodeURIComponent(promptId)}`);
+    // Must subscribe with the SAME client_id that was registered with /prompt in
+    // submitWorkflow() — ComfyUI routes execution-scoped events (executing,
+    // progress, execution_success/error) only to the socket whose clientId
+    // matches the submission's client_id, not to a socket keyed by promptId.
+    const ws = new WebSocket(`${wsBase()}/ws?clientId=${encodeURIComponent(clientId)}`);
     const cancelPoll = setInterval(async () => {
       if (!isCancelled()) return;
       clearInterval(cancelPoll);
