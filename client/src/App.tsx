@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { isFirebaseConfigured, onAuth, saveGeneration, saveVideoGeneration, subscribeGenerations, subscribeFavorites, subscribeVideoParentIndex, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
 import { collectVideoParentCounts } from './utils/videoParentIndex';
+import { resolveVideoSeed } from './utils/videoSeed';
 import type { RankingRollup, RankedRecipe } from './utils/rankingAnalysis';
 import { ToastContainer, type Toast } from './components/ToastContainer';
 import { AppHeader, type HealthStatus } from './components/AppHeader';
@@ -2051,7 +2052,7 @@ function App() {
         fidelity: videoFidelity,
         motion: videoMotion,
         identity: videoIdentity,
-        seed: videoSeedLocked ? videoSeed : -1,
+        seed: resolveVideoSeed(videoSeed, videoSeedLocked),
         clientId: `sumica-${Date.now()}`,
         parentId: videoSourceImage.id,
         params: user ? undefined : videoSourceImage, // local mode: server inherits fields straight from the parent record
