@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { isFirebaseConfigured, onAuth, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
+import { isFirebaseConfigured, onAuth, saveGeneration, saveVideoGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
 import type { RankingRollup, RankedRecipe } from './utils/rankingAnalysis';
 import { ToastContainer, type Toast } from './components/ToastContainer';
 import { AppHeader, type HealthStatus } from './components/AppHeader';
@@ -753,6 +753,51 @@ function App() {
   const [cancelling, setCancelling] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [sdProgress, setSdProgress] = useState<{ progress: number; etaRelative: number } | null>(null);
+
+  // --- Video-mode (ComfyUI image-to-video) form state ---
+  // Whether the left form is currently showing the video pipeline instead of
+  // the image pipeline. Drives ControlPanel's mode toggle and PreviewPanel's
+  // currentMediaType (which selects the process-tracker's step labels).
+  const [videoMode, setVideoMode] = useState(false);
+  // The source still image the video is generated from. Normally chosen from
+  // the Lightbox's "make video" action (Task 7); until that's wired, entering
+  // video mode defaults it to the current preview image (see the effect below)
+  // so the pipeline is exercisable end-to-end.
+  const [videoSourceImage, setVideoSourceImage] = useState<GenerationData | null>(null);
+  // Optional ComfyUI "reference" image (identity/style guidance), chosen via
+  // openVideoReferencePicker below.
+  const [videoReferenceImage, setVideoReferenceImage] = useState<GenerationData | null>(null);
+  const [videoPositivePrompt, setVideoPositivePrompt] = useState('Use the provided start image exactly as the first frame.');
+  const [videoNegativePrompt, setVideoNegativePrompt] = useState('still image, watermark, subtitles, text, 3D, VR');
+  const [videoWidth, setVideoWidth] = useState(1024);
+  const [videoHeight, setVideoHeight] = useState(1088);
+  const [videoLength, setVideoLength] = useState(240);
+  const [videoFidelity, setVideoFidelity] = useState(1.0);
+  const [videoMotion, setVideoMotion] = useState(35);
+  const [videoIdentity, setVideoIdentity] = useState(1.0);
+  const [videoSeed, setVideoSeed] = useState(12345);
+  const [videoSeedLocked, setVideoSeedLocked] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(false);
+  // AbortController for the in-flight /api/video/generate fetch, so
+  // handleVideoCancel can tear down the SSE read loop client-side.
+  const videoAbortRef = useRef<AbortController | null>(null);
+  // Raw SSE `stage` id from the most recent `event: progress` frame — consumed
+  // by PreviewPanel's videoStageLabel() mapping.
+  const [videoProgressStage, setVideoProgressStage] = useState('');
+  // The most recent successful generation from either pipeline (image or
+  // video), surfaced in PreviewPanel's top preview stage. See Task 7 for the
+  // eventual unification with the image pipeline's currentGeneration.
+  const [latestResult, setLatestResult] = useState<GenerationData | null>(null);
+
+  // Entering video mode with nothing picked yet defaults the source image to
+  // whatever is already on screen, so the pipeline can be exercised without
+  // the Lightbox gallery-picker flow (Task 7 adds a way to override this with
+  // any history item).
+  useEffect(() => {
+    if (videoMode && !videoSourceImage && currentGeneration && (currentGeneration.mediaType ?? 'image') === 'image') {
+      setVideoSourceImage(currentGeneration);
+    }
+  }, [videoMode, videoSourceImage, currentGeneration]);
 
   // Batch generation state
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
@@ -1828,6 +1873,180 @@ function App() {
     }
   };
 
+  // Fetch a history item's primary image and return its bytes as a base64
+  // string (no "data:...;base64," prefix). Firebase-hosted URLs need the
+  // server's /api/download-proxy tunnel (ADR-55) to sidestep browser CORS on
+  // firebasestorage.googleapis.com; local-mode URLs are same-origin-enough
+  // (CORS-allowed by the server) to fetch directly. Mirrors handleDownload's
+  // existing storagePath-presence check for which mode an item is in.
+  const fetchImageAsBase64 = async (item: GenerationData): Promise<string> => {
+    const url = item.imageUrl;
+    const fetchUrl = item.storagePath
+      ? `${API_BASE}/download-proxy?url=${encodeURIComponent(url)}`
+      : url;
+    const res = await fetch(fetchUrl);
+    if (!res.ok) throw new Error(`fetch ${url}: HTTP ${res.status}`);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        // Strip the "data:<mime>;base64," prefix FileReader.readAsDataURL adds.
+        const commaIdx = dataUrl.indexOf(',');
+        resolve(dataUrl.slice(commaIdx + 1));
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  // Placeholder for the reference-image gallery picker. Task 7 replaces this
+  // with a modal that lets the user browse history and pick one; for now it's
+  // a no-op stub so ControlPanel's "add reference" button has something to
+  // call without crashing.
+  const openVideoReferencePicker = () => {
+    console.warn('openVideoReferencePicker: gallery picker not implemented yet (Task 7)');
+  };
+
+  const clearVideoReferenceImage = () => setVideoReferenceImage(null);
+
+  // Trigger a ComfyUI image-to-video generation. Opens the /api/video/generate
+  // SSE stream via `fetch` + ReadableStream (browser EventSource is GET-only
+  // and this endpoint is POST), parses each SSE frame by hand, and threads
+  // progress/completion into the shared genStatus/latestResult state.
+  const handleVideoGenerate = async () => {
+    if (!videoSourceImage || videoLoading) return;
+
+    setVideoLoading(true);
+    setErrorStep(null);
+    setRightTab('preview');
+    setLatestResult(null);
+    setGenStatus('generating');
+    setVideoProgressStage('preparing');
+
+    const abortController = new AbortController();
+    videoAbortRef.current = abortController;
+
+    try {
+      // Fetch source (and optional reference) image bytes as base64. Firebase
+      // mode routes through /api/download-proxy; local mode fetches directly.
+      const sourceBase64 = await fetchImageAsBase64(videoSourceImage);
+      const referenceBase64 = videoReferenceImage ? await fetchImageAsBase64(videoReferenceImage) : undefined;
+
+      const body = {
+        sourceImageBytesBase64: sourceBase64,
+        sourceImageFilename: `sumica-source-${Date.now()}.png`,
+        referenceImageBytesBase64: referenceBase64,
+        referenceImageFilename: referenceBase64 ? `sumica-reference-${Date.now()}.png` : undefined,
+        positivePrompt: videoPositivePrompt,
+        negativePrompt: videoNegativePrompt,
+        width: videoWidth,
+        height: videoHeight,
+        length: videoLength,
+        fidelity: videoFidelity,
+        motion: videoMotion,
+        identity: videoIdentity,
+        seed: videoSeedLocked ? videoSeed : -1,
+        clientId: `sumica-${Date.now()}`,
+        parentId: videoSourceImage.id,
+        params: user ? undefined : videoSourceImage, // local mode: server inherits fields straight from the parent record
+      };
+
+      const res = await fetch(`${API_BASE}/video/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-client-persist': user ? 'true' : 'false',
+        },
+        body: JSON.stringify(body),
+        signal: abortController.signal,
+      });
+      if (!res.ok || !res.body) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      }
+
+      // Manual SSE parser: frames are separated by a blank line ("\n\n"); each
+      // frame is an "event: X" line followed by a "data: <json>" line. Frames
+      // can arrive split across chunk boundaries, so partial trailing data is
+      // buffered and re-prepended on the next read.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const frames = buf.split('\n\n');
+        buf = frames.pop() ?? '';
+        for (const frame of frames) {
+          if (!frame.trim()) continue;
+          const evLine = frame.split('\n').find((l) => l.startsWith('event: '));
+          const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
+          if (!evLine || !dataLine) continue;
+          const eventName = evLine.slice(7).trim();
+          const dataJson = JSON.parse(dataLine.slice(6));
+
+          if (eventName === 'progress') {
+            setVideoProgressStage(dataJson.stage ?? '');
+          } else if (eventName === 'complete') {
+            // Signed-in: dataJson carries { videoBase64, posterBase64?, ltxParams } —
+            // the client uploads the bytes to Firebase Storage itself.
+            // Signed-out: dataJson carries { record } — the server already
+            // persisted to server/outputs/, so the record is ready to display.
+            if (user && dataJson.videoBase64) {
+              setVideoProgressStage('saving');
+              const saved = await saveVideoGeneration(user.uid, {
+                parentId: body.parentId!,
+                videoBase64: dataJson.videoBase64,
+                posterBase64: dataJson.posterBase64,
+                ltxParams: dataJson.ltxParams as LtxParams,
+                timestamp: Date.now(),
+                params: { ...videoSourceImage, model: videoSourceImage.model ?? null },
+              });
+              setLatestResult(saved as unknown as GenerationData);
+            } else if (dataJson.record) {
+              setLatestResult(dataJson.record as GenerationData);
+              fetchHistory(); // signed-out history isn't a live subscription — refresh it
+              fetchRollups();
+            }
+            setGenStatus('success');
+            addToast(t.toast.videoGenerateSuccess, 'success');
+          } else if (eventName === 'error') {
+            if (dataJson.cancelled) {
+              setGenStatus('idle');
+              addToast(t.toast.videoGenerateCancelled, 'error');
+            } else {
+              setGenStatus('error');
+              addToast(t.toast.videoGenerateFailed(dataJson.message ?? 'unknown'), 'error');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        setGenStatus('error');
+        addToast(t.toast.videoGenerateFailed((e as Error).message), 'error');
+      } else {
+        setGenStatus('idle');
+      }
+    } finally {
+      setVideoLoading(false);
+      videoAbortRef.current = null;
+    }
+  };
+
+  // Cancel button for an in-flight video generation: best-effort interrupt on
+  // the server (ComfyUI itself), then abort the client's own fetch/SSE read
+  // so the loop above doesn't keep waiting on a stream the server may not
+  // close promptly.
+  const handleVideoCancel = async () => {
+    try {
+      await fetch(`${API_BASE}/video/generate/interrupt`, { method: 'POST' });
+    } catch {
+      // best effort — the fetch abort below still stops the client side regardless
+    }
+    videoAbortRef.current?.abort();
+  };
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -1922,36 +2141,37 @@ function App() {
           loadedPositive={loadedPositive}
           loadedNegative={loadedNegative}
           onClearLoadedEnhanced={clearLoadedEnhanced}
-          // Video-mode placeholders — Task 7 (Plan 2) replaces these with real
-          // state and handlers wired to the ComfyUI video generation pipeline.
-          videoMode={false}
-          setVideoMode={() => {}}
-          videoSourceImage={null}
-          videoReferenceImage={null}
-          openVideoReferencePicker={() => {}}
-          clearVideoReferenceImage={() => {}}
-          videoPositivePrompt=""
-          setVideoPositivePrompt={() => {}}
-          videoNegativePrompt=""
-          setVideoNegativePrompt={() => {}}
-          videoWidth={768}
-          setVideoWidth={() => {}}
-          videoHeight={512}
-          setVideoHeight={() => {}}
-          videoLength={97}
-          setVideoLength={() => {}}
-          videoFidelity={0.5}
-          setVideoFidelity={() => {}}
-          videoMotion={1}
-          setVideoMotion={() => {}}
-          videoIdentity={1}
-          setVideoIdentity={() => {}}
-          videoSeed={0}
-          setVideoSeed={() => {}}
-          videoSeedLocked={false}
-          setVideoSeedLocked={() => {}}
-          onVideoGenerate={() => {}}
-          videoLoading={false}
+          // Video-mode state and handlers (Task 5, Plan 2). The reference-image
+          // gallery picker (openVideoReferencePicker) is still a placeholder
+          // stub — Task 7 replaces it with a real modal.
+          videoMode={videoMode}
+          setVideoMode={setVideoMode}
+          videoSourceImage={videoSourceImage}
+          videoReferenceImage={videoReferenceImage}
+          openVideoReferencePicker={openVideoReferencePicker}
+          clearVideoReferenceImage={clearVideoReferenceImage}
+          videoPositivePrompt={videoPositivePrompt}
+          setVideoPositivePrompt={setVideoPositivePrompt}
+          videoNegativePrompt={videoNegativePrompt}
+          setVideoNegativePrompt={setVideoNegativePrompt}
+          videoWidth={videoWidth}
+          setVideoWidth={setVideoWidth}
+          videoHeight={videoHeight}
+          setVideoHeight={setVideoHeight}
+          videoLength={videoLength}
+          setVideoLength={setVideoLength}
+          videoFidelity={videoFidelity}
+          setVideoFidelity={setVideoFidelity}
+          videoMotion={videoMotion}
+          setVideoMotion={setVideoMotion}
+          videoIdentity={videoIdentity}
+          setVideoIdentity={setVideoIdentity}
+          videoSeed={videoSeed}
+          setVideoSeed={setVideoSeed}
+          videoSeedLocked={videoSeedLocked}
+          setVideoSeedLocked={setVideoSeedLocked}
+          onVideoGenerate={handleVideoGenerate}
+          videoLoading={videoLoading}
         />
 
         {/* RIGHT COLUMN: PREVIEW & HISTORY GRID (tabbed) */}
@@ -2022,7 +2242,10 @@ function App() {
               onLoadIntoForm={loadIntoForm}
               onRequestDelete={requestDelete}
               itemKey={itemKey}
-              onCancel={requestCancel}
+              onCancel={videoMode ? handleVideoCancel : requestCancel}
+              latestResult={latestResult}
+              currentMediaType={videoMode ? 'video' : 'image'}
+              videoProgressStage={videoProgressStage}
             />
           )}
 

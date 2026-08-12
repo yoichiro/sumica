@@ -115,6 +115,47 @@ interface PreviewPanelProps {
   onRequestDelete: (ids: string[]) => void;
   itemKey: (item: GenerationData) => string;
   onCancel: () => void;
+  // The most recent successful generation from EITHER pipeline (image or
+  // video). Set by App.tsx's handleVideoGenerate on a completed video, and
+  // (eventually, per Task 7) unified with the image pipeline's currentGeneration.
+  // When its mediaType is 'video', the top preview stage renders a <video>
+  // instead of an <img>.
+  latestResult: GenerationData | null;
+  // Which pipeline is currently the active one in the form — drives the
+  // process-tracker's step labels (image's 3-step flow vs video's ComfyUI
+  // stage flow). Independent of latestResult.mediaType, which reflects the
+  // last *completed* item rather than what's in-flight right now.
+  currentMediaType: 'image' | 'video';
+  // Raw SSE stage id from the last `event: progress` frame of the in-flight
+  // video generation (see server's /api/video/generate). Mapped to a label
+  // via videoStageLabel() below. Empty string before the first progress event.
+  videoProgressStage: string;
+}
+
+// Maps a raw ComfyUI/SSE stage id — as sent by the server's
+// `sse('progress', { stage })` calls in /api/video/generate — to the
+// corresponding user-facing step label. Unrecognized or empty stages fall
+// back to the "generating" label since the pipeline is still mid-flight in
+// every case that isn't explicitly one of the earlier/later named stages.
+function videoStageLabel(stage: string): string {
+  switch (stage) {
+    case 'preparing':
+      return t.preview.videoStepPreparingLabel;
+    case 'uploaded_source':
+    case 'uploaded_reference':
+      return t.preview.videoStepUploadingLabel;
+    case 'submitted':
+    case 'comfy':
+      return t.preview.videoStepGeneratingLabel;
+    case 'fetching_video':
+      return t.preview.videoStepFetchingLabel;
+    case 'extracting_poster':
+      return t.preview.videoStepPosterLabel;
+    case 'saving':
+      return t.preview.videoStepSavingLabel;
+    default:
+      return t.preview.videoStepGeneratingLabel;
+  }
 }
 
 export function PreviewPanel({
@@ -137,6 +178,9 @@ export function PreviewPanel({
   onRequestDelete,
   itemKey,
   onCancel,
+  latestResult,
+  currentMediaType,
+  videoProgressStage,
 }: PreviewPanelProps) {
   return (
     <>
@@ -152,7 +196,96 @@ export function PreviewPanel({
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {currentGeneration ? (
+        {latestResult && (latestResult.mediaType ?? 'image') === 'video' ? (
+          <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
+            {/* Video Frame — same frame treatment as the image branch below */}
+            <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid var(--panel-border-hover)', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', justifySelf: 'center', maxWidth: '100%', minHeight: 0 }}>
+              <video
+                src={latestResult.videoUrl ?? latestResult.imageUrl}
+                poster={latestResult.posterUrl}
+                controls
+                playsInline
+                style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', display: 'block' }}
+              />
+              <SelectButton
+                size={34}
+                isSelected={isSelected}
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(latestResult); }}
+              />
+              <FavoriteButton
+                size={34}
+                isFavorite={!!latestResult.isFavorite}
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite(latestResult); }}
+              />
+            </div>
+
+            {/* Info column: toolbar + LTX params, mirroring the image branch's layout */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left', maxHeight: '48vh', minHeight: 0 }}>
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => onLoadIntoForm(latestResult)}
+                  className="scale-hover"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  <RotateCcw size={15} /> {t.preview.loadIntoFormButton}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRequestDelete([itemKey(latestResult)])}
+                  className="scale-hover"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  <Trash2 size={15} /> {t.preview.deleteButton}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', minHeight: 0, paddingRight: '4px' }}>
+                <div>
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>{t.preview.originalPromptLabel}</span>
+                  <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>
+                    {latestResult.ltxParams?.positivePrompt ?? latestResult.originalPrompt}
+                  </p>
+                </div>
+
+                {latestResult.ltxParams && (
+                  <div style={{ borderTop: '2px solid var(--panel-border)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
+                    <div>
+                      <span>{t.preview.detailResolutionLabel}</span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.width}x{latestResult.height}</strong>
+                    </div>
+                    <div>
+                      <span>Length: </span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.ltxParams.length}f</strong>
+                    </div>
+                    <div>
+                      <span>Fidelity: </span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.ltxParams.fidelity}</strong>
+                    </div>
+                    <div>
+                      <span>Motion: </span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.ltxParams.motion}</strong>
+                    </div>
+                    <div>
+                      <span>Identity: </span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.ltxParams.identity}</strong>
+                    </div>
+                  </div>
+                )}
+
+                {latestResult.ltxParams?.negativePrompt && (
+                  <div>
+                    <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
+                      {t.preview.negativePromptLabel}
+                    </span>
+                    <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'var(--negative-bg)', padding: '10px', borderRadius: '8px', border: '2px solid var(--negative-border)', wordBreak: 'break-all' }}>
+                      {latestResult.ltxParams.negativePrompt}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : currentGeneration ? (
           <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
             {/* Image Frame — hugs the image and centers within its grid track */}
             <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid var(--panel-border-hover)', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', justifySelf: 'center', maxWidth: '100%', minHeight: 0 }}>
@@ -449,7 +582,16 @@ export function PreviewPanel({
                 </div>
               )}
 
-            {/* Steps Horizontally */}
+            {/* Steps: the image pipeline's 3-node flow, or the video pipeline's
+                single current-stage label (ComfyUI's flow isn't naturally
+                discretized into fixed numbered steps like the image path). */}
+            {currentMediaType === 'video' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: genStatus === 'error' ? 'var(--danger)' : 'var(--text-primary)', fontWeight: '700' }}>
+                <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>
+                  {videoStageLabel(videoProgressStage)}
+                </span>
+              </div>
+            ) : (
             <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
                 <div style={{
@@ -512,6 +654,7 @@ export function PreviewPanel({
                 <span>{t.preview.stepSaveLabel}</span>
               </div>
             </div>
+            )}
             </div>
           </div>
         </div>
