@@ -794,6 +794,18 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
         parentId: parentId || undefined,
         videoUrl,
         posterUrl,
+        // Explicitly clear these after the `...inheritedParams` spread above —
+        // `inheritedParams` comes from the request body (client-controlled) and
+        // must never be allowed to smuggle arbitrary path-like values into a
+        // record that the delete endpoint later unlinks. The local-mode video
+        // save path doesn't use any of these fields; only localPath/thumbnailPath
+        // (already overridden above) carry the real sidecar paths. The delete
+        // handler also independently validates every path is inside outputsDir
+        // before unlinking, so this is belt-and-suspenders, not the only guard.
+        videoLocalPath: undefined,
+        posterLocalPath: undefined,
+        videoStoragePath: undefined,
+        posterStoragePath: undefined,
         ltxParams: {
           fidelity: args.fidelity,
           motion: args.motion,
@@ -1093,6 +1105,18 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'A non-empty ids array is required' });
   }
 
+  // Defense-in-depth: a `GenerationMetadata` record's sidecar-path fields
+  // (localPath/thumbnailPath/videoLocalPath/posterLocalPath) are ultimately
+  // client-influenced (the local video-save path spreads `body.params` into
+  // the persisted record). Only ever unlink a path that resolves inside
+  // `outputsDir` — anything else is silently skipped instead of deleted.
+  const outputsDirResolved = path.resolve(outputsDir);
+  const safeToUnlink = (p: string | undefined): p is string => {
+    if (!p) return false;
+    const resolved = path.resolve(p);
+    return resolved === outputsDirResolved || resolved.startsWith(outputsDirResolved + path.sep);
+  };
+
   let deleted = 0;
   try {
     const history = getLocalHistory();
@@ -1123,7 +1147,7 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
           item.videoLocalPath,
           item.posterLocalPath,
         ]) {
-          if (p && fs.existsSync(p)) {
+          if (safeToUnlink(p) && fs.existsSync(p)) {
             try {
               fs.unlinkSync(p);
             } catch (e) {
