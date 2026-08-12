@@ -132,10 +132,6 @@ export interface ControlPanelProps {
   // Source image chosen via Lightbox → 🎬 動画にする. Read-only in this form —
   // only its thumbnail is displayed.
   videoSourceImage: GenerationData | null;
-  // Optional face-reference image chosen via a separate picker.
-  videoReferenceImage: GenerationData | null;
-  openVideoReferencePicker: () => void;
-  clearVideoReferenceImage: () => void;
 
   videoPositivePrompt: string;
   setVideoPositivePrompt: (v: string) => void;
@@ -1063,51 +1059,6 @@ export function ControlPanel(p: ControlPanelProps) {
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px', background: 'var(--panel-bg)', border: '2px dashed var(--panel-border)', borderRadius: '8px', textAlign: 'center' }}>
                 — Lightbox から「🎬 動画にする」で選択 —
               </div>
-            )}
-          </div>
-
-          {/* Reference image picker (optional) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-              {t.controlPanel.videoReferenceLabel}
-            </label>
-            {p.videoReferenceImage ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
-                <img
-                  src={p.videoReferenceImage.thumbnailUrl ?? p.videoReferenceImage.imageUrl}
-                  alt="reference"
-                  style={{ maxWidth: '64px', maxHeight: '64px', borderRadius: '6px' }}
-                />
-                <button
-                  type="button"
-                  onClick={p.clearVideoReferenceImage}
-                  disabled={p.videoLoading}
-                  title={t.controlPanel.videoReferenceClear}
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={p.openVideoReferencePicker}
-                disabled={p.videoLoading}
-                className="scale-hover"
-                style={{
-                  padding: '10px',
-                  borderRadius: '8px',
-                  background: 'var(--panel-bg)',
-                  color: 'var(--pop-blue)',
-                  border: '2px solid var(--pop-blue)',
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  cursor: p.videoLoading ? 'not-allowed' : 'pointer',
-                  opacity: p.videoLoading ? 0.5 : 1,
-                }}
-              >
-                {t.controlPanel.videoReferenceAdd}
-              </button>
             )}
           </div>
 

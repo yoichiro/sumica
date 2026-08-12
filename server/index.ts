@@ -114,7 +114,6 @@ interface GenerationMetadata {
     motion: number;
     identity: number;
     length: number;
-    referenceImageStoragePath?: string;
     positivePrompt: string;
     negativePrompt: string;
   };
@@ -653,8 +652,6 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
   const body = req.body as {
     sourceImageBytesBase64?: string;      // raw PNG bytes (base64) — client can send Firebase-fetched image directly
     sourceImageFilename?: string;         // suggested filename for upload/image (defaults to `sumica-source.png`)
-    referenceImageBytesBase64?: string;   // optional
-    referenceImageFilename?: string;
     positivePrompt?: string;
     negativePrompt?: string;
     width?: number;
@@ -682,7 +679,6 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
   try {
     args = {
       sourceImageFilename: body.sourceImageFilename || 'sumica-source.png',
-      referenceImageFilename: body.referenceImageFilename,
       positivePrompt: body.positivePrompt,
       negativePrompt: body.negativePrompt,
       width: num(body.width, 'width'),
@@ -715,19 +711,12 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
   try {
     sse('progress', { stage: 'preparing' });
 
-    // 1. Load bundled workflow + upload source image (+ reference if present)
+    // 1. Load bundled workflow + upload source image
     const workflow = await loadBundledWorkflow();
     const sourceBytes = Buffer.from(body.sourceImageBytesBase64, 'base64');
     const sourceName = await uploadImageToComfy(sourceBytes, args.sourceImageFilename);
     args.sourceImageFilename = sourceName;
     sse('progress', { stage: 'uploaded_source', filename: sourceName });
-
-    if (body.referenceImageBytesBase64) {
-      const refBytes = Buffer.from(body.referenceImageBytesBase64, 'base64');
-      const refName = await uploadImageToComfy(refBytes, body.referenceImageFilename || 'sumica-reference.png');
-      args.referenceImageFilename = refName;
-      sse('progress', { stage: 'uploaded_reference', filename: refName });
-    }
 
     // 2. Mutate workflow with dynamic parameters and submit
     const mutated = mutateWorkflow(workflow, args);
@@ -833,8 +822,6 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
         length: args.length,
         positivePrompt: args.positivePrompt,
         negativePrompt: args.negativePrompt,
-        // referenceImageStoragePath is provided by the client on save; the server
-        // only knows the reference by uploaded filename, not by storage path.
       },
     });
   } catch (err) {

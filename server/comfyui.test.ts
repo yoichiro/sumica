@@ -40,7 +40,6 @@ describe('mutateWorkflow', () => {
 
   const baseArgs: MutateArgs = {
     sourceImageFilename: 'test_source.png',
-    referenceImageFilename: undefined,
     positivePrompt: 'She smiles softly.',
     negativePrompt: 'still image, watermark',
     width: 1024,
@@ -52,18 +51,12 @@ describe('mutateWorkflow', () => {
     seed: 12345,
   };
 
-  it('substitutes the main input image (node 837) and leaves reference (node 923) untouched when unset', async () => {
+  it('substitutes the main input image (node 837) and leaves reference (node 923) at its workflow default', async () => {
     const wf = await loadWorkflow();
     const referenceBefore = wf['923'].inputs.image;
     const out = mutateWorkflow(wf, baseArgs);
     expect(out['837'].inputs.image).toBe('test_source.png');
     expect(out['923'].inputs.image).toBe(referenceBefore);
-  });
-
-  it('substitutes the reference image (node 923) when provided', async () => {
-    const wf = await loadWorkflow();
-    const out = mutateWorkflow(wf, { ...baseArgs, referenceImageFilename: 'ref.png' });
-    expect(out['923'].inputs.image).toBe('ref.png');
   });
 
   it('writes both Xi and Xf on each mxSlider so the value takes effect', async () => {

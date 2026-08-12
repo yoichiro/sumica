@@ -108,7 +108,6 @@ export type LtxParams = {
   motion: number;
   identity: number;
   length: number;
-  referenceImageStoragePath?: string;
   positivePrompt: string;
   negativePrompt: string;
 };

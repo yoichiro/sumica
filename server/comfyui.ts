@@ -23,7 +23,6 @@ export type WorkflowJson = Record<string, { class_type: string; inputs: Record<s
 
 export type MutateArgs = {
   sourceImageFilename: string;
-  referenceImageFilename?: string;
   positivePrompt: string;
   negativePrompt: string;
   width: number;
@@ -66,9 +65,6 @@ export function clampSeed(seed: number): number {
 export function mutateWorkflow(workflow: WorkflowJson, args: MutateArgs): WorkflowJson {
   const clone: WorkflowJson = JSON.parse(JSON.stringify(workflow));
   clone['837'].inputs.image = args.sourceImageFilename;
-  if (args.referenceImageFilename) {
-    clone['923'].inputs.image = args.referenceImageFilename;
-  }
   clone['536'].inputs.text = args.positivePrompt;
   clone['537'].inputs.text = args.negativePrompt;
   clone['524'].inputs.seed = clampSeed(args.seed);

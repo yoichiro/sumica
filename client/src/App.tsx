@@ -846,9 +846,6 @@ function App() {
   // mode with nothing picked yet also defaults it to the current preview
   // image (see the effect below) so the pipeline is exercisable directly.
   const [videoSourceImage, setVideoSourceImage] = useState<GenerationData | null>(null);
-  // Optional ComfyUI "reference" image (identity/style guidance), chosen via
-  // openVideoReferencePicker below.
-  const [videoReferenceImage, setVideoReferenceImage] = useState<GenerationData | null>(null);
   const [videoPositivePrompt, setVideoPositivePrompt] = useState('Use the provided start image exactly as the first frame.');
   const [videoNegativePrompt, setVideoNegativePrompt] = useState('still image, watermark, subtitles, text, 3D, VR');
   const [videoWidth, setVideoWidth] = useState(1024);
@@ -860,9 +857,6 @@ function App() {
   const [videoSeed, setVideoSeed] = useState(12345);
   const [videoSeedLocked, setVideoSeedLocked] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
-  // Whether the lightweight reference-image picker modal is open (opened via
-  // ControlPanel's "参照画像を選ぶ" button, see openVideoReferencePicker below).
-  const [showVideoReferencePicker, setShowVideoReferencePicker] = useState(false);
   // AbortController for the in-flight /api/video/generate fetch, so
   // handleVideoCancel can tear down the SSE read loop client-side.
   const videoAbortRef = useRef<AbortController | null>(null);
@@ -2007,15 +2001,6 @@ function App() {
     });
   };
 
-  // Opens the lightweight reference-image picker modal (rendered near the
-  // other modals below) so the user can browse history and pick a face
-  // reference image for the video generation.
-  const openVideoReferencePicker = () => {
-    setShowVideoReferencePicker(true);
-  };
-
-  const clearVideoReferenceImage = () => setVideoReferenceImage(null);
-
   // Trigger a ComfyUI image-to-video generation. Opens the /api/video/generate
   // SSE stream via `fetch` + ReadableStream (browser EventSource is GET-only
   // and this endpoint is POST), parses each SSE frame by hand, and threads
@@ -2034,16 +2019,13 @@ function App() {
     videoAbortRef.current = abortController;
 
     try {
-      // Fetch source (and optional reference) image bytes as base64. Firebase
-      // mode routes through /api/download-proxy; local mode fetches directly.
+      // Fetch source image bytes as base64. Firebase mode routes through
+      // /api/download-proxy; local mode fetches directly.
       const sourceBase64 = await fetchImageAsBase64(videoSourceImage);
-      const referenceBase64 = videoReferenceImage ? await fetchImageAsBase64(videoReferenceImage) : undefined;
 
       const body = {
         sourceImageBytesBase64: sourceBase64,
         sourceImageFilename: `sumica-source-${Date.now()}.png`,
-        referenceImageBytesBase64: referenceBase64,
-        referenceImageFilename: referenceBase64 ? `sumica-reference-${Date.now()}.png` : undefined,
         positivePrompt: videoPositivePrompt,
         negativePrompt: videoNegativePrompt,
         width: videoWidth,
@@ -2247,14 +2229,10 @@ function App() {
           loadedPositive={loadedPositive}
           loadedNegative={loadedNegative}
           onClearLoadedEnhanced={clearLoadedEnhanced}
-          // Video-mode state and handlers (Task 5, Plan 2). openVideoReferencePicker
-          // opens the pickerModal rendered near the other modals below (Task 7).
+          // Video-mode state and handlers (Task 5, Plan 2).
           videoMode={videoMode}
           setVideoMode={setVideoMode}
           videoSourceImage={videoSourceImage}
-          videoReferenceImage={videoReferenceImage}
-          openVideoReferencePicker={openVideoReferencePicker}
-          clearVideoReferenceImage={clearVideoReferenceImage}
           videoPositivePrompt={videoPositivePrompt}
           setVideoPositivePrompt={setVideoPositivePrompt}
           videoNegativePrompt={videoNegativePrompt}
@@ -2470,61 +2448,6 @@ function App() {
           handleBatchGenerate(jobs);
         }}
       />
-
-      {/* Lightweight reference-image picker modal for the video form's
-          "参照画像を選ぶ" button. Scoped to `history` (not `displayedHistory`)
-          so it still lists images even while the gallery filter is parked on
-          the Video tab. */}
-      {showVideoReferencePicker && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          }}
-          onClick={() => setShowVideoReferencePicker(false)}
-        >
-          <div
-            style={{
-              background: 'var(--panel-bg)', borderRadius: '16px', padding: '20px',
-              maxWidth: '640px', maxHeight: '80vh', overflowY: 'auto',
-              display: 'flex', flexDirection: 'column', gap: '12px',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ margin: 0 }}>{t.controlPanel.videoReferencePickerTitle}</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-              {history
-                .filter((r) => (r.mediaType ?? 'image') === 'image')
-                .slice(0, 60)
-                .map((item) => (
-                  <img
-                    key={itemKey(item)}
-                    src={item.thumbnailUrl ?? item.imageUrl}
-                    alt="reference candidate"
-                    onClick={() => {
-                      setVideoReferenceImage(item);
-                      setShowVideoReferencePicker(false);
-                    }}
-                    style={{
-                      width: '96px', height: '96px', objectFit: 'cover',
-                      borderRadius: '8px', cursor: 'pointer', margin: '4px',
-                    }}
-                  />
-                ))}
-              {history.filter((r) => (r.mediaType ?? 'image') === 'image').length === 0 && (
-                <p style={{ color: 'var(--text-secondary)' }}>{t.controlPanel.videoReferencePickerEmpty}</p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowVideoReferencePicker(false)}
-              style={{ alignSelf: 'flex-end', padding: '6px 14px' }}
-            >
-              {t.controlPanel.videoReferencePickerClose}
-            </button>
-          </div>
-        </div>
-      )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
