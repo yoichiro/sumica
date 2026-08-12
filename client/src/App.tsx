@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { isFirebaseConfigured, onAuth, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams } from './firebase';
+import { isFirebaseConfigured, onAuth, saveGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
 import type { RankingRollup, RankedRecipe } from './utils/rankingAnalysis';
 import { ToastContainer, type Toast } from './components/ToastContainer';
 import { AppHeader, type HealthStatus } from './components/AppHeader';
@@ -109,6 +109,13 @@ export interface GenerationData {
   // Ground-truth architecture from the user's toggle at generation time.
   // Absent on legacy records; loadIntoForm falls back to name/title heuristics.
   modelArchitecture?: Architecture;
+  mediaType?: 'image' | 'video';
+  parentId?: string;
+  videoUrl?: string;
+  videoStoragePath?: string;
+  posterUrl?: string;
+  posterStoragePath?: string;
+  ltxParams?: LtxParams;
 }
 
 

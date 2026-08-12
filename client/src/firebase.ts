@@ -95,6 +95,21 @@ export type GenerationParams = {
   modelArchitecture?: Architecture;
 };
 
+// LTX-Video 2 image-to-video parameters, persisted only on mediaType === 'video'
+// records. Length is in frames (workflow uses 24 fps, so 240 frames = 10 s). The
+// three float knobs (fidelity/motion/identity) are the mxSlider values authored
+// into the workflow (see server/workflows/i2v.json nodes 797/915/941). Prompts
+// are stored so the record fully round-trips through "load into form".
+export type LtxParams = {
+  fidelity: number;
+  motion: number;
+  identity: number;
+  length: number;
+  referenceImageStoragePath?: string;
+  positivePrompt: string;
+  negativePrompt: string;
+};
+
 // Keep this shape in sync with GenerationData in App.tsx.
 // A fully-persisted generation (params + storage/firestore bookkeeping).
 export type GenerationRecord = GenerationParams & {
@@ -110,6 +125,17 @@ export type GenerationRecord = GenerationParams & {
   createdAt: string;
   backendMode: 'firebase';
   isFavorite?: boolean;
+  // Media type discriminator. Absent on legacy records; treat undefined as 'image'
+  // when reading (never write undefined). Videos always carry parentId + videoUrl
+  // + videoStoragePath (+ posterUrl/posterStoragePath when the ffmpeg poster
+  // extraction succeeded) and ltxParams.
+  mediaType: 'image' | 'video';
+  parentId?: string;
+  videoUrl?: string;
+  videoStoragePath?: string;
+  posterUrl?: string;
+  posterStoragePath?: string;
+  ltxParams?: LtxParams;
 };
 
 export function onAuth(cb: (user: AuthUser | null) => void): () => void {
@@ -169,6 +195,7 @@ export async function saveGeneration(
     timestamp,
     createdAt: new Date(timestamp).toISOString(),
     backendMode: 'firebase',
+    mediaType: 'image',
   };
 
   // Compute the rollup key and write the generation doc + rollup counter in
