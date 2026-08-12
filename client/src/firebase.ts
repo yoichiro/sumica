@@ -356,6 +356,11 @@ export async function deleteGenerations(uid: string, records: GenerationRecord[]
     for (const rec of chunk) {
       const genRef = doc(dbInstance, 'users', uid, 'generations', rec.id);
       batch.delete(genRef);
+      // Videos are outside the Ranking system (see spec Q9) and never increment a
+      // rollup on save, so they must not decrement one on delete either — otherwise
+      // a parent image's rollup key (inherited by its video children) gets
+      // over-decremented by every video generated from it.
+      if ((rec.mediaType ?? 'image') !== 'image') continue;
       const normalised = normalizeParams(rec);
       const rollupHash = await buildRollupKey(normalised);
       const rollupRef = doc(dbInstance, 'users', uid, 'rankingRollups', rollupHash);

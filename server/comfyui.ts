@@ -196,5 +196,12 @@ export async function waitForCompletion(
       }
     });
     ws.on('error', (err) => { clearInterval(cancelPoll); reject(err); });
+    // If ComfyUI drops the socket without ever emitting an `error` event (e.g. a
+    // restart, or the OS closing the fd), the promise would otherwise never settle
+    // and the cancel-poll interval would leak while /api/video/generate hangs forever.
+    ws.on('close', () => {
+      clearInterval(cancelPoll);
+      reject(new Error('ComfyUI ws closed before execution_success'));
+    });
   });
 }

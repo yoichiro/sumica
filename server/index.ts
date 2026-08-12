@@ -1167,6 +1167,11 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
     // if a rollup write fails, the delete itself is still complete and the
     // rollup can be rebuilt later via a backfill script.
     for (const rec of deletedRecords) {
+      // Videos are outside the Ranking system (see spec Q9) and never increment a
+      // rollup on save, so they must not decrement one on delete either — otherwise
+      // a parent image's rollup key (inherited by its video children) gets
+      // over-decremented by every video generated from it.
+      if ((rec.mediaType ?? 'image') !== 'image') continue;
       try {
         updateLocalRollup(
           LOCAL_ROLLUPS_PATH,
