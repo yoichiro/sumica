@@ -296,6 +296,16 @@ function App() {
     return filterOptions.models;
   }, [filterOptions.models, galleryFilters.arch]);
 
+  // Count the child videos that would be cascaded deleted when deleting the
+  // currently-selected generations. Used by the delete-confirm modal to show
+  // a cascade-aware message when deleting a parent image.
+  const childVideoCount = useMemo(() => {
+    const selected = new Set(deleteTargetIds);
+    return displayedHistory.filter((r) =>
+      (r.mediaType ?? 'image') === 'video' && r.parentId && selected.has(r.parentId)
+    ).length;
+  }, [deleteTargetIds, displayedHistory]);
+
   // Stale-value clearing: whenever the arch (and hence the option lists) shifts
   // such that a currently-selected value falls out of its options, null the
   // dangling filter so state and UI stay in sync.
@@ -2322,6 +2332,7 @@ function App() {
       <DeleteConfirmModal
         open={showDeleteConfirm}
         targetCount={deleteTargetIds.length}
+        childVideoCount={childVideoCount}
         deleting={deleting}
         exiting={confirmExiting}
         onCancel={closeConfirm}

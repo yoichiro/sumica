@@ -4,13 +4,14 @@ import { t } from '../i18n';
 interface DeleteConfirmModalProps {
   open: boolean;
   targetCount: number;
+  childVideoCount: number;
   deleting: boolean;
   exiting: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
 
-export function DeleteConfirmModal({ open, targetCount, deleting, exiting, onCancel, onConfirm }: DeleteConfirmModalProps) {
+export function DeleteConfirmModal({ open, targetCount, childVideoCount, deleting, exiting, onCancel, onConfirm }: DeleteConfirmModalProps) {
   if (!open) return null;
   return (
     <div className={`dialog-overlay${exiting ? ' exiting' : ''}`} style={{
@@ -44,7 +45,9 @@ export function DeleteConfirmModal({ open, targetCount, deleting, exiting, onCan
             {t.deleteConfirm.title}
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-            {t.deleteConfirm.message(targetCount)}
+            {childVideoCount > 0
+              ? t.deleteConfirm.messageWithCascade(targetCount, childVideoCount)
+              : t.deleteConfirm.message(targetCount)}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
