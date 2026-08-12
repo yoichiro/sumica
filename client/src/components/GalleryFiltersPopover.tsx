@@ -107,7 +107,9 @@ export function GalleryFilterPanel({
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
-  const clear = () => onSetFilters({ arch: null, model: null, sampler: null, aspectRatio: null, orientation: null });
+  // Only resets this panel's own 5 axes — mediaType/parentId are controlled by
+  // the media-type tab strip above the panel and are intentionally preserved.
+  const clear = () => onSetFilters({ ...filters, arch: null, model: null, sampler: null, aspectRatio: null, orientation: null });
 
   const archOptions: { value: GalleryFilters['arch']; label: string }[] = [
     { value: null, label: t.gallery.filters.archAll },

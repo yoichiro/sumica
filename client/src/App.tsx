@@ -232,6 +232,8 @@ function App() {
     sampler: null,
     aspectRatio: null,
     orientation: null,
+    mediaType: null,
+    parentId: null,
   });
   // Short-lived flag toggled by `applyRecipeToGalleryFilter` so the stale-clear
   // useEffects below skip their nulling logic for ~600ms after a recipe is
@@ -1404,6 +1406,10 @@ function App() {
       sampler: rp.sampler || null,
       aspectRatio,
       orientation,
+      // Recipes are image-generation params only; leave the media-type tab
+      // and parent-image filter untouched by this image-focused recipe apply.
+      mediaType: galleryFilters.mediaType,
+      parentId: galleryFilters.parentId,
     };
     // Suspend stale-clear effects for ~600ms so the freshly-set filter values
     // are not nulled by a transient filterOptions mismatch during the initial
@@ -1994,6 +2000,7 @@ function App() {
             <HistoryGallery
               historyLength={history.length}
               displayedHistory={displayedHistory}
+              baseScopedHistory={baseScopedHistory}
               filterDate={filterDate}
               onSetFilterDate={setFilterDate}
               favoritesOnly={favoritesOnly}

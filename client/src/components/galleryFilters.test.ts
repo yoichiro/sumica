@@ -8,7 +8,15 @@ import {
 import type { GenerationData } from '../App';
 import type { SdModel } from './presets';
 
-const ALL_NULL: GalleryFilters = { arch: null, model: null, sampler: null, aspectRatio: null, orientation: null };
+const ALL_NULL: GalleryFilters = {
+  arch: null,
+  model: null,
+  sampler: null,
+  aspectRatio: null,
+  orientation: null,
+  mediaType: null,
+  parentId: null,
+};
 
 function mkRecord(overrides: Partial<GenerationData>): GenerationData {
   return {
@@ -117,6 +125,8 @@ describe('applyGalleryFilters', () => {
       sampler: 'Euler a',
       aspectRatio: null,
       orientation: null,
+      mediaType: null,
+      parentId: null,
     };
     const out = applyGalleryFilters(history, filters, KNOWN_MODELS);
     expect(out).toHaveLength(1);
@@ -184,6 +194,29 @@ describe('applyGalleryFilters', () => {
   it('returns empty array when input is empty', () => {
     expect(applyGalleryFilters([], ALL_NULL, [])).toEqual([]);
     expect(applyGalleryFilters([], { ...ALL_NULL, model: 'x' }, [])).toEqual([]);
+  });
+
+  it('filters by mediaType (treating legacy undefined as image)', () => {
+    const history = [
+      mkRecord({ model: 'juggernautXL.safetensors [abc]' }),           // no mediaType — image
+      mkRecord({ model: 'juggernautXL.safetensors [abc]', mediaType: 'image' }),
+      mkRecord({ model: 'juggernautXL.safetensors [abc]', mediaType: 'video' }),
+    ];
+    const filteredImages = applyGalleryFilters(history, { ...ALL_NULL, mediaType: 'image' }, KNOWN_MODELS);
+    expect(filteredImages).toHaveLength(2);
+    const filteredVideos = applyGalleryFilters(history, { ...ALL_NULL, mediaType: 'video' }, KNOWN_MODELS);
+    expect(filteredVideos).toHaveLength(1);
+  });
+
+  it('filters by parentId (matches records whose parentId equals the filter)', () => {
+    const history = [
+      mkRecord({ id: 'p1', model: 'juggernautXL.safetensors [abc]' }),
+      mkRecord({ model: 'juggernautXL.safetensors [abc]', mediaType: 'video', parentId: 'p1' }),
+      mkRecord({ model: 'juggernautXL.safetensors [abc]', mediaType: 'video', parentId: 'p2' }),
+    ];
+    const filtered = applyGalleryFilters(history, { ...ALL_NULL, parentId: 'p1' }, KNOWN_MODELS);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].parentId).toBe('p1');
   });
 });
 
@@ -289,6 +322,8 @@ describe('countActiveFilters', () => {
       sampler: 'y',
       aspectRatio: '4:3',
       orientation: 'portrait',
+      mediaType: 'image',
+      parentId: 'p1',
     })).toBe(5);
   });
 });

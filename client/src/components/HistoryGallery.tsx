@@ -166,6 +166,10 @@ function CaptionInfo({ info }: { info: CaptionInfoData }) {
 interface HistoryGalleryProps {
   historyLength: number;
   displayedHistory: GenerationData[];
+  // History narrowed only by date/favoritesOnly (i.e. before galleryFilters,
+  // which now includes mediaType) — used to compute the image/video tab
+  // counts independently of which media-type tab is currently active.
+  baseScopedHistory: GenerationData[];
   filterDate: string;
   onSetFilterDate: (v: string) => void;
   favoritesOnly: boolean;
@@ -192,6 +196,7 @@ interface HistoryGalleryProps {
 export function HistoryGallery({
   historyLength,
   displayedHistory,
+  baseScopedHistory,
   filterDate,
   onSetFilterDate,
   favoritesOnly,
@@ -254,6 +259,51 @@ export function HistoryGallery({
 
   return (
     <div style={{ flexShrink: 0 }}>
+      {/* Media type tabs — controls galleryFilters.mediaType */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        {(['image', 'video'] as const).map((mt) => {
+          const active = galleryFilters.mediaType === mt;
+          const count = baseScopedHistory.filter((r) => (r.mediaType ?? 'image') === mt).length;
+          return (
+            <button
+              key={mt}
+              type="button"
+              onClick={() => onSetGalleryFilters({ ...galleryFilters, mediaType: mt, parentId: mt === 'image' ? null : galleryFilters.parentId })}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                color: active ? '#fff' : 'var(--text-secondary)',
+                fontWeight: 800,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              {mt === 'image' ? t.gallery.mediaTabImageCount(count) : t.gallery.mediaTabVideoCount(count)}
+            </button>
+          );
+        })}
+        {/* When a parentId filter is active in the video tab, show a chip that clears it */}
+        {galleryFilters.mediaType === 'video' && galleryFilters.parentId && (
+          <button
+            type="button"
+            onClick={() => onSetGalleryFilters({ ...galleryFilters, parentId: null })}
+            style={{
+              padding: '6px 10px',
+              borderRadius: '8px',
+              border: '2px solid var(--pop-blue)',
+              background: 'transparent',
+              color: 'var(--pop-blue)',
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+            title={t.gallery.filterByParentImageClear}
+          >
+            🖼️ {t.gallery.filterByParentImage} ✕
+          </button>
+        )}
+      </div>
       {/* Sticky toolbar: date filter + result count (left) / selection + delete
           (right) on the first row, then an inline filter panel below when open.
           The whole cluster sticks to the top of the surrounding scroll
@@ -423,15 +473,45 @@ export function HistoryGallery({
               }}
             >
               <div style={{ position: 'relative' }}>
-                <img
-                  src={item.thumbnailUrl ?? item.imageUrl}
-                  alt={item.originalPrompt}
-                  onClick={() => onOpenLightbox(item.imageUrl, itemKey(item))}
-                  style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
-                  loading="lazy"
-                  decoding="async"
-                  fetchPriority="low"
-                />
+                {(item.mediaType ?? 'image') === 'video' ? (
+                  <div style={{ position: 'relative' }}>
+                    <img
+                      src={item.posterUrl ?? item.videoUrl ?? item.imageUrl}
+                      alt={t.gallery.videoBadgeTitle}
+                      onClick={() => onOpenLightbox(item.videoUrl ?? item.imageUrl, itemKey(item))}
+                      style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
+                      loading="lazy"
+                      decoding="async"
+                      fetchPriority="low"
+                    />
+                    <span
+                      title={t.gallery.videoBadgeTitle}
+                      style={{
+                        position: 'absolute',
+                        top: '6px',
+                        right: '6px',
+                        background: 'rgba(0, 0, 0, 0.6)',
+                        color: '#fff',
+                        borderRadius: '8px',
+                        padding: '2px 6px',
+                        fontSize: '13px',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      🎬
+                    </span>
+                  </div>
+                ) : (
+                  <img
+                    src={item.thumbnailUrl ?? item.imageUrl}
+                    alt={item.originalPrompt}
+                    onClick={() => onOpenLightbox(item.imageUrl, itemKey(item))}
+                    style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
+                  />
+                )}
                 <SelectButton
                   size={26}
                   isSelected={selectedIds.has(itemKey(item))}

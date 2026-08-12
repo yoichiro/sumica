@@ -25,6 +25,13 @@ export interface GalleryFilters {
   // the null (すべて) filter — the orientation UI never offers a 正方 option
   // because it's implicit in aspectRatio=1:1.
   orientation: Exclude<GalleryOrientation, 'square'> | null;
+  // 'image' or 'video' — legacy records without a mediaType field are treated
+  // as 'image' everywhere this filter is applied (see applyGalleryFilters).
+  mediaType: 'image' | 'video' | null;
+  // Matches records whose parentId equals this value. Only meaningful for
+  // videos (which carry the source image's id as parentId), but the filter
+  // itself is generic over any record shape.
+  parentId: string | null;
 }
 
 // Euclidean GCD, integer-only. Returns 1 when either side is non-positive so
@@ -62,6 +69,15 @@ export function applyGalleryFilters(
   sdModels: SdModel[],
 ): GenerationData[] {
   return history.filter((it) => {
+    // mediaType filter — legacy records without mediaType are treated as 'image'
+    if (filters.mediaType !== null) {
+      const recMediaType = it.mediaType ?? 'image';
+      if (recMediaType !== filters.mediaType) return false;
+    }
+    // parentId filter — only meaningful for videos, but the filter itself is universal
+    if (filters.parentId !== null && it.parentId !== filters.parentId) {
+      return false;
+    }
     if (filters.model && stripHashSuffix(it.model ?? '') !== filters.model) return false;
     if (filters.sampler && it.sampler !== filters.sampler) return false;
     if (filters.arch) {
