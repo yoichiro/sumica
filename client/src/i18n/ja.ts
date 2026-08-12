@@ -80,6 +80,9 @@ export const ja = {
     videoIdentityLabel: '顔の一致度',
     videoGenerateButton: '動画を生成する 🎬⚡️',
     videoGenerateButtonLoading: '動画生成中... (2〜5 分) ⚡️',
+    videoReferencePickerTitle: '参照画像を選ぶ',
+    videoReferencePickerEmpty: '画像がまだありません',
+    videoReferencePickerClose: '閉じる',
   },
   preview: {
     favoriteRemoveTitle: 'お気に入りを解除',

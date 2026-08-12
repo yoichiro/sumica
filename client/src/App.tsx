@@ -232,7 +232,8 @@ function App() {
     sampler: null,
     aspectRatio: null,
     orientation: null,
-    mediaType: null,
+    // Default to the Image tab so a fresh session opens on stills, not videos.
+    mediaType: 'image',
     parentId: null,
   });
   // Short-lived flag toggled by `applyRecipeToGalleryFilter` so the stale-clear
@@ -299,12 +300,18 @@ function App() {
   // Count the child videos that would be cascaded deleted when deleting the
   // currently-selected generations. Used by the delete-confirm modal to show
   // a cascade-aware message when deleting a parent image.
+  //
+  // Deliberately scoped to `history` (the raw, un-gallery-filtered list) rather
+  // than `displayedHistory`: the gallery defaults to the Image tab
+  // (`galleryFilters.mediaType === 'image'`), which would otherwise exclude
+  // every video record from this count and make the cascade message always
+  // read "0 videos" even when child videos exist.
   const childVideoCount = useMemo(() => {
     const selected = new Set(deleteTargetIds);
-    return displayedHistory.filter((r) =>
+    return history.filter((r) =>
       (r.mediaType ?? 'image') === 'video' && r.parentId && selected.has(r.parentId)
     ).length;
-  }, [deleteTargetIds, displayedHistory]);
+  }, [deleteTargetIds, history]);
 
   // Stale-value clearing: whenever the arch (and hence the option lists) shifts
   // such that a currently-selected value falls out of its options, null the
@@ -639,6 +646,58 @@ function App() {
     ? displayedHistory[lightboxIndex]
     : (morphSourceKey === '__preview__' ? currentGeneration : null);
 
+  // Count of child videos for whichever image is currently shown in the
+  // Lightbox — feeds the 📼 動画一覧 button's enabled/disabled state and
+  // tooltip count. Scoped to `history` (not `displayedHistory`) for the same
+  // reason as the delete-confirm `childVideoCount` above: the gallery's
+  // Image-tab default would otherwise hide every video record from the count.
+  const lightboxChildVideoCount = useMemo(() => {
+    if (!lightboxMeta?.id) return 0;
+    return history.filter((r) =>
+      (r.mediaType ?? 'image') === 'video' && r.parentId === lightboxMeta.id
+    ).length;
+  }, [history, lightboxMeta]);
+
+  // --- Lightbox → video-mode navigation handlers (Task 7) ---
+
+  // Called by the Lightbox's 🎬 動画にする button: snapshot the currently-shown
+  // image as the video source, switch ControlPanel into Video mode (inheriting
+  // the source's dimensions as sensible defaults), and close the lightbox so
+  // the user immediately sees the video form.
+  const handleOpenVideoForm = () => {
+    const current = lightboxMeta;
+    if (!current) return;
+    setVideoSourceImage(current);
+    setVideoMode(true);
+    setVideoWidth(current.width);
+    setVideoHeight(current.height);
+    closeLightbox();
+    switchControlTab('form');
+  };
+
+  // Called by the Lightbox's 📼 動画一覧 button: switch the gallery to the
+  // Video tab filtered down to this image's children, switch to the gallery
+  // right-column tab so the result is actually visible, then close the lightbox.
+  const handleOpenChildVideos = (parentId: string) => {
+    setGalleryFilters((f) => ({ ...f, mediaType: 'video', parentId }));
+    setRightTab('gallery');
+    closeLightbox();
+  };
+
+  // Called by the video Lightbox's 🖼️ 元画像を見る button: find the parent
+  // image and reopen the lightbox on it. Checks `displayedHistory` first
+  // (respects the active gallery filters) and falls back to the raw `history`
+  // list so this still works even when the parent image is hidden by the
+  // current mediaType/date/favorites filters.
+  const handleOpenParentImage = (parentId: string) => {
+    const parent = displayedHistory.find((r) => r.id === parentId)
+      ?? history.find((r) => r.id === parentId);
+    if (!parent) return;
+    closeLightbox();
+    // Give React a tick to re-render the closed lightbox before reopening with a new image.
+    setTimeout(() => openLightbox(parent.imageUrl, itemKey(parent)), 0);
+  };
+
   // Track the last valid lightboxIndex so we can recover the "next" item if
   // the currently-shown image drops out of displayedHistory (e.g. unfavorited
   // in favoritesOnly mode).
@@ -769,10 +828,10 @@ function App() {
   // the image pipeline. Drives ControlPanel's mode toggle and PreviewPanel's
   // currentMediaType (which selects the process-tracker's step labels).
   const [videoMode, setVideoMode] = useState(false);
-  // The source still image the video is generated from. Normally chosen from
-  // the Lightbox's "make video" action (Task 7); until that's wired, entering
-  // video mode defaults it to the current preview image (see the effect below)
-  // so the pipeline is exercisable end-to-end.
+  // The source still image the video is generated from. Normally chosen via
+  // the Lightbox's 🎬 動画にする action (handleOpenVideoForm); entering video
+  // mode with nothing picked yet also defaults it to the current preview
+  // image (see the effect below) so the pipeline is exercisable directly.
   const [videoSourceImage, setVideoSourceImage] = useState<GenerationData | null>(null);
   // Optional ComfyUI "reference" image (identity/style guidance), chosen via
   // openVideoReferencePicker below.
@@ -788,6 +847,9 @@ function App() {
   const [videoSeed, setVideoSeed] = useState(12345);
   const [videoSeedLocked, setVideoSeedLocked] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
+  // Whether the lightweight reference-image picker modal is open (opened via
+  // ControlPanel's "参照画像を選ぶ" button, see openVideoReferencePicker below).
+  const [showVideoReferencePicker, setShowVideoReferencePicker] = useState(false);
   // AbortController for the in-flight /api/video/generate fetch, so
   // handleVideoCancel can tear down the SSE read loop client-side.
   const videoAbortRef = useRef<AbortController | null>(null);
@@ -795,14 +857,14 @@ function App() {
   // by PreviewPanel's videoStageLabel() mapping.
   const [videoProgressStage, setVideoProgressStage] = useState('');
   // The most recent successful generation from either pipeline (image or
-  // video), surfaced in PreviewPanel's top preview stage. See Task 7 for the
-  // eventual unification with the image pipeline's currentGeneration.
+  // video), surfaced in PreviewPanel's top preview stage — it takes priority
+  // over currentGeneration there whenever it holds a completed video.
   const [latestResult, setLatestResult] = useState<GenerationData | null>(null);
 
   // Entering video mode with nothing picked yet defaults the source image to
-  // whatever is already on screen, so the pipeline can be exercised without
-  // the Lightbox gallery-picker flow (Task 7 adds a way to override this with
-  // any history item).
+  // whatever is already on screen (the current preview image), so the pipeline
+  // is exercisable without going through the Lightbox first. The Lightbox's
+  // 🎬 動画にする button (handleOpenVideoForm) overrides this with any history item.
   useEffect(() => {
     if (videoMode && !videoSourceImage && currentGeneration && (currentGeneration.mediaType ?? 'image') === 'image') {
       setVideoSourceImage(currentGeneration);
@@ -1910,12 +1972,11 @@ function App() {
     });
   };
 
-  // Placeholder for the reference-image gallery picker. Task 7 replaces this
-  // with a modal that lets the user browse history and pick one; for now it's
-  // a no-op stub so ControlPanel's "add reference" button has something to
-  // call without crashing.
+  // Opens the lightweight reference-image picker modal (rendered near the
+  // other modals below) so the user can browse history and pick a face
+  // reference image for the video generation.
   const openVideoReferencePicker = () => {
-    console.warn('openVideoReferencePicker: gallery picker not implemented yet (Task 7)');
+    setShowVideoReferencePicker(true);
   };
 
   const clearVideoReferenceImage = () => setVideoReferenceImage(null);
@@ -2151,9 +2212,8 @@ function App() {
           loadedPositive={loadedPositive}
           loadedNegative={loadedNegative}
           onClearLoadedEnhanced={clearLoadedEnhanced}
-          // Video-mode state and handlers (Task 5, Plan 2). The reference-image
-          // gallery picker (openVideoReferencePicker) is still a placeholder
-          // stub — Task 7 replaces it with a real modal.
+          // Video-mode state and handlers (Task 5, Plan 2). openVideoReferencePicker
+          // opens the pickerModal rendered near the other modals below (Task 7).
           videoMode={videoMode}
           setVideoMode={setVideoMode}
           videoSourceImage={videoSourceImage}
@@ -2321,12 +2381,10 @@ function App() {
         onDownload={() => { if (lightboxMeta) handleDownload(lightboxMeta); }}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
-        // TEMPORARY placeholders — Task 7 wires these up to real handlers
-        // (video-generation form, child-video list, parent-image lookup).
-        onOpenVideoForm={() => {}}
-        onOpenChildVideos={() => {}}
-        onOpenParentImage={() => {}}
-        childVideoCount={0}
+        onOpenVideoForm={handleOpenVideoForm}
+        onOpenChildVideos={handleOpenChildVideos}
+        onOpenParentImage={handleOpenParentImage}
+        childVideoCount={lightboxChildVideoCount}
       />
 
       <DeleteConfirmModal
@@ -2376,6 +2434,61 @@ function App() {
           handleBatchGenerate(jobs);
         }}
       />
+
+      {/* Lightweight reference-image picker modal for the video form's
+          "参照画像を選ぶ" button. Scoped to `history` (not `displayedHistory`)
+          so it still lists images even while the gallery filter is parked on
+          the Video tab. */}
+      {showVideoReferencePicker && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}
+          onClick={() => setShowVideoReferencePicker(false)}
+        >
+          <div
+            style={{
+              background: 'var(--panel-bg)', borderRadius: '16px', padding: '20px',
+              maxWidth: '640px', maxHeight: '80vh', overflowY: 'auto',
+              display: 'flex', flexDirection: 'column', gap: '12px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: 0 }}>{t.controlPanel.videoReferencePickerTitle}</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+              {history
+                .filter((r) => (r.mediaType ?? 'image') === 'image')
+                .slice(0, 60)
+                .map((item) => (
+                  <img
+                    key={itemKey(item)}
+                    src={item.thumbnailUrl ?? item.imageUrl}
+                    alt="reference candidate"
+                    onClick={() => {
+                      setVideoReferenceImage(item);
+                      setShowVideoReferencePicker(false);
+                    }}
+                    style={{
+                      width: '96px', height: '96px', objectFit: 'cover',
+                      borderRadius: '8px', cursor: 'pointer', margin: '4px',
+                    }}
+                  />
+                ))}
+              {history.filter((r) => (r.mediaType ?? 'image') === 'image').length === 0 && (
+                <p style={{ color: 'var(--text-secondary)' }}>{t.controlPanel.videoReferencePickerEmpty}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowVideoReferencePicker(false)}
+              style={{ alignSelf: 'flex-end', padding: '6px 14px' }}
+            >
+              {t.controlPanel.videoReferencePickerClose}
+            </button>
+          </div>
+        </div>
+      )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 

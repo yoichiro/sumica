@@ -82,6 +82,9 @@ export const en: typeof ja = {
     videoIdentityLabel: 'Face identity strength',
     videoGenerateButton: 'Generate video 🎬⚡️',
     videoGenerateButtonLoading: 'Generating video... (2-5 min) ⚡️',
+    videoReferencePickerTitle: 'Pick a reference image',
+    videoReferencePickerEmpty: 'No images yet',
+    videoReferencePickerClose: 'Close',
   },
   preview: {
     favoriteRemoveTitle: 'Remove from favorites',

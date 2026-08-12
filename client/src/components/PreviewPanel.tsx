@@ -116,10 +116,9 @@ interface PreviewPanelProps {
   itemKey: (item: GenerationData) => string;
   onCancel: () => void;
   // The most recent successful generation from EITHER pipeline (image or
-  // video). Set by App.tsx's handleVideoGenerate on a completed video, and
-  // (eventually, per Task 7) unified with the image pipeline's currentGeneration.
-  // When its mediaType is 'video', the top preview stage renders a <video>
-  // instead of an <img>.
+  // video). Set by App.tsx's handleVideoGenerate on a completed video. When
+  // its mediaType is 'video', the top preview stage below renders a <video>
+  // instead of falling through to the currentGeneration <img> branch.
   latestResult: GenerationData | null;
   // Which pipeline is currently the active one in the form — drives the
   // process-tracker's step labels (image's 3-step flow vs video's ComfyUI
