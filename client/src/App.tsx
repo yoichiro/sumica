@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { isFirebaseConfigured, onAuth, saveGeneration, saveVideoGeneration, subscribeGenerations, subscribeFavorites, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
+import { isFirebaseConfigured, onAuth, saveGeneration, saveVideoGeneration, subscribeGenerations, subscribeFavorites, subscribeVideoParentIndex, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
+import { collectVideoParentCounts } from './utils/videoParentIndex';
 import type { RankingRollup, RankedRecipe } from './utils/rankingAnalysis';
 import { ToastContainer, type Toast } from './components/ToastContainer';
 import { AppHeader, type HealthStatus } from './components/AppHeader';
@@ -167,6 +168,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<number>(0); // 0: Idle, 1: LM Studio Enhancing, 2: SD Generating, 3: Saving/Finishing
   const [history, setHistory] = useState<GenerationData[]>([]);
+  // parentId -> child video count. Feeds the 🎬 badge on image cards in the
+  // gallery; must survive the date filter (a child video can live on a
+  // different day than its parent), so it's populated from a separate
+  // Firestore subscription in Firebase mode and derived from the local
+  // history array in signed-out mode.
+  const [videoParentCounts, setVideoParentCounts] = useState<Map<string, number>>(new Map());
   const [currentGeneration, setCurrentGeneration] = useState<GenerationData | null>(null);
   
   // Config & Status states
@@ -1239,6 +1246,25 @@ function App() {
     fetchRollups();
     return undefined;
   }, [user]);
+
+  // Child-video index for the gallery's 🎬 badge on image cards. Only in
+  // Firebase mode — the signed-out path derives its counts from local
+  // history via the useMemo below.
+  useEffect(() => {
+    if (!user) return;
+    return subscribeVideoParentIndex(user.uid, setVideoParentCounts);
+  }, [user]);
+
+  // Effective parent-count source. Signed-in reads the live subscription's
+  // state (which spans all days). Signed-out derives from the current
+  // history slice each time it changes — good enough because local mode
+  // has no date scoping and history holds every record.
+  const effectiveVideoParentCounts = useMemo(
+    () => (user
+      ? videoParentCounts
+      : collectVideoParentCounts(history as unknown as Array<{ mediaType?: string; parentId?: string }>)),
+    [user, history, videoParentCounts],
+  );
 
   // Check LM Studio / Stable Diffusion connectivity. Guarded so overlapping
   // polls (or a poll racing a manual refresh) never run concurrently.
@@ -2353,6 +2379,7 @@ function App() {
               availableSamplers={filterOptions.samplers}
               availableAspectRatios={filterOptions.aspectRatios}
               availableOrientations={filterOptions.orientations}
+              videoParentCounts={effectiveVideoParentCounts}
             />
           )}
           </div>

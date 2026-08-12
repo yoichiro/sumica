@@ -147,6 +147,7 @@ export const en: typeof ja = {
     mediaTabImageCount: (n: number) => `${n} images`,
     mediaTabVideoCount: (n: number) => `${n} videos`,
     videoBadgeTitle: 'Video',
+    hasChildVideosTitle: 'This image has child videos',
     filterByParentImage: 'This image\'s child videos only',
     filterByParentImageClear: 'Clear parent-image filter',
     filters: {

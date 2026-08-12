@@ -145,6 +145,7 @@ export const ja = {
     mediaTabImageCount: (n: number) => `画像 ${n}件`,
     mediaTabVideoCount: (n: number) => `動画 ${n}件`,
     videoBadgeTitle: '動画',
+    hasChildVideosTitle: 'この画像から生成された動画があります',
     filterByParentImage: 'この画像の子動画のみ',
     filterByParentImageClear: '元画像フィルタを解除',
     filters: {

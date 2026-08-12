@@ -191,6 +191,9 @@ interface HistoryGalleryProps {
   availableSamplers: string[];
   availableAspectRatios: AspectRatioOption[];
   availableOrientations: Exclude<GalleryFilters['orientation'], null>[];
+  // parentId -> child-video count. Drives the 🎬 badge on image cards
+  // (image branch only — video cards already carry their own 🎬 marker).
+  videoParentCounts: Map<string, number>;
 }
 
 export function HistoryGallery({
@@ -218,6 +221,7 @@ export function HistoryGallery({
   availableSamplers,
   availableAspectRatios,
   availableOrientations,
+  videoParentCounts,
 }: HistoryGalleryProps) {
   // Anchor for Shift+click range selection. Tracks the last checkbox the user
   // clicked (whether that click selected or deselected), so Shift+click on any
@@ -502,15 +506,35 @@ export function HistoryGallery({
                     </span>
                   </div>
                 ) : (
-                  <img
-                    src={item.thumbnailUrl ?? item.imageUrl}
-                    alt={item.originalPrompt}
-                    onClick={() => onOpenLightbox(item.imageUrl, itemKey(item))}
-                    style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
-                    loading="lazy"
-                    decoding="async"
-                    fetchPriority="low"
-                  />
+                  <>
+                    <img
+                      src={item.thumbnailUrl ?? item.imageUrl}
+                      alt={item.originalPrompt}
+                      onClick={() => onOpenLightbox(item.imageUrl, itemKey(item))}
+                      style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
+                      loading="lazy"
+                      decoding="async"
+                      fetchPriority="low"
+                    />
+                    {!!item.id && (videoParentCounts.get(item.id) ?? 0) > 0 && (
+                      <span
+                        title={t.gallery.hasChildVideosTitle}
+                        style={{
+                          position: 'absolute',
+                          top: '6px',
+                          left: '6px',
+                          background: 'rgba(0, 0, 0, 0.6)',
+                          color: '#fff',
+                          borderRadius: '8px',
+                          padding: '2px 6px',
+                          fontSize: '13px',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        🎬
+                      </span>
+                    )}
+                  </>
                 )}
                 <SelectButton
                   size={26}

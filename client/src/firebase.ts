@@ -31,6 +31,7 @@ import {
   type FirebaseStorage,
 } from 'firebase/storage';
 import { generateThumbnail } from './utils/thumbnail';
+import { collectVideoParentCounts } from './utils/videoParentIndex';
 import { normalizeParams, buildRollupKey } from './utils/rankingRollup';
 import type { RankingRollup } from './utils/rankingAnalysis';
 import type { Architecture } from './components/presets';
@@ -354,6 +355,42 @@ export function subscribeGenerations(
     (err) => {
       console.error('Firestore subscription failed:', err);
       cb([]);
+      onError?.(err);
+    },
+  );
+}
+
+// Subscribe to a live index of "how many videos each image has spawned".
+// Independent from subscribeGenerations because the gallery's date filter
+// scopes the main subscription to a single day, but the child-video badge
+// on an image card must remain accurate even when the child was generated
+// on a different day. Query targets mediaType='video' only (single-field
+// auto index — no composite index required) and streams a fresh
+// Map<parentId, count> on every write.
+export function subscribeVideoParentIndex(
+  uid: string,
+  cb: (parentCounts: Map<string, number>) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  if (!dbInstance) {
+    cb(new Map());
+    return () => {};
+  }
+  const generationsRef = collection(dbInstance, 'users', uid, 'generations');
+  const q = query(generationsRef, where('mediaType', '==', 'video'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const records: Array<{ mediaType?: string; parentId?: string }> = [];
+      snap.forEach((d) => {
+        const data = d.data() as Partial<GenerationRecord>;
+        records.push({ mediaType: data.mediaType, parentId: data.parentId });
+      });
+      cb(collectVideoParentCounts(records));
+    },
+    (err) => {
+      console.error('Video parent index subscription failed:', err);
+      cb(new Map());
       onError?.(err);
     },
   );
