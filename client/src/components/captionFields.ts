@@ -2,8 +2,13 @@ import type { GenerationData } from '../App';
 import { findSdxlSelection, findSd15Selection } from './presets';
 import { t } from '../i18n';
 
+// Primary line of the gallery card caption is either `model` (image records)
+// or `length` (video records). Both are optional so the renderer picks
+// whichever the current record populated. hasHires/hasLora are SD-only
+// concepts and stay false on video records.
 export type CaptionInfoData = {
-  model: string;
+  model?: string;
+  length?: string;
   size: string;
   date: string;
   hasHires: boolean;
@@ -24,7 +29,27 @@ function formatSize(width: number, height: number): string {
   return `${width}×${height}`;
 }
 
+// LTX-Video workflow's mxSlider outputs a frame count; the workflow is
+// wired to 24 fps, so seconds = frames / 24. Keep both units so the caller
+// can read the duration at a glance and match it to the workflow input.
+const VIDEO_FPS = 24;
+
+function formatVideoLength(frames: number): string {
+  return `${(frames / VIDEO_FPS).toFixed(1)}s (${frames}f)`;
+}
+
 export function buildCaptionInfo(item: GenerationData): CaptionInfoData {
+  const isVideo = (item.mediaType ?? 'image') === 'video';
+  if (isVideo) {
+    const frames = item.ltxParams?.length ?? 0;
+    return {
+      length: formatVideoLength(frames),
+      size: formatSize(item.width, item.height),
+      date: formatDateShort(item.timestamp),
+      hasHires: false,
+      hasLora: false,
+    };
+  }
   return {
     model: item.model && item.model.length > 0 ? item.model : t.caption.unknownModel,
     size: formatSize(item.width, item.height),

@@ -112,7 +112,7 @@ function CaptionInfo({ info }: { info: CaptionInfoData }) {
           minWidth: 0,
           flex: 1,
         }}>
-          {info.model}
+          {info.model ?? info.length ?? ''}
         </div>
         <span style={{
           fontSize: '10px',

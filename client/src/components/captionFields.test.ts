@@ -91,4 +91,58 @@ describe('buildCaptionInfo', () => {
     expect(info.hasHires).toBe(true);
     expect(info.hasLora).toBe(true);
   });
+
+  describe('for video records', () => {
+    const videoItem: GenerationData = {
+      ...baseItem,
+      mediaType: 'video',
+      parentId: 'parent-abc',
+      videoUrl: 'v',
+      width: 1024,
+      height: 1088,
+      // The image side inherited via spread stays put (enableHr/loras/model),
+      // but buildCaptionInfo must ignore them for video records.
+      enableHr: true,
+      loras: [{ name: 'x', weight: 0.5 }],
+      ltxParams: {
+        fidelity: 1.0,
+        motion: 35,
+        identity: 1.0,
+        length: 240,
+        positivePrompt: 'move',
+        negativePrompt: 'still',
+      },
+    };
+
+    it('formats length as seconds (frames) at 24 fps', () => {
+      const info = buildCaptionInfo(videoItem);
+      expect(info.length).toBe('10.0s (240f)');
+    });
+
+    it('drops model, hasHires, hasLora on video records regardless of underlying fields', () => {
+      const info = buildCaptionInfo(videoItem);
+      expect(info.model).toBeUndefined();
+      expect(info.hasHires).toBe(false);
+      expect(info.hasLora).toBe(false);
+    });
+
+    it('still formats the size string for the video dimensions', () => {
+      const info = buildCaptionInfo(videoItem);
+      expect(info.size).toBe('1024×1088');
+    });
+
+    it('falls back to 0.0s (0f) when ltxParams is missing (legacy/broken record)', () => {
+      const info = buildCaptionInfo({ ...videoItem, ltxParams: undefined });
+      expect(info.length).toBe('0.0s (0f)');
+    });
+
+    it('rounds sub-second lengths to one decimal', () => {
+      const info = buildCaptionInfo({
+        ...videoItem,
+        ltxParams: { ...videoItem.ltxParams!, length: 121 },
+      });
+      // 121 / 24 = 5.04166... → 5.0
+      expect(info.length).toBe('5.0s (121f)');
+    });
+  });
 });
