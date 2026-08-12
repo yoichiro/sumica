@@ -2058,6 +2058,12 @@ function App() {
         onDownload={() => { if (lightboxMeta) handleDownload(lightboxMeta); }}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
+        // TEMPORARY placeholders — Task 7 wires these up to real handlers
+        // (video-generation form, child-video list, parent-image lookup).
+        onOpenVideoForm={() => {}}
+        onOpenChildVideos={() => {}}
+        onOpenParentImage={() => {}}
+        childVideoCount={0}
       />
 
       <DeleteConfirmModal

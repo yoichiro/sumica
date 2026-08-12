@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Info, Download, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, Play, Pause, Eye, X } from 'lucide-react';
+import { Info, Download, CheckCircle2, Circle, Star, ChevronLeft, ChevronRight, Maximize, Minimize, Shuffle, Play, Pause, Eye, X, Video, Film, Image as ImageIcon } from 'lucide-react';
 import type { GenerationParams } from '../firebase';
 import { t } from '../i18n';
 
@@ -8,7 +8,14 @@ import { t } from '../i18n';
 // shows the preview tab's current generation (not a gallery item), lightboxIndex
 // is -1 and those overlays hide themselves.
 interface GalleryItem extends Partial<GenerationParams> {
+  id?: string;
   isFavorite?: boolean;
+  // Video mode fields (see GenerationData in App.tsx / GenerationRecord in
+  // firebase.ts). Absent mediaType is treated as 'image'.
+  mediaType?: 'image' | 'video';
+  parentId?: string;
+  videoUrl?: string;
+  posterUrl?: string;
 }
 
 interface LightboxProps {
@@ -41,6 +48,11 @@ interface LightboxProps {
   onDownload: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  // Video mode integration
+  onOpenVideoForm: () => void;
+  onOpenChildVideos: (parentId: string) => void;
+  onOpenParentImage: (parentId: string) => void;
+  childVideoCount: number; // pre-computed by App.tsx for the current lightbox item
 }
 
 export function Lightbox({
@@ -67,6 +79,10 @@ export function Lightbox({
   onDownload,
   isFullscreen,
   onToggleFullscreen,
+  onOpenVideoForm,
+  onOpenChildVideos,
+  onOpenParentImage,
+  childVideoCount,
 }: LightboxProps) {
   if (!url) return null;
 
@@ -86,12 +102,23 @@ export function Lightbox({
         padding: '24px'
       }}
     >
-      <img
-        src={url}
-        alt={t.lightbox.imageAlt}
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
-      />
+      {meta && (meta.mediaType ?? 'image') === 'video' ? (
+        <video
+          src={meta.videoUrl ?? url}
+          poster={meta.posterUrl}
+          controls
+          playsInline
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
+        />
+      ) : (
+        <img
+          src={url}
+          alt={t.lightbox.imageAlt}
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
+        />
+      )}
       {meta && (
         <button
           type="button"
@@ -408,6 +435,99 @@ export function Lightbox({
       >
         <Download size={22} />
       </button>
+      {/* Video mode: image side. 🎬 opens the image-to-video form seeded with
+          the current image; 📼 opens the list of videos already generated
+          from this image (disabled when there are none yet). Both hidden
+          when the current item is itself a video. */}
+      {meta && (meta.mediaType ?? 'image') !== 'video' && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenVideoForm(); }}
+          title={t.lightbox.imageToVideoTooltip}
+          className="scale-hover"
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '592px',
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: 'rgba(255, 255, 255, 0.15)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <Video size={22} />
+        </button>
+      )}
+      {meta && (meta.mediaType ?? 'image') !== 'video' && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (childVideoCount > 0 && meta.id) onOpenChildVideos(meta.id);
+          }}
+          disabled={childVideoCount === 0}
+          title={childVideoCount > 0
+            ? t.lightbox.viewChildVideosTooltip(childVideoCount)
+            : t.lightbox.viewChildVideosDisabledTooltip}
+          className="scale-hover"
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '644px',
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: childVideoCount > 0 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+            color: childVideoCount > 0 ? '#fff' : 'rgba(255, 255, 255, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: childVideoCount > 0 ? 'pointer' : 'default',
+          }}
+        >
+          <Film size={22} />
+        </button>
+      )}
+      {/* Video mode: video side. 🖼️ jumps back to the source image that this
+          video was generated from (disabled when the source has since been
+          deleted or is otherwise unknown). Mutually exclusive with the two
+          image-side buttons above — shares their right offset. */}
+      {meta && (meta.mediaType ?? 'image') === 'video' && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (meta.parentId) onOpenParentImage(meta.parentId);
+          }}
+          disabled={!meta.parentId}
+          title={meta.parentId ? t.lightbox.viewParentImageTooltip : t.lightbox.viewParentImageDisabledTooltip}
+          className="scale-hover"
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '592px',
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: meta.parentId ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+            color: meta.parentId ? '#fff' : 'rgba(255, 255, 255, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: meta.parentId ? 'pointer' : 'default',
+          }}
+        >
+          <ImageIcon size={22} />
+        </button>
+      )}
       {/* Open-in-preview: send the currently displayed gallery item to the
           Preview tab, then close the lightbox. Hidden when the lightbox is
           showing the preview tab's own current generation (lightboxIndex < 0)
