@@ -2011,6 +2011,11 @@ function App() {
     setVideoLoading(true);
     setErrorStep(null);
     setRightTab('preview');
+    // Mirror the image-generation open: clear both preview slots so the
+    // PreviewPanel falls through to its loading branch (which shows the
+    // video-mode stage label + cancel button) instead of leaving a stale
+    // image or video from a previous run visible while the new run runs.
+    setCurrentGeneration(null);
     setLatestResult(null);
     setGenStatus('generating');
     setVideoProgressStage('preparing');
