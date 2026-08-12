@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction, FormEvent } from 'react';
 import { Sparkles, RotateCw, Layers, X } from 'lucide-react';
 import { t } from '../i18n';
+import type { GenerationData } from '../App';
 import {
   SDXL_PRESETS,
   SDXL_SIZES,
@@ -121,6 +122,47 @@ export interface ControlPanelProps {
   loadedPositive: string;
   loadedNegative: string;
   onClearLoadedEnhanced: () => void;
+
+  // Media type mode toggle — Image (default SD form above) vs Video (ComfyUI
+  // i2v form below). When videoMode is true, the entire Image-mode form is
+  // hidden and the Video form renders instead.
+  videoMode: boolean;
+  setVideoMode: (v: boolean) => void;
+
+  // Source image chosen via Lightbox → 🎬 動画にする. Read-only in this form —
+  // only its thumbnail is displayed.
+  videoSourceImage: GenerationData | null;
+  // Optional face-reference image chosen via a separate picker.
+  videoReferenceImage: GenerationData | null;
+  openVideoReferencePicker: () => void;
+  clearVideoReferenceImage: () => void;
+
+  videoPositivePrompt: string;
+  setVideoPositivePrompt: (v: string) => void;
+  videoNegativePrompt: string;
+  setVideoNegativePrompt: (v: string) => void;
+
+  // ComfyUI LTX-Video numeric parameters (mxSlider-style plain number inputs).
+  videoWidth: number;
+  setVideoWidth: (v: number) => void;
+  videoHeight: number;
+  setVideoHeight: (v: number) => void;
+  videoLength: number;
+  setVideoLength: (v: number) => void;
+  videoFidelity: number;
+  setVideoFidelity: (v: number) => void;
+  videoMotion: number;
+  setVideoMotion: (v: number) => void;
+  videoIdentity: number;
+  setVideoIdentity: (v: number) => void;
+
+  videoSeed: number;
+  setVideoSeed: (v: number) => void;
+  videoSeedLocked: boolean;
+  setVideoSeedLocked: (v: boolean) => void;
+
+  onVideoGenerate: () => void;
+  videoLoading: boolean;
 }
 
 export function ControlPanel(p: ControlPanelProps) {
@@ -133,6 +175,34 @@ export function ControlPanel(p: ControlPanelProps) {
       overflow: 'hidden',
       height: '100%'
     }}>
+      {/* Media type mode toggle — Image (default form) vs Video (ComfyUI i2v) */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        {(['image', 'video'] as const).map((mode) => {
+          const active = (mode === 'video') === p.videoMode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => p.setVideoMode(mode === 'video')}
+              style={{
+                flex: 1,
+                padding: '8px',
+                borderRadius: '8px',
+                border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                color: active ? '#fff' : 'var(--text-secondary)',
+                fontWeight: 800,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              {mode === 'image' ? t.controlPanel.modeImage : t.controlPanel.modeVideo}
+            </button>
+          );
+        })}
+      </div>
+
+      {!p.videoMode && (
       <form onSubmit={p.onGenerate} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         <div style={{
           flex: 1,
@@ -971,6 +1041,145 @@ export function ControlPanel(p: ControlPanelProps) {
           </button>
         </div>
       </form>
+      )}
+
+      {p.videoMode && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+          {/* Source image thumbnail (readonly — chosen from Lightbox) */}
+          <div>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+              {t.controlPanel.videoSourceLabel}
+            </label>
+            {p.videoSourceImage ? (
+              <img
+                src={p.videoSourceImage.thumbnailUrl ?? p.videoSourceImage.imageUrl}
+                alt={t.controlPanel.videoSourceLabel}
+                style={{ maxWidth: '128px', borderRadius: '8px', display: 'block', marginTop: '4px' }}
+              />
+            ) : (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px' }}>
+                — Lightbox から「🎬 動画にする」で選択 —
+              </div>
+            )}
+          </div>
+
+          {/* Reference image picker (optional) */}
+          <div>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+              {t.controlPanel.videoReferenceLabel}
+            </label>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+              {p.videoReferenceImage ? (
+                <>
+                  <img
+                    src={p.videoReferenceImage.thumbnailUrl ?? p.videoReferenceImage.imageUrl}
+                    alt="reference"
+                    style={{ maxWidth: '64px', borderRadius: '6px' }}
+                  />
+                  <button type="button" onClick={p.clearVideoReferenceImage} style={{ padding: '4px 8px' }}>
+                    {t.controlPanel.videoReferenceClear}
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={p.openVideoReferencePicker} style={{ padding: '6px 12px' }}>
+                  {t.controlPanel.videoReferenceAdd}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Prompts */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+              {t.controlPanel.videoPositivePromptLabel}
+            </label>
+            <textarea
+              rows={3}
+              value={p.videoPositivePrompt}
+              onChange={(e) => p.setVideoPositivePrompt(e.target.value)}
+              disabled={p.videoLoading}
+              style={{ padding: '8px', fontSize: '13px', borderRadius: '6px' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 700 }}>
+              {t.controlPanel.videoNegativePromptLabel}
+            </label>
+            <textarea
+              rows={2}
+              value={p.videoNegativePrompt}
+              onChange={(e) => p.setVideoNegativePrompt(e.target.value)}
+              disabled={p.videoLoading}
+              style={{ padding: '8px', fontSize: '13px', borderRadius: '6px' }}
+            />
+          </div>
+
+          {/* Numeric mxSlider inputs */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            {[
+              ['videoWidthLabel', p.videoWidth, p.setVideoWidth, 1] as const,
+              ['videoHeightLabel', p.videoHeight, p.setVideoHeight, 1] as const,
+              ['videoLengthLabel', p.videoLength, p.setVideoLength, 1] as const,
+              ['videoFidelityLabel', p.videoFidelity, p.setVideoFidelity, 0.1] as const,
+              ['videoMotionLabel', p.videoMotion, p.setVideoMotion, 1] as const,
+              ['videoIdentityLabel', p.videoIdentity, p.setVideoIdentity, 0.1] as const,
+            ].map(([labelKey, value, setter, step]) => (
+              <div key={labelKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+                  {t.controlPanel[labelKey as keyof typeof t.controlPanel] as string}
+                </label>
+                <input
+                  type="number"
+                  step={step}
+                  value={value}
+                  onChange={(e) => setter(parseFloat(e.target.value) || 0)}
+                  disabled={p.videoLoading}
+                  style={{ padding: '6px', fontSize: '13px', borderRadius: '4px' }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Seed (existing lock pattern) */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              type="number"
+              value={p.videoSeed}
+              onChange={(e) => p.setVideoSeed(parseInt(e.target.value) || 0)}
+              disabled={p.videoLoading}
+              style={{ flex: 1, padding: '6px', fontSize: '13px' }}
+            />
+            <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="checkbox"
+                checked={p.videoSeedLocked}
+                onChange={(e) => p.setVideoSeedLocked(e.target.checked)}
+              />
+              {t.controlPanel.seedLockLabel}
+            </label>
+          </div>
+
+          {/* Generate button (Cancel is provided by PreviewPanel while generating) */}
+          <button
+            type="button"
+            onClick={p.onVideoGenerate}
+            disabled={p.videoLoading || !p.videoSourceImage}
+            style={{
+              padding: '12px',
+              borderRadius: '10px',
+              border: 'none',
+              background: p.videoLoading ? 'var(--panel-bg-sunk)' : 'var(--pop-blue)',
+              color: '#fff',
+              fontWeight: 800,
+              fontSize: '15px',
+              cursor: (p.videoLoading || !p.videoSourceImage) ? 'default' : 'pointer',
+            }}
+          >
+            {p.videoLoading ? t.controlPanel.videoGenerateButtonLoading : t.controlPanel.videoGenerateButton}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

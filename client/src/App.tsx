@@ -1922,6 +1922,36 @@ function App() {
           loadedPositive={loadedPositive}
           loadedNegative={loadedNegative}
           onClearLoadedEnhanced={clearLoadedEnhanced}
+          // Video-mode placeholders — Task 7 (Plan 2) replaces these with real
+          // state and handlers wired to the ComfyUI video generation pipeline.
+          videoMode={false}
+          setVideoMode={() => {}}
+          videoSourceImage={null}
+          videoReferenceImage={null}
+          openVideoReferencePicker={() => {}}
+          clearVideoReferenceImage={() => {}}
+          videoPositivePrompt=""
+          setVideoPositivePrompt={() => {}}
+          videoNegativePrompt=""
+          setVideoNegativePrompt={() => {}}
+          videoWidth={768}
+          setVideoWidth={() => {}}
+          videoHeight={512}
+          setVideoHeight={() => {}}
+          videoLength={97}
+          setVideoLength={() => {}}
+          videoFidelity={0.5}
+          setVideoFidelity={() => {}}
+          videoMotion={1}
+          setVideoMotion={() => {}}
+          videoIdentity={1}
+          setVideoIdentity={() => {}}
+          videoSeed={0}
+          setVideoSeed={() => {}}
+          videoSeedLocked={false}
+          setVideoSeedLocked={() => {}}
+          onVideoGenerate={() => {}}
+          videoLoading={false}
         />
 
         {/* RIGHT COLUMN: PREVIEW & HISTORY GRID (tabbed) */}
