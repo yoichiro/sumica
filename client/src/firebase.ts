@@ -18,6 +18,9 @@ import {
   where,
   writeBatch,
   increment,
+  getDocs,
+  deleteDoc,
+  setDoc,
   type Firestore,
 } from 'firebase/firestore';
 import {
@@ -225,6 +228,59 @@ export async function saveGeneration(
   return { id: genRef.id, ...record };
 }
 
+export type SaveVideoArgs = {
+  parentId: string;
+  videoBase64: string;
+  posterBase64?: string;
+  ltxParams: LtxParams;
+  timestamp: number;
+  params: GenerationParams;
+};
+
+export async function saveVideoGeneration(uid: string, args: SaveVideoArgs): Promise<GenerationRecord> {
+  if (!dbInstance || !storageInstance) throw new Error('Firebase is not configured');
+  const { parentId, videoBase64, posterBase64, ltxParams, timestamp, params } = args;
+
+  // 1. Upload the mp4 bytes to users/{uid}/videos/{ts}.mp4
+  const videoStoragePath = `users/${uid}/videos/generated_${timestamp}.mp4`;
+  const videoRef = ref(storageInstance, videoStoragePath);
+  await uploadString(videoRef, videoBase64, 'base64', { contentType: 'video/mp4' });
+  const videoUrl = await getDownloadURL(videoRef);
+
+  // 2. Upload the poster WebP (if extracted) to users/{uid}/posters/{ts}.webp
+  let posterStoragePath: string | undefined;
+  let posterUrl: string | undefined;
+  if (posterBase64) {
+    posterStoragePath = `users/${uid}/posters/generated_${timestamp}.webp`;
+    const posterRef = ref(storageInstance, posterStoragePath);
+    await uploadString(posterRef, posterBase64, 'base64', { contentType: 'image/webp' });
+    posterUrl = await getDownloadURL(posterRef);
+  }
+
+  // 3. Write the Firestore doc
+  const id = `video_${timestamp}`;
+  const docRef = doc(dbInstance, `users/${uid}/generations/${id}`);
+  const record: GenerationRecord = {
+    ...params,
+    id,
+    imageUrl: videoUrl,           // legacy field carries the primary media URL
+    storagePath: videoStoragePath, // legacy field carries the primary storage path
+    thumbnailUrl: posterUrl,      // gallery grid uses thumbnailUrl ?? imageUrl
+    timestamp,
+    createdAt: new Date(timestamp).toISOString(),
+    backendMode: 'firebase',
+    mediaType: 'video',
+    parentId,
+    videoUrl,
+    videoStoragePath,
+    posterUrl,
+    posterStoragePath,
+    ltxParams,
+  };
+  await setDoc(docRef, record);
+  return record;
+}
+
 // Subscribe to a user's generations. When `dateYMD` (local YYYY-MM-DD) is provided,
 // the query is narrowed server-side to that single local day's timestamp range, so
 // EVERY generation from that day is returned (no count cap) — matching the gallery's
@@ -278,45 +334,42 @@ export function subscribeGenerations(
 
 export async function deleteGenerations(uid: string, records: GenerationRecord[]): Promise<void> {
   if (!dbInstance || !storageInstance) throw new Error('Firebase is not configured');
+  if (records.length === 0) return;
 
-  // Chunk into batches of ≤250 records (2 writes each: doc delete + rollup
-  // update) to respect Firestore's 500-operation writeBatch limit.
-  for (let i = 0; i < records.length; i += 250) {
-    const chunk = records.slice(i, i + 250);
-    const batch = writeBatch(dbInstance);
-    for (const rec of chunk) {
-      const genRef = doc(dbInstance, 'users', uid, 'generations', rec.id);
-      batch.delete(genRef);
-      const normalised = normalizeParams(rec);
-      const rollupHash = await buildRollupKey(normalised);
-      const rollupRef = doc(dbInstance, 'users', uid, 'rankingRollups', rollupHash);
-      batch.set(
-        rollupRef,
-        {
-          version: 1,
-          params: normalised,
-          total: increment(-1),
-          favs: increment(rec.isFavorite ? -1 : 0),
-          updatedAt: Date.now(),
-        },
-        { merge: true },
-      );
-    }
-    await batch.commit();
+  // 1. Look up children: any record whose parentId is one of the deleted records' ids.
+  //    Firestore's `in` operator supports at most 10 ids per call — chunk if needed.
+  const parentIds = records.map((r) => r.id).filter((id): id is string => typeof id === 'string');
+  const generationsRef = collection(dbInstance, `users/${uid}/generations`);
+  const childRecords: GenerationRecord[] = [];
+  for (let i = 0; i < parentIds.length; i += 10) {
+    const chunk = parentIds.slice(i, i + 10);
+    const snap = await getDocs(query(generationsRef, where('parentId', 'in', chunk)));
+    snap.forEach((d) => childRecords.push({ id: d.id, ...(d.data() as Omit<GenerationRecord, 'id'>) }));
   }
 
-  // Remove the PNGs and their sidecar thumbnails. Both are best-effort —
-  // the Firestore doc removal above is the source of truth for the gallery listing.
-  await Promise.all(
-    records.map(async (r) => {
-      if (r.storagePath) {
-        await deleteObject(ref(storageInstance!, r.storagePath)).catch(() => {});
-      }
-      if (r.thumbnailStoragePath) {
-        await deleteObject(ref(storageInstance!, r.thumbnailStoragePath)).catch(() => {});
-      }
-    }),
-  );
+  // 2. Delete every Storage object referenced by parent OR child records (best-effort;
+  //    missing objects are tolerated so partial state cleans up too).
+  const allRecords = [...records, ...childRecords];
+  const storagePaths = new Set<string>();
+  for (const r of allRecords) {
+    if (r.storagePath) storagePaths.add(r.storagePath);
+    if (r.thumbnailUrl && r.storagePath) {
+      // legacy: thumbnails live at users/{uid}/thumbs/... derived from imageUrl; try both
+      const thumb = r.storagePath.replace('/images/', '/thumbs/').replace(/\.png$/, '.webp');
+      storagePaths.add(thumb);
+    }
+    if (r.videoStoragePath) storagePaths.add(r.videoStoragePath);
+    if (r.posterStoragePath) storagePaths.add(r.posterStoragePath);
+  }
+  for (const path of storagePaths) {
+    await deleteObject(ref(storageInstance, path)).catch(() => { /* tolerated */ });
+  }
+
+  // 3. Delete every Firestore doc.
+  for (const r of allRecords) {
+    if (!r.id) continue;
+    await deleteDoc(doc(dbInstance, `users/${uid}/generations/${r.id}`)).catch(() => { /* tolerated */ });
+  }
 }
 
 export async function updateFavorite(
