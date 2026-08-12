@@ -2,6 +2,18 @@ import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import {
+  loadBundledWorkflow,
+  mutateWorkflow,
+  uploadImageToComfy,
+  submitWorkflow,
+  waitForCompletion,
+  fetchVideo,
+  extractPoster,
+  CancelledError,
+  type MutateArgs,
+  type WsEvent,
+} from './comfyui.js';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -129,6 +141,11 @@ const lmStudioModel = process.env.LM_STUDIO_MODEL || ''; // Empty ⇒ use LM Stu
 // because SD only ever processes one generation job at a time for this
 // single-local-user tool — no per-job tracking is needed.
 let cancelRequested = false;
+// Independent cancellation flag for video generation — kept separate from the
+// image `cancelRequested` so a video cancel doesn't accidentally interrupt an
+// image generation running in the same session (Sumica is single-local-user
+// but the endpoints are conceptually independent).
+let videoCancelRequested = false;
 
 interface EnhancedPrompt {
   positive: string;
@@ -601,6 +618,155 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     console.error('Generation pipeline failed:', error);
     res.status(500).json({ error: (error as Error).message || 'Image generation pipeline failed.' });
   }
+});
+
+// Video generation via ComfyUI. Streams progress as SSE. See
+// docs/superpowers/specs/2026-08-12-comfyui-video-generation-design.md
+// for the request/response contract and node-mutation strategy.
+app.post('/api/video/generate', async (req: Request, res: Response) => {
+  // Preflight body validation (fail fast with a 400 before touching ComfyUI)
+  const body = req.body as {
+    sourceImageBytesBase64?: string;      // raw PNG bytes (base64) — client can send Firebase-fetched image directly
+    sourceImageFilename?: string;         // suggested filename for upload/image (defaults to `sumica-source.png`)
+    referenceImageBytesBase64?: string;   // optional
+    referenceImageFilename?: string;
+    positivePrompt?: string;
+    negativePrompt?: string;
+    width?: number;
+    height?: number;
+    length?: number;
+    fidelity?: number;
+    motion?: number;
+    identity?: number;
+    seed?: number;
+    clientId?: string;
+  };
+  if (!body.sourceImageBytesBase64 || typeof body.sourceImageBytesBase64 !== 'string') {
+    return res.status(400).json({ error: 'sourceImageBytesBase64 (base64 PNG) is required' });
+  }
+  if (typeof body.positivePrompt !== 'string' || typeof body.negativePrompt !== 'string') {
+    return res.status(400).json({ error: 'positivePrompt and negativePrompt are required' });
+  }
+  const num = (v: unknown, name: string) => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error(`${name} must be a finite number`);
+    return v;
+  };
+  let args: MutateArgs;
+  try {
+    args = {
+      sourceImageFilename: body.sourceImageFilename || 'sumica-source.png',
+      referenceImageFilename: body.referenceImageFilename,
+      positivePrompt: body.positivePrompt,
+      negativePrompt: body.negativePrompt,
+      width: num(body.width, 'width'),
+      height: num(body.height, 'height'),
+      length: num(body.length, 'length'),
+      fidelity: num(body.fidelity, 'fidelity'),
+      motion: num(body.motion, 'motion'),
+      identity: num(body.identity, 'identity'),
+      seed: num(body.seed, 'seed'),
+    };
+  } catch (e) {
+    return res.status(400).json({ error: (e as Error).message });
+  }
+
+  // Reset cancel flag defensively (guards against a stale flag from a prior request)
+  videoCancelRequested = false;
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  const sse = (event: string, payload: unknown) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  const clientId = body.clientId || `sumica-${Date.now()}`;
+
+  try {
+    sse('progress', { stage: 'preparing' });
+
+    // 1. Load bundled workflow + upload source image (+ reference if present)
+    const workflow = await loadBundledWorkflow();
+    const sourceBytes = Buffer.from(body.sourceImageBytesBase64, 'base64');
+    const sourceName = await uploadImageToComfy(sourceBytes, args.sourceImageFilename);
+    args.sourceImageFilename = sourceName;
+    sse('progress', { stage: 'uploaded_source', filename: sourceName });
+
+    if (body.referenceImageBytesBase64) {
+      const refBytes = Buffer.from(body.referenceImageBytesBase64, 'base64');
+      const refName = await uploadImageToComfy(refBytes, body.referenceImageFilename || 'sumica-reference.png');
+      args.referenceImageFilename = refName;
+      sse('progress', { stage: 'uploaded_reference', filename: refName });
+    }
+
+    // 2. Mutate workflow with dynamic parameters and submit
+    const mutated = mutateWorkflow(workflow, args);
+    const promptId = await submitWorkflow(mutated, clientId);
+    sse('progress', { stage: 'submitted', promptId });
+
+    // 3. Stream ComfyUI progress events over SSE while waiting for completion
+    const history = await waitForCompletion(
+      promptId,
+      (evt: WsEvent) => sse('progress', { stage: 'comfy', evt }),
+      () => videoCancelRequested,
+    );
+
+    // 4. Locate the final video output filename (VHS_VideoCombine node 597, `gifs` array)
+    const node597 = history.outputs?.['597'] as { gifs?: Array<{ filename: string; subfolder: string; type: 'output' | 'temp' }> } | undefined;
+    const finalOutput = node597?.gifs?.[0];
+    if (!finalOutput) throw new Error('ComfyUI history missing node 597 output');
+
+    sse('progress', { stage: 'fetching_video', filename: finalOutput.filename });
+    const mp4 = await fetchVideo(finalOutput.filename, finalOutput.subfolder, finalOutput.type);
+
+    // 5. Extract poster frame (non-fatal on failure)
+    sse('progress', { stage: 'extracting_poster' });
+    let posterBase64: string | undefined;
+    try {
+      const posterBytes = await extractPoster(mp4);
+      posterBase64 = posterBytes.toString('base64');
+    } catch (e) {
+      console.error('poster extract failed (non-fatal):', (e as Error).message);
+    }
+
+    // 6. Emit `complete` with the payload the client will persist
+    sse('complete', {
+      videoBase64: mp4.toString('base64'),
+      posterBase64,
+      ltxParams: {
+        fidelity: args.fidelity,
+        motion: args.motion,
+        identity: args.identity,
+        length: args.length,
+        positivePrompt: args.positivePrompt,
+        negativePrompt: args.negativePrompt,
+        // referenceImageStoragePath is provided by the client on save; the server
+        // only knows the reference by uploaded filename, not by storage path.
+      },
+    });
+  } catch (err) {
+    if (err instanceof CancelledError) {
+      videoCancelRequested = false;
+      sse('error', { cancelled: true });
+    } else {
+      console.error('/api/video/generate failed:', (err as Error).message);
+      sse('error', { message: (err as Error).message });
+    }
+  } finally {
+    res.end();
+  }
+});
+
+// Best-effort cancellation of the currently-running video generation. Sets a
+// flag that /api/video/generate's cancel-poll picks up on its next tick, which
+// then calls ComfyUI's own /interrupt endpoint before rejecting with
+// CancelledError.
+app.post('/api/video/generate/interrupt', async (_req: Request, res: Response) => {
+  videoCancelRequested = true;
+  res.json({ success: true });
 });
 
 // 1b. Interrupt the currently-running Stable Diffusion generation, if any.
