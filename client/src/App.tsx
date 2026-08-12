@@ -1551,6 +1551,7 @@ function App() {
   // preview/progress isn't clobbered.
   const openInPreview = (item: GenerationData) => {
     if (genStatus === 'enhancing' || genStatus === 'generating' || genStatus === 'saving') return;
+    setLatestResult(null); // Clear any stuck video preview so the image branch renders
     setCurrentGeneration(item);
     setGenStatus('success');
     setLoadingStep(3);
@@ -1752,6 +1753,7 @@ function App() {
     setErrorStep(null);
     setRightTab('preview'); // Surface progress/result even if the gallery tab was open
     setCurrentGeneration(null); // Clear preview on start
+    setLatestResult(null); // Clear any stuck video preview so the image branch renders
     // Only surface step 1 (enhancing) when actually calling the LLM. When
     // a loaded enhanced prompt is present we go straight to step 2 without
     // even flashing the "enhancing" status.
@@ -1855,6 +1857,7 @@ function App() {
     setErrorStep(null);
     setRightTab('preview');
     setCurrentGeneration(null);
+    setLatestResult(null); // Clear any stuck video preview so the image branch renders
     // Only surface step 1 (enhancing) when actually calling the LLM. When
     // a loaded enhanced prompt is present we go straight to step 2 without
     // even flashing the "enhancing" status.

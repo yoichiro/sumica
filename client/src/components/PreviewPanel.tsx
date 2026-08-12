@@ -181,6 +181,20 @@ export function PreviewPanel({
   currentMediaType,
   videoProgressStage,
 }: PreviewPanelProps) {
+  // The video branch below can be entered from either source: latestResult
+  // (a just-completed generation from handleVideoGenerate) or currentGeneration
+  // (a gallery/lightbox video opened via "Open in Preview" — see
+  // openInPreview in App.tsx, which sets currentGeneration but never touches
+  // latestResult). Prefer latestResult when it's the video so the live
+  // just-generated result keeps taking precedence, otherwise fall back to
+  // currentGeneration so a recalled gallery video renders as <video> instead
+  // of falling through to the <img> branch (whose src would be the mp4 URL).
+  const videoItem = latestResult?.mediaType === 'video'
+    ? latestResult
+    : currentGeneration?.mediaType === 'video'
+      ? currentGeneration
+      : null;
+
   return (
     <>
       {/* GENERATION PREVIEW STAGE */}
@@ -195,13 +209,13 @@ export function PreviewPanel({
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {latestResult && (latestResult.mediaType ?? 'image') === 'video' ? (
+        {videoItem ? (
           <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1.2fr', gap: '24px', alignItems: 'start' }}>
             {/* Video Frame — same frame treatment as the image branch below */}
             <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '2px solid var(--panel-border-hover)', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', justifySelf: 'center', maxWidth: '100%', minHeight: 0 }}>
               <video
-                src={latestResult.videoUrl ?? latestResult.imageUrl}
-                poster={latestResult.posterUrl}
+                src={videoItem.videoUrl ?? videoItem.imageUrl}
+                poster={videoItem.posterUrl}
                 controls
                 playsInline
                 style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', display: 'block' }}
@@ -209,12 +223,12 @@ export function PreviewPanel({
               <SelectButton
                 size={34}
                 isSelected={isSelected}
-                onClick={(e) => { e.stopPropagation(); onToggleSelect(latestResult); }}
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(videoItem); }}
               />
               <FavoriteButton
                 size={34}
-                isFavorite={!!latestResult.isFavorite}
-                onClick={(e) => { e.stopPropagation(); onToggleFavorite(latestResult); }}
+                isFavorite={!!videoItem.isFavorite}
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite(videoItem); }}
               />
             </div>
 
@@ -223,7 +237,7 @@ export function PreviewPanel({
               <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                 <button
                   type="button"
-                  onClick={() => onLoadIntoForm(latestResult)}
+                  onClick={() => onLoadIntoForm(videoItem)}
                   className="scale-hover"
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
                 >
@@ -231,7 +245,7 @@ export function PreviewPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onRequestDelete([itemKey(latestResult)])}
+                  onClick={() => onRequestDelete([itemKey(videoItem)])}
                   className="scale-hover"
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
                 >
@@ -242,42 +256,42 @@ export function PreviewPanel({
                 <div>
                   <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>{t.preview.originalPromptLabel}</span>
                   <p style={{ fontSize: '15px', fontWeight: '700', marginTop: '4px', color: 'var(--text-primary)', lineHeight: '1.4' }}>
-                    {latestResult.ltxParams?.positivePrompt ?? latestResult.originalPrompt}
+                    {videoItem.ltxParams?.positivePrompt ?? videoItem.originalPrompt}
                   </p>
                 </div>
 
-                {latestResult.ltxParams && (
+                {videoItem.ltxParams && (
                   <div style={{ borderTop: '2px solid var(--panel-border)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
                     <div>
                       <span>{t.preview.detailResolutionLabel}</span>
-                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.width}x{latestResult.height}</strong>
+                      <strong style={{ color: 'var(--text-primary)' }}>{videoItem.width}x{videoItem.height}</strong>
                     </div>
                     <div>
                       <span>Length: </span>
-                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.ltxParams.length}f</strong>
+                      <strong style={{ color: 'var(--text-primary)' }}>{videoItem.ltxParams.length}f</strong>
                     </div>
                     <div>
                       <span>Fidelity: </span>
-                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.ltxParams.fidelity}</strong>
+                      <strong style={{ color: 'var(--text-primary)' }}>{videoItem.ltxParams.fidelity}</strong>
                     </div>
                     <div>
                       <span>Motion: </span>
-                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.ltxParams.motion}</strong>
+                      <strong style={{ color: 'var(--text-primary)' }}>{videoItem.ltxParams.motion}</strong>
                     </div>
                     <div>
                       <span>Identity: </span>
-                      <strong style={{ color: 'var(--text-primary)' }}>{latestResult.ltxParams.identity}</strong>
+                      <strong style={{ color: 'var(--text-primary)' }}>{videoItem.ltxParams.identity}</strong>
                     </div>
                   </div>
                 )}
 
-                {latestResult.ltxParams?.negativePrompt && (
+                {videoItem.ltxParams?.negativePrompt && (
                   <div>
                     <span style={{ fontSize: '11px', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}>
                       {t.preview.negativePromptLabel}
                     </span>
                     <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)', lineHeight: '1.4', background: 'var(--negative-bg)', padding: '10px', borderRadius: '8px', border: '2px solid var(--negative-border)', wordBreak: 'break-all' }}>
-                      {latestResult.ltxParams.negativePrompt}
+                      {videoItem.ltxParams.negativePrompt}
                     </p>
                   </div>
                 )}
