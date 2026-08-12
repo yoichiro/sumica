@@ -478,33 +478,15 @@ export function HistoryGallery({
             >
               <div style={{ position: 'relative' }}>
                 {(item.mediaType ?? 'image') === 'video' ? (
-                  <div style={{ position: 'relative' }}>
-                    <img
-                      src={item.posterUrl ?? item.videoUrl ?? item.imageUrl}
-                      alt={t.gallery.videoBadgeTitle}
-                      onClick={() => onOpenLightbox(item.videoUrl ?? item.imageUrl, itemKey(item))}
-                      style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
-                      loading="lazy"
-                      decoding="async"
-                      fetchPriority="low"
-                    />
-                    <span
-                      title={t.gallery.videoBadgeTitle}
-                      style={{
-                        position: 'absolute',
-                        top: '6px',
-                        right: '6px',
-                        background: 'rgba(0, 0, 0, 0.6)',
-                        color: '#fff',
-                        borderRadius: '8px',
-                        padding: '2px 6px',
-                        fontSize: '13px',
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      🎬
-                    </span>
-                  </div>
+                  <img
+                    src={item.posterUrl ?? item.videoUrl ?? item.imageUrl}
+                    alt={t.gallery.videoBadgeTitle}
+                    onClick={() => onOpenLightbox(item.videoUrl ?? item.imageUrl, itemKey(item))}
+                    style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', display: 'block', backgroundColor: 'var(--panel-bg-sunk)', cursor: 'pointer', viewTransitionName: (morphSourceKey === itemKey(item) && !lightboxUrl) ? 'lightbox-morph' : undefined }}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
+                  />
                 ) : (
                   <>
                     <img
