@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction, FormEvent } from 'react';
-import { Sparkles, RotateCw, Layers, X } from 'lucide-react';
+import { Sparkles, RotateCw, Layers, X, Video } from 'lucide-react';
 import { t } from '../i18n';
 import type { GenerationData } from '../App';
 import {
@@ -1044,74 +1044,98 @@ export function ControlPanel(p: ControlPanelProps) {
       )}
 
       {p.videoMode && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '6px' }}>
 
           {/* Source image thumbnail (readonly — chosen from Lightbox) */}
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
               {t.controlPanel.videoSourceLabel}
             </label>
             {p.videoSourceImage ? (
-              <img
-                src={p.videoSourceImage.thumbnailUrl ?? p.videoSourceImage.imageUrl}
-                alt={t.controlPanel.videoSourceLabel}
-                style={{ maxWidth: '128px', borderRadius: '8px', display: 'block', marginTop: '4px' }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
+                <img
+                  src={p.videoSourceImage.thumbnailUrl ?? p.videoSourceImage.imageUrl}
+                  alt={t.controlPanel.videoSourceLabel}
+                  style={{ maxWidth: '96px', maxHeight: '96px', borderRadius: '6px', display: 'block' }}
+                />
+              </div>
             ) : (
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px', background: 'var(--panel-bg)', border: '2px dashed var(--panel-border)', borderRadius: '8px', textAlign: 'center' }}>
                 — Lightbox から「🎬 動画にする」で選択 —
               </div>
             )}
           </div>
 
           {/* Reference image picker (optional) */}
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
               {t.controlPanel.videoReferenceLabel}
             </label>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-              {p.videoReferenceImage ? (
-                <>
-                  <img
-                    src={p.videoReferenceImage.thumbnailUrl ?? p.videoReferenceImage.imageUrl}
-                    alt="reference"
-                    style={{ maxWidth: '64px', borderRadius: '6px' }}
-                  />
-                  <button type="button" onClick={p.clearVideoReferenceImage} style={{ padding: '4px 8px' }}>
-                    {t.controlPanel.videoReferenceClear}
-                  </button>
-                </>
-              ) : (
-                <button type="button" onClick={p.openVideoReferencePicker} style={{ padding: '6px 12px' }}>
-                  {t.controlPanel.videoReferenceAdd}
+            {p.videoReferenceImage ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
+                <img
+                  src={p.videoReferenceImage.thumbnailUrl ?? p.videoReferenceImage.imageUrl}
+                  alt="reference"
+                  style={{ maxWidth: '64px', maxHeight: '64px', borderRadius: '6px' }}
+                />
+                <button
+                  type="button"
+                  onClick={p.clearVideoReferenceImage}
+                  disabled={p.videoLoading}
+                  title={t.controlPanel.videoReferenceClear}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                >
+                  <X size={14} />
                 </button>
-              )}
-            </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={p.openVideoReferencePicker}
+                disabled={p.videoLoading}
+                className="scale-hover"
+                style={{
+                  padding: '10px',
+                  borderRadius: '8px',
+                  background: 'var(--panel-bg)',
+                  color: 'var(--pop-blue)',
+                  border: '2px solid var(--pop-blue)',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  cursor: p.videoLoading ? 'not-allowed' : 'pointer',
+                  opacity: p.videoLoading ? 0.5 : 1,
+                }}
+              >
+                {t.controlPanel.videoReferenceAdd}
+              </button>
+            )}
           </div>
 
           {/* Prompts */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
               {t.controlPanel.videoPositivePromptLabel}
             </label>
             <textarea
+              className="input-field"
               rows={3}
               value={p.videoPositivePrompt}
               onChange={(e) => p.setVideoPositivePrompt(e.target.value)}
               disabled={p.videoLoading}
-              style={{ padding: '8px', fontSize: '13px', borderRadius: '6px' }}
+              style={{ borderRadius: '12px', resize: 'vertical', lineHeight: '1.4' }}
             />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 700 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+            <label style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: '700' }}>
               {t.controlPanel.videoNegativePromptLabel}
             </label>
             <textarea
+              className="input-field"
               rows={2}
               value={p.videoNegativePrompt}
               onChange={(e) => p.setVideoNegativePrompt(e.target.value)}
               disabled={p.videoLoading}
-              style={{ padding: '8px', fontSize: '13px', borderRadius: '6px' }}
+              style={{ borderRadius: '12px', resize: 'vertical', lineHeight: '1.4' }}
             />
           </div>
 
@@ -1125,59 +1149,77 @@ export function ControlPanel(p: ControlPanelProps) {
               ['videoMotionLabel', p.videoMotion, p.setVideoMotion, 1] as const,
               ['videoIdentityLabel', p.videoIdentity, p.setVideoIdentity, 0.1] as const,
             ].map(([labelKey, value, setter, step]) => (
-              <div key={labelKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+              <div key={labelKey} style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
                   {t.controlPanel[labelKey as keyof typeof t.controlPanel] as string}
                 </label>
                 <input
+                  className="input-field"
                   type="number"
                   step={step}
                   value={value}
                   onChange={(e) => setter(parseFloat(e.target.value) || 0)}
                   disabled={p.videoLoading}
-                  style={{ padding: '6px', fontSize: '13px', borderRadius: '4px' }}
+                  style={{ borderRadius: '8px' }}
                 />
               </div>
             ))}
           </div>
 
-          {/* Seed (existing lock pattern) */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <input
-              type="number"
-              value={p.videoSeed}
-              onChange={(e) => p.setVideoSeed(parseInt(e.target.value) || 0)}
-              disabled={p.videoLoading}
-              style={{ flex: 1, padding: '6px', fontSize: '13px' }}
-            />
-            <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {/* Seed (matches image form pattern) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: p.videoLoading ? 'default' : 'pointer', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
               <input
                 type="checkbox"
                 checked={p.videoSeedLocked}
                 onChange={(e) => p.setVideoSeedLocked(e.target.checked)}
+                disabled={p.videoLoading}
               />
               {t.controlPanel.seedLockLabel}
             </label>
+            <input
+              className="input-field"
+              type="number"
+              value={p.videoSeed}
+              onChange={(e) => p.setVideoSeed(parseInt(e.target.value) || 0)}
+              disabled={p.videoLoading}
+              style={{ borderRadius: '8px' }}
+            />
           </div>
 
           {/* Generate button (Cancel is provided by PreviewPanel while generating) */}
-          <button
-            type="button"
-            onClick={p.onVideoGenerate}
-            disabled={p.videoLoading || !p.videoSourceImage}
-            style={{
-              padding: '12px',
-              borderRadius: '10px',
-              border: 'none',
-              background: p.videoLoading ? 'var(--panel-bg-sunk)' : 'var(--pop-blue)',
-              color: '#fff',
-              fontWeight: 800,
-              fontSize: '15px',
-              cursor: (p.videoLoading || !p.videoSourceImage) ? 'default' : 'pointer',
-            }}
-          >
-            {p.videoLoading ? t.controlPanel.videoGenerateButtonLoading : t.controlPanel.videoGenerateButton}
-          </button>
+          <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={p.onVideoGenerate}
+              className="btn-neon"
+              disabled={p.videoLoading || !p.videoSourceImage}
+              style={{
+                flex: 1,
+                padding: '16px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                fontSize: '17px',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              {p.videoLoading ? (
+                <>
+                  <RotateCw size={20} className="animate-spin-custom" />
+                  <span>{t.controlPanel.videoGenerateButtonLoading}</span>
+                </>
+              ) : (
+                <>
+                  <Video size={20} />
+                  <span>{t.controlPanel.videoGenerateButton}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
     </section>
