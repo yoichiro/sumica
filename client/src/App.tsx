@@ -669,8 +669,13 @@ function App() {
     if (!current) return;
     setVideoSourceImage(current);
     setVideoMode(true);
-    setVideoWidth(current.width);
-    setVideoHeight(current.height);
+    // Inherit the ACTUAL image dimensions, not the pre-Hires base resolution.
+    // `record.width/height` is the SD payload's base; when enableHr is on, the
+    // saved PNG is hrScale× larger — so the video must default to the same
+    // dimensions the user actually sees, not the 512-ish base they typed.
+    const scale = (current.enableHr && current.hrScale) ? current.hrScale : 1;
+    setVideoWidth(Math.round(current.width * scale));
+    setVideoHeight(Math.round(current.height * scale));
     closeLightbox();
     switchControlTab('form');
   };
