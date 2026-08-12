@@ -19,7 +19,6 @@ import {
   writeBatch,
   increment,
   getDocs,
-  deleteDoc,
   setDoc,
   type Firestore,
 } from 'firebase/firestore';
@@ -265,7 +264,7 @@ export async function saveVideoGeneration(uid: string, args: SaveVideoArgs): Pro
     id,
     imageUrl: videoUrl,           // legacy field carries the primary media URL
     storagePath: videoStoragePath, // legacy field carries the primary storage path
-    thumbnailUrl: posterUrl,      // gallery grid uses thumbnailUrl ?? imageUrl
+    ...(posterUrl ? { thumbnailUrl: posterUrl } : {}), // gallery grid uses thumbnailUrl ?? imageUrl
     timestamp,
     createdAt: new Date(timestamp).toISOString(),
     backendMode: 'firebase',
@@ -273,8 +272,8 @@ export async function saveVideoGeneration(uid: string, args: SaveVideoArgs): Pro
     parentId,
     videoUrl,
     videoStoragePath,
-    posterUrl,
-    posterStoragePath,
+    ...(posterUrl ? { posterUrl } : {}),
+    ...(posterStoragePath ? { posterStoragePath } : {}),
     ltxParams,
   };
   await setDoc(docRef, record);
@@ -347,28 +346,45 @@ export async function deleteGenerations(uid: string, records: GenerationRecord[]
     snap.forEach((d) => childRecords.push({ id: d.id, ...(d.data() as Omit<GenerationRecord, 'id'>) }));
   }
 
+  // 1b. Update ranking rollups and delete generation docs: decrement counters for all deleted records
+  //     (parent + child), and delete their Firestore docs. Batch in chunks of 250 (2 ops per record:
+  //     genRef delete + rollup set) to stay within Firestore's 500-write limit.
+  const allRecords = [...records, ...childRecords];
+  for (let i = 0; i < allRecords.length; i += 250) {
+    const chunk = allRecords.slice(i, i + 250);
+    const batch = writeBatch(dbInstance);
+    for (const rec of chunk) {
+      const genRef = doc(dbInstance, 'users', uid, 'generations', rec.id);
+      batch.delete(genRef);
+      const normalised = normalizeParams(rec);
+      const rollupHash = await buildRollupKey(normalised);
+      const rollupRef = doc(dbInstance, 'users', uid, 'rankingRollups', rollupHash);
+      batch.set(
+        rollupRef,
+        {
+          version: 1,
+          params: normalised,
+          total: increment(-1),
+          favs: increment(rec.isFavorite ? -1 : 0),
+          updatedAt: Date.now(),
+        },
+        { merge: true },
+      );
+    }
+    await batch.commit();
+  }
+
   // 2. Delete every Storage object referenced by parent OR child records (best-effort;
   //    missing objects are tolerated so partial state cleans up too).
-  const allRecords = [...records, ...childRecords];
   const storagePaths = new Set<string>();
   for (const r of allRecords) {
     if (r.storagePath) storagePaths.add(r.storagePath);
-    if (r.thumbnailUrl && r.storagePath) {
-      // legacy: thumbnails live at users/{uid}/thumbs/... derived from imageUrl; try both
-      const thumb = r.storagePath.replace('/images/', '/thumbs/').replace(/\.png$/, '.webp');
-      storagePaths.add(thumb);
-    }
+    if (r.thumbnailStoragePath) storagePaths.add(r.thumbnailStoragePath);
     if (r.videoStoragePath) storagePaths.add(r.videoStoragePath);
     if (r.posterStoragePath) storagePaths.add(r.posterStoragePath);
   }
   for (const path of storagePaths) {
     await deleteObject(ref(storageInstance, path)).catch(() => { /* tolerated */ });
-  }
-
-  // 3. Delete every Firestore doc.
-  for (const r of allRecords) {
-    if (!r.id) continue;
-    await deleteDoc(doc(dbInstance, `users/${uid}/generations/${r.id}`)).catch(() => { /* tolerated */ });
   }
 }
 
