@@ -94,6 +94,30 @@ interface GenerationMetadata {
   // Ground-truth architecture from the user's toggle at generation time.
   // Absent on legacy records; loadIntoForm falls back to name/title heuristics.
   modelArchitecture?: Architecture;
+  // Media type discriminator. Absent on legacy/image records; only 'video'
+  // records set it explicitly. Mirrors the client-side GenerationRecord
+  // additions in client/src/firebase.ts (Task 1).
+  mediaType?: 'image' | 'video';
+  parentId?: string;
+  videoUrl?: string;
+  videoStoragePath?: string;
+  posterUrl?: string;
+  posterStoragePath?: string;
+  // Local-mode sidecar file paths for the mp4/poster pair, mirroring
+  // localPath/thumbnailPath but reserved for a future local-mode shape where
+  // video/poster paths aren't aliased onto the legacy image fields.
+  videoLocalPath?: string;
+  posterLocalPath?: string;
+  // LTX-Video 2 image-to-video parameters, persisted only on mediaType === 'video'.
+  ltxParams?: {
+    fidelity: number;
+    motion: number;
+    identity: number;
+    length: number;
+    referenceImageStoragePath?: string;
+    positivePrompt: string;
+    negativePrompt: string;
+  };
 }
 
 // Thumbnail spec — 256px max dimension, WebP quality 80. Aspect ratio preserved
@@ -640,6 +664,8 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
     identity?: number;
     seed?: number;
     clientId?: string;
+    parentId?: string;             // source image record id, for signed-out cascade-delete + linkage
+    params?: GenerationMetadata;   // inherited fields from the source image record (signed-out only)
   };
   if (!body.sourceImageBytesBase64 || typeof body.sourceImageBytesBase64 !== 'string') {
     return res.status(400).json({ error: 'sourceImageBytesBase64 (base64 PNG) is required' });
@@ -733,7 +759,57 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
       console.error('poster extract failed (non-fatal):', (e as Error).message);
     }
 
-    // 6. Emit `complete` with the payload the client will persist
+    // 6. If the client is not signed in (no clientPersist=true header), save locally
+    // and hand the client back a metadata record; otherwise stream the bytes back
+    // for the client to upload to Firebase Storage on its own.
+    const clientPersist = req.headers['x-client-persist'] === 'true';
+    if (!clientPersist) {
+      const timestamp = Date.now();
+      const fileName = `generated_${timestamp}.mp4`;
+      const localFilePath = path.join(outputsDir, fileName);
+      fs.writeFileSync(localFilePath, mp4);
+      let posterFileName: string | undefined;
+      let posterLocalPath: string | undefined;
+      if (posterBase64) {
+        posterFileName = `generated_${timestamp}_poster.webp`;
+        posterLocalPath = path.join(outputsDir, posterFileName);
+        fs.writeFileSync(posterLocalPath, Buffer.from(posterBase64, 'base64'));
+      }
+      const videoUrl = `http://localhost:${PORT}/api/outputs/${fileName}`;
+      const posterUrl = posterFileName ? `http://localhost:${PORT}/api/outputs/${posterFileName}` : undefined;
+      const parentId = body.parentId || '';
+      const inheritedParams = body.params || ({} as GenerationMetadata);
+      const record: GenerationMetadata = {
+        ...inheritedParams,
+        id: `local_video_${timestamp}`,
+        imageUrl: videoUrl,
+        localPath: localFilePath,
+        thumbnailUrl: posterUrl,
+        thumbnailPath: posterLocalPath,
+        timestamp,
+        createdAt: new Date(timestamp).toISOString(),
+        backendMode: 'local',
+        mediaType: 'video',
+        parentId: parentId || undefined,
+        videoUrl,
+        posterUrl,
+        ltxParams: {
+          fidelity: args.fidelity,
+          motion: args.motion,
+          identity: args.identity,
+          length: args.length,
+          positivePrompt: args.positivePrompt,
+          negativePrompt: args.negativePrompt,
+        },
+      };
+      const history = getLocalHistory();
+      history.unshift(record);
+      saveLocalHistory(history);
+      sse('complete', { record });
+      return;
+    }
+
+    // client-persist path (signed in — the client uploads bytes itself)
     sse('complete', {
       videoBase64: mp4.toString('base64'),
       posterBase64,
@@ -1018,14 +1094,34 @@ app.post('/api/generations/delete', async (req: Request, res: Response) => {
 
   let deleted = 0;
   try {
+    const history = getLocalHistory();
     const idSet = new Set(ids.map(String));
+
+    // Cascade: pull in any local record whose parentId matches one of the
+    // requested ids, so deleting a source image also deletes videos generated
+    // from it.
+    const cascadeChildren = history.filter((r) => r.parentId && idSet.has(r.parentId));
+    for (const child of cascadeChildren) {
+      if (child.id) idSet.add(child.id);
+    }
+
     const remaining: GenerationMetadata[] = [];
     const deletedRecords: GenerationMetadata[] = [];
-    for (const item of getLocalHistory()) {
+    for (const item of history) {
       if (item.id && idSet.has(item.id)) {
-        // Remove the PNG and any sidecar WebP thumbnail. `thumbnailPath` is
-        // optional on legacy items — silently skip when absent or missing.
-        for (const p of [item.localPath, item.thumbnailPath]) {
+        // Remove every known sidecar file: the PNG/thumbnail pair for images,
+        // and the mp4/poster pair for videos (aliased onto localPath/thumbnailPath
+        // by the local-mode video save path, plus the dedicated video-side fields
+        // in case a future shape stops aliasing them). All are optional — legacy
+        // items may lack a thumbnail, and image records lack video/poster fields.
+        for (const p of [
+          item.localPath,
+          item.thumbnailPath,
+          item.videoStoragePath,
+          item.posterStoragePath,
+          item.videoLocalPath,
+          item.posterLocalPath,
+        ]) {
           if (p && fs.existsSync(p)) {
             try {
               fs.unlinkSync(p);
