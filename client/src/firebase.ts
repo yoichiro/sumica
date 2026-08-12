@@ -256,11 +256,39 @@ export async function saveVideoGeneration(uid: string, args: SaveVideoArgs): Pro
     posterUrl = await getDownloadURL(posterRef);
   }
 
-  // 3. Write the Firestore doc
+  // 3. Write the Firestore doc.
+  //
+  // Defensive strip: callers routinely pass the full parent GenerationRecord as
+  // `params` (App.tsx spreads `videoSourceImage` verbatim), so `...params` would
+  // otherwise inherit the parent's Firebase-object references — most damagingly
+  // `thumbnailStoragePath`, which deleteGenerations then unlinks when the video
+  // is later deleted, taking the parent image's thumbnail with it. Strip every
+  // Storage / Firestore-bookkeeping field so the video record only owns paths
+  // it wrote itself.
+  const {
+    id: _stripId,
+    imageUrl: _stripImageUrl,
+    storagePath: _stripStoragePath,
+    thumbnailUrl: _stripThumbUrl,
+    thumbnailStoragePath: _stripThumbPath,
+    timestamp: _stripTs,
+    createdAt: _stripCreatedAt,
+    backendMode: _stripBackend,
+    isFavorite: _stripFav,
+    mediaType: _stripMediaType,
+    parentId: _stripParentId,
+    videoUrl: _stripVideoUrl,
+    videoStoragePath: _stripVideoPath,
+    posterUrl: _stripPosterUrl,
+    posterStoragePath: _stripPosterPath,
+    ltxParams: _stripLtx,
+    ...cleanParams
+  } = params as GenerationParams & Partial<GenerationRecord>;
+
   const id = `video_${timestamp}`;
   const docRef = doc(dbInstance, `users/${uid}/generations/${id}`);
   const record: GenerationRecord = {
-    ...params,
+    ...cleanParams,
     id,
     imageUrl: videoUrl,           // legacy field carries the primary media URL
     storagePath: videoStoragePath, // legacy field carries the primary storage path
