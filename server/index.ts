@@ -94,10 +94,10 @@ interface GenerationMetadata {
   // Ground-truth architecture from the user's toggle at generation time.
   // Absent on legacy records; loadIntoForm falls back to name/title heuristics.
   modelArchitecture?: Architecture;
-  // Media type discriminator. Absent on legacy/image records; only 'video'
-  // records set it explicitly. Mirrors the client-side GenerationRecord
-  // additions in client/src/firebase.ts (Task 1).
-  mediaType?: 'image' | 'video';
+  // Media type discriminator. Required on all new records (mirrors the
+  // client-side GenerationRecord additions in client/src/firebase.ts, Task 1);
+  // absent only on legacy records saved before this field existed.
+  mediaType: 'image' | 'video';
   parentId?: string;
   videoUrl?: string;
   videoStoragePath?: string;
@@ -585,6 +585,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
       const imageUrl = `http://localhost:${PORT}/api/outputs/${fileName}`;
       const metadata: GenerationMetadata = {
         id: `local_${timestamp}`,
+        mediaType: 'image',
         originalPrompt: finalOriginalPrompt,
         enhancedPrompt: finalPrompt,
         negativePrompt: finalNegativePrompt,
