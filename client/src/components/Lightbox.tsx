@@ -119,6 +119,22 @@ export function Lightbox({
           style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
         />
       )}
+      {/* L-shaped toolbar: a horizontal top row (Close anchors the right-hand
+          corner, with item-agnostic controls extending leftward) plus a
+          vertical column dropping from beneath Close (item-specific actions
+          on the currently displayed entry). The two lists share the top-right
+          corner but never overlap — vertical column starts at top:72 (=
+          20 + 44 + 8) so it sits one row-slot below the horizontal strip.
+          Each button drops its own position/top/right and lets the flex
+          container place it. */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        display: 'flex',
+        flexDirection: 'row',
+        gap: '8px',
+      }}>
       {meta && (
         <button
           type="button"
@@ -127,9 +143,6 @@ export function Lightbox({
           aria-pressed={showInfo}
           className="scale-hover"
           style={{
-            position: 'absolute',
-            top: '20px',
-            right: '332px',
             width: '44px',
             height: '44px',
             borderRadius: '50%',
@@ -146,150 +159,6 @@ export function Lightbox({
           <Info size={22} />
         </button>
       )}
-      {/* Selection toggle: only available when the lightbox shows a gallery item
-          (not the preview tab's current generation, whose key is '__preview__' and
-          not present in displayedHistory). Mirrors the click-to-select behavior on
-          the gallery tile so a user can flip through images and mark deletion
-          candidates without leaving the lightbox. */}
-      {lightboxIndex >= 0 && (() => {
-        const selected = isItemSelected(lightboxIndex);
-        return (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onToggleSelect(lightboxIndex); }}
-            title={selected ? t.lightbox.deselectTooltip : t.lightbox.selectTooltip}
-            className="scale-hover"
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '228px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: selected ? '2px solid #fff' : 'none',
-              background: selected ? 'var(--pop-blue)' : 'rgba(255, 255, 255, 0.15)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: selected ? '0 0 0 3px rgba(51, 154, 240, 0.35)' : 'none'
-            }}
-          >
-            {selected ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-          </button>
-        );
-      })()}
-      {lightboxIndex >= 0 && (() => {
-        const fav = !!displayedHistory[lightboxIndex]?.isFavorite;
-        return (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite(lightboxIndex); }}
-            title={fav ? t.lightbox.favoriteRemoveTooltip : t.lightbox.favoriteAddTooltip}
-            className="scale-hover"
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '280px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: fav ? '2px solid #fff' : 'none',
-              background: fav ? '#ffd43b' : 'rgba(255, 255, 255, 0.15)',
-              color: fav ? '#1a1a1a' : '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: fav ? '0 0 0 3px rgba(255, 212, 59, 0.35)' : 'none'
-            }}
-          >
-            {fav
-              ? <Star size={22} fill="#1a1a1a" stroke="#1a1a1a" />
-              : <Star size={22} />}
-          </button>
-        );
-      })()}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onNavigate(-1); }}
-        disabled={lightboxIndex <= 0}
-        title={t.lightbox.prevTooltip}
-        className={lightboxIndex <= 0 ? '' : 'scale-hover'}
-        style={{
-          position: 'absolute',
-          top: '20px',
-          right: '176px',
-          width: '44px',
-          height: '44px',
-          borderRadius: '50%',
-          border: 'none',
-          background: 'rgba(255, 255, 255, 0.15)',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: lightboxIndex <= 0 ? 'not-allowed' : 'pointer',
-          opacity: lightboxIndex <= 0 ? 0.35 : 1
-        }}
-      >
-        <ChevronLeft size={22} />
-      </button>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onNavigate(1); }}
-        disabled={lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1}
-        title={t.lightbox.nextTooltip}
-        className={(lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? '' : 'scale-hover'}
-        style={{
-          position: 'absolute',
-          top: '20px',
-          right: '124px',
-          width: '44px',
-          height: '44px',
-          borderRadius: '50%',
-          border: 'none',
-          background: 'rgba(255, 255, 255, 0.15)',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 'not-allowed' : 'pointer',
-          opacity: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 0.35 : 1
-        }}
-      >
-        <ChevronRight size={22} />
-      </button>
-      {/* Random-mode toggle: when ON, both manual ← / → and the slideshow
-          timer pick a random next image (excluding the current one). Same
-          disabled gate as before (needs at least 2 gallery-backed candidates). */}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onToggleRandom(); }}
-        disabled={lightboxIndex < 0 || displayedHistory.length < 2}
-        title={randomMode ? t.lightbox.randomModeToggleOnTooltip : t.lightbox.randomModeToggleOffTooltip}
-        aria-pressed={randomMode}
-        className={(lightboxIndex < 0 || displayedHistory.length < 2) ? '' : 'scale-hover'}
-        style={{
-          position: 'absolute',
-          top: '20px',
-          right: '384px',
-          width: '44px',
-          height: '44px',
-          borderRadius: '50%',
-          border: 'none',
-          background: randomMode ? 'var(--pop-blue)' : 'rgba(255, 255, 255, 0.15)',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: (lightboxIndex < 0 || displayedHistory.length < 2) ? 'not-allowed' : 'pointer',
-          opacity: (lightboxIndex < 0 || displayedHistory.length < 2) ? 0.35 : 1,
-        }}
-      >
-        <Shuffle size={20} />
-      </button>
       {/* Slideshow toggle: when ON, advances (via nextSlideshowIndex) every
           slideshowIntervalMs. Whether the advance is sequential or random
           depends on the shared randomMode flag above. Same disabled gate as
@@ -318,9 +187,7 @@ export function Lightbox({
         aria-pressed={slideshowPlaying}
         className={(lightboxIndex < 0 || displayedHistory.length < 2) ? '' : 'scale-hover'}
         style={{
-          position: 'absolute',
-          top: '20px',
-          right: '436px',
+          position: 'relative',
           width: '44px',
           height: '44px',
           borderRadius: '50%',
@@ -408,19 +275,39 @@ export function Lightbox({
           {Math.round(slideshowIntervalMs / 1000)}s
         </span>
       </button>
-      {/* Download button — save the currently displayed image to disk with a
-          human-readable JST timestamp filename. Mirrors the Info button's
-          shape/positioning; opts out of the toggled/pressed styling since
-          it's a one-shot action. */}
+      {/* Random-mode toggle: when ON, both manual ← / → and the slideshow
+          timer pick a random next image (excluding the current one). Same
+          disabled gate as before (needs at least 2 gallery-backed candidates). */}
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); onDownload(); }}
-        title={t.lightbox.downloadTooltip}
-        className="scale-hover"
+        onClick={(e) => { e.stopPropagation(); onToggleRandom(); }}
+        disabled={lightboxIndex < 0 || displayedHistory.length < 2}
+        title={randomMode ? t.lightbox.randomModeToggleOnTooltip : t.lightbox.randomModeToggleOffTooltip}
+        aria-pressed={randomMode}
+        className={(lightboxIndex < 0 || displayedHistory.length < 2) ? '' : 'scale-hover'}
         style={{
-          position: 'absolute',
-          top: '20px',
-          right: '540px',
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          border: 'none',
+          background: randomMode ? 'var(--pop-blue)' : 'rgba(255, 255, 255, 0.15)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: (lightboxIndex < 0 || displayedHistory.length < 2) ? 'not-allowed' : 'pointer',
+          opacity: (lightboxIndex < 0 || displayedHistory.length < 2) ? 0.35 : 1,
+        }}
+      >
+        <Shuffle size={20} />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onNavigate(-1); }}
+        disabled={lightboxIndex <= 0}
+        title={t.lightbox.prevTooltip}
+        className={lightboxIndex <= 0 ? '' : 'scale-hover'}
+        style={{
           width: '44px',
           height: '44px',
           borderRadius: '50%',
@@ -430,144 +317,40 @@ export function Lightbox({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: 'pointer',
+          cursor: lightboxIndex <= 0 ? 'not-allowed' : 'pointer',
+          opacity: lightboxIndex <= 0 ? 0.35 : 1
         }}
       >
-        <Download size={22} />
+        <ChevronLeft size={22} />
       </button>
-      {/* Video mode: image side. 🎬 opens the image-to-video form seeded with
-          the current image; 📼 opens the list of videos already generated
-          from this image (disabled when there are none yet). Both hidden
-          when the current item is itself a video. */}
-      {meta && (meta.mediaType ?? 'image') !== 'video' && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onOpenVideoForm(); }}
-          title={t.lightbox.imageToVideoTooltip}
-          className="scale-hover"
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '592px',
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            border: 'none',
-            background: 'rgba(255, 255, 255, 0.15)',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-          }}
-        >
-          <Video size={22} />
-        </button>
-      )}
-      {meta && (meta.mediaType ?? 'image') !== 'video' && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (childVideoCount > 0 && meta.id) onOpenChildVideos(meta.id);
-          }}
-          disabled={childVideoCount === 0}
-          title={childVideoCount > 0
-            ? t.lightbox.viewChildVideosTooltip(childVideoCount)
-            : t.lightbox.viewChildVideosDisabledTooltip}
-          className="scale-hover"
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '644px',
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            border: 'none',
-            background: childVideoCount > 0 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-            color: childVideoCount > 0 ? '#fff' : 'rgba(255, 255, 255, 0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: childVideoCount > 0 ? 'pointer' : 'default',
-          }}
-        >
-          <Film size={22} />
-        </button>
-      )}
-      {/* Video mode: video side. 🖼️ jumps back to the source image that this
-          video was generated from (disabled when the source has since been
-          deleted or is otherwise unknown). Mutually exclusive with the two
-          image-side buttons above — shares their right offset. */}
-      {meta && (meta.mediaType ?? 'image') === 'video' && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (meta.parentId) onOpenParentImage(meta.parentId);
-          }}
-          disabled={!meta.parentId}
-          title={meta.parentId ? t.lightbox.viewParentImageTooltip : t.lightbox.viewParentImageDisabledTooltip}
-          className="scale-hover"
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '592px',
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            border: 'none',
-            background: meta.parentId ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-            color: meta.parentId ? '#fff' : 'rgba(255, 255, 255, 0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: meta.parentId ? 'pointer' : 'default',
-          }}
-        >
-          <ImageIcon size={22} />
-        </button>
-      )}
-      {/* Open-in-preview: send the currently displayed gallery item to the
-          Preview tab, then close the lightbox. Hidden when the lightbox is
-          showing the preview tab's own current generation (lightboxIndex < 0)
-          — there's nothing to "send back" in that case. */}
-      {lightboxIndex >= 0 && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onOpenInPreview(); }}
-          disabled={openInPreviewDisabled}
-          title={t.lightbox.openInPreviewTooltip}
-          className={openInPreviewDisabled ? '' : 'scale-hover'}
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '488px',
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            border: 'none',
-            background: 'rgba(255, 255, 255, 0.15)',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: openInPreviewDisabled ? 'not-allowed' : 'pointer',
-            opacity: openInPreviewDisabled ? 0.35 : 1,
-          }}
-        >
-          <Eye size={20} />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onNavigate(1); }}
+        disabled={lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1}
+        title={t.lightbox.nextTooltip}
+        className={(lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? '' : 'scale-hover'}
+        style={{
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          border: 'none',
+          background: 'rgba(255, 255, 255, 0.15)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 'not-allowed' : 'pointer',
+          opacity: (lightboxIndex < 0 || lightboxIndex >= displayedHistory.length - 1) ? 0.35 : 1
+        }}
+      >
+        <ChevronRight size={22} />
+      </button>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onToggleFullscreen(); }}
         title={isFullscreen ? t.lightbox.fullscreenExitTooltip : t.lightbox.fullscreenEnterTooltip}
         className="scale-hover"
         style={{
-          position: 'absolute',
-          top: '20px',
-          right: '72px',
           width: '44px',
           height: '44px',
           borderRadius: '50%',
@@ -588,9 +371,6 @@ export function Lightbox({
         title={t.lightbox.closeTooltip}
         className="scale-hover"
         style={{
-          position: 'absolute',
-          top: '20px',
-          right: '20px',
           width: '44px',
           height: '44px',
           borderRadius: '50%',
@@ -605,6 +385,215 @@ export function Lightbox({
       >
         <X size={22} />
       </button>
+      </div>
+      {/* Vertical right column: item-specific actions dropping from beneath
+          Close. top:72 = 20 (row top) + 44 (row height) + 8 (gap) so the
+          column starts one row-slot below the horizontal strip and never
+          overlaps its rightmost button. */}
+      <div style={{
+        position: 'absolute',
+        top: '72px',
+        right: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+      }}>
+      {/* Selection toggle: only available when the lightbox shows a gallery item
+          (not the preview tab's current generation, whose key is '__preview__' and
+          not present in displayedHistory). Mirrors the click-to-select behavior on
+          the gallery tile so a user can flip through images and mark deletion
+          candidates without leaving the lightbox. */}
+      {lightboxIndex >= 0 && (() => {
+        const selected = isItemSelected(lightboxIndex);
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(lightboxIndex); }}
+            title={selected ? t.lightbox.deselectTooltip : t.lightbox.selectTooltip}
+            className="scale-hover"
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: selected ? '2px solid #fff' : 'none',
+              background: selected ? 'var(--pop-blue)' : 'rgba(255, 255, 255, 0.15)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: selected ? '0 0 0 3px rgba(51, 154, 240, 0.35)' : 'none'
+            }}
+          >
+            {selected ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+          </button>
+        );
+      })()}
+      {lightboxIndex >= 0 && (() => {
+        const fav = !!displayedHistory[lightboxIndex]?.isFavorite;
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(lightboxIndex); }}
+            title={fav ? t.lightbox.favoriteRemoveTooltip : t.lightbox.favoriteAddTooltip}
+            className="scale-hover"
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: fav ? '2px solid #fff' : 'none',
+              background: fav ? '#ffd43b' : 'rgba(255, 255, 255, 0.15)',
+              color: fav ? '#1a1a1a' : '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: fav ? '0 0 0 3px rgba(255, 212, 59, 0.35)' : 'none'
+            }}
+          >
+            {fav
+              ? <Star size={22} fill="#1a1a1a" stroke="#1a1a1a" />
+              : <Star size={22} />}
+          </button>
+        );
+      })()}
+      {/* Open-in-preview: send the currently displayed gallery item to the
+          Preview tab, then close the lightbox. Hidden when the lightbox is
+          showing the preview tab's own current generation (lightboxIndex < 0)
+          — there's nothing to "send back" in that case. */}
+      {lightboxIndex >= 0 && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenInPreview(); }}
+          disabled={openInPreviewDisabled}
+          title={t.lightbox.openInPreviewTooltip}
+          className={openInPreviewDisabled ? '' : 'scale-hover'}
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: 'rgba(255, 255, 255, 0.15)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: openInPreviewDisabled ? 'not-allowed' : 'pointer',
+            opacity: openInPreviewDisabled ? 0.35 : 1,
+          }}
+        >
+          <Eye size={20} />
+        </button>
+      )}
+      {/* Download button — save the currently displayed image to disk with a
+          human-readable JST timestamp filename. One-shot action, so no
+          toggled/pressed styling. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onDownload(); }}
+        title={t.lightbox.downloadTooltip}
+        className="scale-hover"
+        style={{
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          border: 'none',
+          background: 'rgba(255, 255, 255, 0.15)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+        }}
+      >
+        <Download size={22} />
+      </button>
+      {/* Video mode: image side. 🎬 opens the image-to-video form seeded with
+          the current image. Hidden when the current item is itself a video —
+          the Parent-image button below takes its column slot instead. */}
+      {meta && (meta.mediaType ?? 'image') !== 'video' && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenVideoForm(); }}
+          title={t.lightbox.imageToVideoTooltip}
+          className="scale-hover"
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: 'rgba(255, 255, 255, 0.15)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <Video size={22} />
+        </button>
+      )}
+      {/* Video mode: video side. 🖼️ jumps back to the source image that this
+          video was generated from (disabled when the source has since been
+          deleted or is otherwise unknown). Mutually exclusive with the
+          image-side Video button above — occupies the same column slot. */}
+      {meta && (meta.mediaType ?? 'image') === 'video' && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (meta.parentId) onOpenParentImage(meta.parentId);
+          }}
+          disabled={!meta.parentId}
+          title={meta.parentId ? t.lightbox.viewParentImageTooltip : t.lightbox.viewParentImageDisabledTooltip}
+          className="scale-hover"
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: meta.parentId ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+            color: meta.parentId ? '#fff' : 'rgba(255, 255, 255, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: meta.parentId ? 'pointer' : 'default',
+          }}
+        >
+          <ImageIcon size={22} />
+        </button>
+      )}
+      {/* 📼 opens the list of videos already generated from this image
+          (disabled when there are none yet). Image-side only. */}
+      {meta && (meta.mediaType ?? 'image') !== 'video' && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (childVideoCount > 0 && meta.id) onOpenChildVideos(meta.id);
+          }}
+          disabled={childVideoCount === 0}
+          title={childVideoCount > 0
+            ? t.lightbox.viewChildVideosTooltip(childVideoCount)
+            : t.lightbox.viewChildVideosDisabledTooltip}
+          className="scale-hover"
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: childVideoCount > 0 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+            color: childVideoCount > 0 ? '#fff' : 'rgba(255, 255, 255, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: childVideoCount > 0 ? 'pointer' : 'default',
+          }}
+        >
+          <Film size={22} />
+        </button>
+      )}
+      </div>
       {meta && (() => {
         const m = meta;
         const hasHr = m.enableHr === true;
