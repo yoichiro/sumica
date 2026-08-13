@@ -218,7 +218,27 @@ export function PreviewPanel({
                 poster={videoItem.posterUrl}
                 controls
                 playsInline
-                style={{ maxWidth: '100%', maxHeight: '48vh', width: 'auto', height: 'auto', display: 'block' }}
+                // HTML width/height attrs seed the intrinsic size before
+                // metadata loads (default is 300x150 otherwise).
+                width={videoItem.width}
+                height={videoItem.height}
+                // Height-first sizing: pin to 48vh and derive width from the
+                // record's aspect ratio. A width-first layout (`width: 100%`)
+                // gave the grid track authority over the video size, which
+                // varied with the info column's content and let a click-time
+                // relayout expand the box. Height-first pins the box to the
+                // viewport, so the same size is drawn on first paint and any
+                // relayout. `max-width: 100%` still keeps landscape videos
+                // from overflowing narrow columns.
+                style={{
+                  width: 'auto',
+                  height: '48vh',
+                  maxWidth: '100%',
+                  maxHeight: '48vh',
+                  aspectRatio: videoItem.width && videoItem.height ? `${videoItem.width} / ${videoItem.height}` : undefined,
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
               />
               <SelectButton
                 size={34}
