@@ -218,6 +218,65 @@ describe('applyGalleryFilters', () => {
     expect(filtered).toHaveLength(1);
     expect(filtered[0].parentId).toBe('p1');
   });
+
+  describe('image-only filters on video records', () => {
+    // Videos inherit model/sampler/arch from the parent image via
+    // `...cleanParams` in saveVideoGeneration, but those fields don't
+    // describe the video itself. applyGalleryFilters must skip them for
+    // video records so the video tab isn't secretly pruned by SD filters.
+    const videoWithInheritedSdFields = mkRecord({
+      mediaType: 'video',
+      parentId: 'anything',
+      model: 'juggernautXL.safetensors [abc]',
+      sampler: 'Euler a',
+      modelArchitecture: 'sdxl',
+      width: 1024,
+      height: 768,
+    });
+
+    it('does NOT filter out video records when the model filter would otherwise mismatch', () => {
+      const filtered = applyGalleryFilters(
+        [videoWithInheritedSdFields],
+        { ...ALL_NULL, mediaType: 'video', model: 'a-different-model' },
+        KNOWN_MODELS,
+      );
+      expect(filtered).toHaveLength(1);
+    });
+
+    it('does NOT filter out video records when the sampler filter would otherwise mismatch', () => {
+      const filtered = applyGalleryFilters(
+        [videoWithInheritedSdFields],
+        { ...ALL_NULL, mediaType: 'video', sampler: 'DPM++ 2M' },
+        KNOWN_MODELS,
+      );
+      expect(filtered).toHaveLength(1);
+    });
+
+    it('does NOT filter out video records when the arch filter would otherwise mismatch', () => {
+      const filtered = applyGalleryFilters(
+        [videoWithInheritedSdFields],
+        { ...ALL_NULL, mediaType: 'video', arch: 'sd15' },
+        KNOWN_MODELS,
+      );
+      expect(filtered).toHaveLength(1);
+    });
+
+    it('still applies aspectRatio and orientation to video records', () => {
+      // Video dimensions 1024x768 → aspectRatio 4:3, orientation landscape
+      const filteredWrongRatio = applyGalleryFilters(
+        [videoWithInheritedSdFields],
+        { ...ALL_NULL, mediaType: 'video', aspectRatio: '16:9' },
+        KNOWN_MODELS,
+      );
+      expect(filteredWrongRatio).toHaveLength(0);
+      const filteredRightRatio = applyGalleryFilters(
+        [videoWithInheritedSdFields],
+        { ...ALL_NULL, mediaType: 'video', aspectRatio: '4:3' },
+        KNOWN_MODELS,
+      );
+      expect(filteredRightRatio).toHaveLength(1);
+    });
+  });
 });
 
 describe('deriveFilterOptions', () => {
@@ -325,5 +384,32 @@ describe('countActiveFilters', () => {
       mediaType: 'image',
       parentId: 'p1',
     })).toBe(5);
+  });
+
+  it('excludes arch/model/sampler from the count on the video tab', () => {
+    // The SD-only trio stays in state (so switching back to the image tab
+    // restores it), but the badge should show only the axes that actually
+    // apply to the video-tab view.
+    expect(countActiveFilters({
+      arch: 'sd15',
+      model: 'x',
+      sampler: 'y',
+      aspectRatio: '4:3',
+      orientation: 'portrait',
+      mediaType: 'video',
+      parentId: null,
+    })).toBe(2);
+  });
+
+  it('counts arch/model/sampler on the image tab (baseline for the video-tab drop test)', () => {
+    expect(countActiveFilters({
+      arch: 'sd15',
+      model: 'x',
+      sampler: 'y',
+      aspectRatio: null,
+      orientation: null,
+      mediaType: 'image',
+      parentId: null,
+    })).toBe(3);
   });
 });

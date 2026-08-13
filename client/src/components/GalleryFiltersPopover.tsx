@@ -92,8 +92,12 @@ export function GalleryFilterPanel({
   availableOrientations,
   onClose,
 }: GalleryFilterPanelProps) {
-  const showModel = availableModels.length > 1;
-  const showSampler = availableSamplers.length > 1;
+  // Arch/model/sampler are SD concepts that don't describe the video itself
+  // (see applyGalleryFilters), so the whole trio is hidden on the video tab.
+  const isVideoTab = filters.mediaType === 'video';
+  const showArch = !isVideoTab;
+  const showModel = !isVideoTab && availableModels.length > 1;
+  const showSampler = !isVideoTab && availableSamplers.length > 1;
   const showAspectRatio = availableAspectRatios.length > 1;
   // Orientation only makes sense when the day has both landscape and portrait
   // records AND the user isn't restricting to 1:1 (which is inherently square).
@@ -137,16 +141,18 @@ export function GalleryFilterPanel({
         viewTransitionName: 'gallery-filter-morph',
       }}
     >
-      <FilterGroup label={t.gallery.filters.archLabel}>
-        {archOptions.map((opt) => (
-          <RadioOption
-            key={String(opt.value)}
-            checked={filters.arch === opt.value}
-            onChange={() => onSetFilters({ ...filters, arch: opt.value })}
-            label={opt.label}
-          />
-        ))}
-      </FilterGroup>
+      {showArch && (
+        <FilterGroup label={t.gallery.filters.archLabel}>
+          {archOptions.map((opt) => (
+            <RadioOption
+              key={String(opt.value)}
+              checked={filters.arch === opt.value}
+              onChange={() => onSetFilters({ ...filters, arch: opt.value })}
+              label={opt.label}
+            />
+          ))}
+        </FilterGroup>
+      )}
 
       {showAspectRatio && (
         <FilterSelectGroup

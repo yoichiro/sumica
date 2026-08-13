@@ -78,11 +78,18 @@ export function applyGalleryFilters(
     if (filters.parentId !== null && it.parentId !== filters.parentId) {
       return false;
     }
-    if (filters.model && stripHashSuffix(it.model ?? '') !== filters.model) return false;
-    if (filters.sampler && it.sampler !== filters.sampler) return false;
-    if (filters.arch) {
-      const arch = it.modelArchitecture ?? inferSdArchitectureFromTitle(it.model ?? '', sdModels);
-      if (arch !== filters.arch) return false;
+    // Arch / model / sampler are SD concepts; video records inherit these
+    // fields from the parent image via `...cleanParams` in saveVideoGeneration,
+    // but they don't describe the video itself. Skip them for videos so the
+    // filter row on the video tab reflects only what the video is (dimensions).
+    const isVideo = (it.mediaType ?? 'image') === 'video';
+    if (!isVideo) {
+      if (filters.model && stripHashSuffix(it.model ?? '') !== filters.model) return false;
+      if (filters.sampler && it.sampler !== filters.sampler) return false;
+      if (filters.arch) {
+        const arch = it.modelArchitecture ?? inferSdArchitectureFromTitle(it.model ?? '', sdModels);
+        if (arch !== filters.arch) return false;
+      }
     }
     if (filters.aspectRatio && computeAspectRatio(it.width, it.height) !== filters.aspectRatio) return false;
     if (filters.orientation && computeOrientation(it.width, it.height) !== filters.orientation) return false;
@@ -156,11 +163,18 @@ function ratioValue(ratio: string): number {
   return Number.isFinite(a) && Number.isFinite(b) && b > 0 ? a / b : 0;
 }
 
+// The count reflects only filters that actually apply to the current
+// media-type view. Arch/model/sampler stay in state so switching back to the
+// image tab restores them, but they should not contribute to the badge on
+// the video tab where applyGalleryFilters skips them.
 export function countActiveFilters(filters: GalleryFilters): number {
+  const isVideoTab = filters.mediaType === 'video';
   let count = 0;
-  if (filters.arch) count++;
-  if (filters.model) count++;
-  if (filters.sampler) count++;
+  if (!isVideoTab) {
+    if (filters.arch) count++;
+    if (filters.model) count++;
+    if (filters.sampler) count++;
+  }
   if (filters.aspectRatio) count++;
   if (filters.orientation) count++;
   return count;
