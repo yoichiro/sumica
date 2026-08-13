@@ -584,7 +584,13 @@ export function PreviewPanel({
 
               <div style={{ textAlign: 'left' }}>
                 <span style={{ fontSize: '14px', fontWeight: '800', display: 'block', color: genStatus === 'error' ? 'var(--danger)' : genStatus === 'success' ? 'var(--success)' : 'var(--text-primary)' }}>
-                  {genStatus === 'error' ? t.preview.statusErrorTitle : genStatus === 'success' ? t.preview.statusSuccessTitle : t.preview.statusInProgressTitle}
+                  {genStatus === 'error'
+                    ? t.preview.statusErrorTitle
+                    : genStatus === 'success'
+                      ? t.preview.statusSuccessTitle
+                      : currentMediaType === 'video'
+                        ? t.preview.videoStatusInProgressTitle
+                        : t.preview.statusInProgressTitle}
                 </span>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                   {genStatus === 'error' ? t.preview.statusErrorDetail : genStatus === 'success' ? t.preview.statusSuccessDetail : t.preview.statusInProgressDetail}

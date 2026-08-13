@@ -99,6 +99,7 @@ export const ja = {
     statusErrorTitle: '生成処理エラー ❌',
     statusSuccessTitle: '生成完了！ 🎉',
     statusInProgressTitle: '画像生成パイプライン進行中... ⚡️',
+    videoStatusInProgressTitle: '動画生成パイプライン進行中... ⚡️',
     statusErrorDetail: '処理の途中でエラーが発生しました',
     statusSuccessDetail: 'すべての処理が正常に完了しました',
     statusInProgressDetail: 'バックエンドでタスクを実行しています',

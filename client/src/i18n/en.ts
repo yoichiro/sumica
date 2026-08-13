@@ -101,6 +101,7 @@ export const en: typeof ja = {
     statusErrorTitle: 'Generation error ❌',
     statusSuccessTitle: 'Generation complete! 🎉',
     statusInProgressTitle: 'Image generation pipeline in progress... ⚡️',
+    videoStatusInProgressTitle: 'Video generation pipeline in progress... ⚡️',
     statusErrorDetail: 'An error occurred during processing',
     statusSuccessDetail: 'All processing completed successfully',
     statusInProgressDetail: 'Running the task on the backend',
