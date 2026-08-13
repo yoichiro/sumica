@@ -274,7 +274,8 @@ export function HistoryGallery({
               type="button"
               onClick={() => onSetGalleryFilters({ ...galleryFilters, mediaType: mt, parentId: mt === 'image' ? null : galleryFilters.parentId })}
               style={{
-                padding: '6px 12px',
+                flex: 1,
+                padding: '8px',
                 borderRadius: '8px',
                 border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
                 background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
