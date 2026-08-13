@@ -84,7 +84,7 @@ export function mutateWorkflow(workflow: WorkflowJson, args: MutateArgs): Workfl
   return clone;
 }
 
-const comfyBase = () => process.env.COMFYUI_URL || 'http://127.0.0.1:8188';
+export const comfyBase = () => process.env.COMFYUI_URL || 'http://127.0.0.1:8188';
 const wsBase = () => comfyBase().replace(/^http/, 'ws');
 
 export async function loadBundledWorkflow(): Promise<WorkflowJson> {

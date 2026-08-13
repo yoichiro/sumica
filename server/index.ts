@@ -11,6 +11,7 @@ import {
   fetchVideo,
   extractPoster,
   CancelledError,
+  comfyBase,
   type MutateArgs,
   type WsEvent,
 } from './comfyui.js';
@@ -375,6 +376,18 @@ async function checkLmStudio(): Promise<{ connected: boolean; model: string | nu
 async function checkStableDiffusion(): Promise<{ connected: boolean; error: string | null }> {
   try {
     await axios.get(`${stableDiffusionUrl}/sdapi/v1/sd-models`, { timeout: 4000 });
+    return { connected: true, error: null };
+  } catch (error) {
+    return { connected: false, error: (error as Error).message };
+  }
+}
+
+// Helper: reachability check for ComfyUI (used by the video-generation pipeline).
+// `/system_stats` is a no-side-effect GET that returns 200 whenever the server
+// is up, so it doubles as a health probe without touching the prompt queue.
+async function checkComfyui(): Promise<{ connected: boolean; error: string | null }> {
+  try {
+    await axios.get(`${comfyBase()}/system_stats`, { timeout: 4000 });
     return { connected: true, error: null };
   } catch (error) {
     return { connected: false, error: (error as Error).message };
@@ -926,11 +939,12 @@ app.get('/api/status', (_req: Request, res: Response) => {
 // 4. Connection health check for upstream services (LM Studio + Stable Diffusion).
 // Always responds 200 with per-service flags so the client can branch on the result.
 app.get('/api/health', async (_req: Request, res: Response) => {
-  const [lmStudio, stableDiffusion] = await Promise.all([
+  const [lmStudio, stableDiffusion, comfyui] = await Promise.all([
     checkLmStudio(),
     checkStableDiffusion(),
+    checkComfyui(),
   ]);
-  res.json({ lmStudio, stableDiffusion });
+  res.json({ lmStudio, stableDiffusion, comfyui });
 });
 
 // 6. List Stable Diffusion checkpoints, tagged with their architecture, and the
