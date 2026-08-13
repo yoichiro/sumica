@@ -473,9 +473,18 @@ function App() {
         fetchRollups(); // server updated rankingRollups.json as part of the delete request
       }
       setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedSet.has(id))));
-      // Clear the preview if the image it shows was just deleted.
-      if (currentGeneration && deletedSet.has(itemKey(currentGeneration))) {
+      // Clear both preview slots if the item they show was just deleted —
+      // either directly, or cascade-deleted as a video child of a parent
+      // image the user removed. Both `currentGeneration` (image preview or
+      // recalled video) and `latestResult` (freshly generated video) can
+      // hold the disappearing record.
+      const clearedByDelete = (item: GenerationData | null): boolean =>
+        !!item && (deletedSet.has(itemKey(item)) || (typeof item.parentId === 'string' && deletedSet.has(item.parentId)));
+      if (clearedByDelete(currentGeneration)) {
         setCurrentGeneration(null);
+      }
+      if (clearedByDelete(latestResult)) {
+        setLatestResult(null);
       }
       // closeConfirm also resets deleteTargetIds after the exit animation.
       closeConfirm();
