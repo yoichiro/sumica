@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { isFirebaseConfigured, onAuth, saveGeneration, saveVideoGeneration, subscribeGenerations, subscribeFavorites, subscribeVideoParentIndex, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
 import { collectVideoParentCounts } from './utils/videoParentIndex';
 import { resolveVideoSeed } from './utils/videoSeed';
+import { createInitialVideoProgress, estimateComfyFractionByTime, loadLastComfyDurationSeconds, saveLastComfyDurationSeconds, DEFAULT_EXPECTED_COMFY_SECONDS, type VideoProgressState } from './utils/videoProgress';
 import type { RankingRollup, RankedRecipe } from './utils/rankingAnalysis';
 import { ToastContainer, type Toast } from './components/ToastContainer';
 import { AppHeader, type HealthStatus } from './components/AppHeader';
@@ -863,6 +864,15 @@ function App() {
   // Raw SSE `stage` id from the most recent `event: progress` frame — consumed
   // by PreviewPanel's videoStageLabel() mapping.
   const [videoProgressStage, setVideoProgressStage] = useState('');
+  // Fine-grained progress accumulated from ComfyUI's raw WS events forwarded
+  // over SSE (executing → currentNode, progress → stepValue/stepMax). Null
+  // outside a video-generation run. Used for the per-node label/step counter;
+  // the pipeline-wide bar is time-based via videoComfyElapsedSeconds below.
+  const [videoProgress, setVideoProgress] = useState<VideoProgressState | null>(null);
+  // Wall-clock elapsed seconds since the comfy stage started (0 until the
+  // pipeline actually enters ComfyUI). Feeds the time-based comfy fraction
+  // that draws the pipeline-wide progress bar smoothly.
+  const [videoComfyElapsedSeconds, setVideoComfyElapsedSeconds] = useState(0);
   // The most recent successful generation from either pipeline (image or
   // video), surfaced in PreviewPanel's top preview stage — it takes priority
   // over currentGeneration there whenever it holds a completed video.
@@ -2019,6 +2029,23 @@ function App() {
     setLatestResult(null);
     setGenStatus('generating');
     setVideoProgressStage('preparing');
+    setVideoProgress(null);
+
+    // Live elapsed-seconds counter — mirrors runWithProgressTracking's
+    // pattern so the shared "経過 X 秒" chip in PreviewPanel is animated
+    // for video generation too (was frozen at 0 before).
+    const videoStartTime = Date.now();
+    // Set to a positive value once the pipeline reports its first `comfy`
+    // stage — used as the anchor for the time-based comfy fraction below.
+    let comfyStartTime: number | null = null;
+    setElapsedSeconds(0);
+    setVideoComfyElapsedSeconds(0);
+    const videoElapsedTimer = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - videoStartTime) / 1000));
+      if (comfyStartTime !== null) {
+        setVideoComfyElapsedSeconds(Math.floor((Date.now() - comfyStartTime) / 1000));
+      }
+    }, 1000);
 
     const abortController = new AbortController();
     videoAbortRef.current = abortController;
@@ -2081,6 +2108,36 @@ function App() {
 
           if (eventName === 'progress') {
             setVideoProgressStage(dataJson.stage ?? '');
+            // Anchor the time-based comfy fraction the first time we see
+            // the pipeline enter ComfyUI. Everything before this stage
+            // (upload/submit) is punctual and already advances the bar
+            // via computeOverallProgress.
+            if (dataJson.stage === 'comfy' && comfyStartTime === null) {
+              comfyStartTime = Date.now();
+            }
+            // Server forwards ComfyUI's raw WS events as { stage: 'comfy',
+            // evt: WsEvent }. We accumulate them here so PreviewPanel can
+            // show the current node + N/M step counter next to the label.
+            // The bar itself is driven by wall-clock time, not this state.
+            if (dataJson.stage === 'comfy' && dataJson.evt) {
+              const evt = dataJson.evt as { type: string; data?: { node?: string | null; value?: number; max?: number } };
+              setVideoProgress((prev) => {
+                const next = prev ?? createInitialVideoProgress();
+                if (evt.type === 'executing') {
+                  // Only the label/step display needs the active node; the
+                  // pipeline-wide bar is time-based and doesn't count nodes.
+                  return { ...next, currentNode: evt.data?.node ?? null, stepValue: 0, stepMax: 0 };
+                }
+                if (evt.type === 'progress') {
+                  return {
+                    ...next,
+                    stepValue: evt.data?.value ?? next.stepValue,
+                    stepMax: evt.data?.max ?? next.stepMax,
+                  };
+                }
+                return next;
+              });
+            }
           } else if (eventName === 'complete') {
             // Signed-in: dataJson carries { videoBase64, posterBase64?, ltxParams } —
             // the client uploads the bytes to Firebase Storage itself.
@@ -2103,6 +2160,11 @@ function App() {
               fetchRollups();
             }
             setGenStatus('success');
+            // Persist how long this run's comfy stage took so the next run's
+            // progress bar can crawl at the right pace from the very start.
+            if (comfyStartTime !== null) {
+              saveLastComfyDurationSeconds((Date.now() - comfyStartTime) / 1000);
+            }
             addToast(t.toast.videoGenerateSuccess, 'success');
           } else if (eventName === 'error') {
             if (dataJson.cancelled) {
@@ -2123,6 +2185,10 @@ function App() {
         setGenStatus('idle');
       }
     } finally {
+      clearInterval(videoElapsedTimer);
+      setElapsedSeconds(0);
+      setVideoComfyElapsedSeconds(0);
+      setVideoProgress(null);
       setVideoLoading(false);
       videoAbortRef.current = null;
     }
@@ -2334,6 +2400,12 @@ function App() {
               latestResult={latestResult}
               currentMediaType={videoMode ? 'video' : 'image'}
               videoProgressStage={videoProgressStage}
+              videoProgressComfyFraction={estimateComfyFractionByTime(
+                videoComfyElapsedSeconds,
+                loadLastComfyDurationSeconds() ?? DEFAULT_EXPECTED_COMFY_SECONDS,
+              )}
+              videoProgressNode={videoProgress?.currentNode ?? null}
+              videoProgressStep={videoProgress ? { value: videoProgress.stepValue, max: videoProgress.stepMax } : null}
             />
           )}
 

@@ -1,6 +1,7 @@
 import { Image as ImageIcon, Cloud, Folder, Trash2, Sparkles, CheckCircle2, Circle, AlertTriangle, Star, RotateCcw } from 'lucide-react';
 import type { GenerationData } from '../App';
 import { t } from '../i18n';
+import { computeOverallProgress, estimateRemainingSeconds } from '../utils/videoProgress';
 
 export type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
 
@@ -129,6 +130,15 @@ interface PreviewPanelProps {
   // video generation (see server's /api/video/generate). Mapped to a label
   // via videoStageLabel() below. Empty string before the first progress event.
   videoProgressStage: string;
+  // ComfyUI-only progress ∈ [0, 1] from the per-node events. The
+  // pipeline-wide bar is computed here via computeOverallProgress that
+  // weights this against the pre/post-Comfy stages.
+  videoProgressComfyFraction: number;
+  // ComfyUI node id currently executing, null between nodes or outside a run.
+  videoProgressNode: string | null;
+  // Sampler step counter within the current node (value / max).
+  // null when no step-level event has arrived yet.
+  videoProgressStep: { value: number; max: number } | null;
 }
 
 // Maps a raw ComfyUI/SSE stage id — as sent by the server's
@@ -180,6 +190,9 @@ export function PreviewPanel({
   latestResult,
   currentMediaType,
   videoProgressStage,
+  videoProgressComfyFraction,
+  videoProgressNode,
+  videoProgressStep,
 }: PreviewPanelProps) {
   // The video branch below can be entered from either source: latestResult
   // (a just-completed generation from handleVideoGenerate) or currentGeneration
@@ -595,8 +608,22 @@ export function PreviewPanel({
               {/* Elapsed/remaining time — sits right next to (to the left of) the
                   steps sequence. Both this row and the stop button above render
                   only during 'generating', so the steps row's own height never
-                  changes when a generation starts/stops. */}
-              {genStatus === 'generating' && (
+                  changes when a generation starts/stops. Video mode shows a
+                  pipeline-wide remaining estimate; image mode shows SD's own
+                  ETA proxy since it's more accurate for a single sampler run. */}
+              {genStatus === 'generating' && currentMediaType === 'video' && (() => {
+                const overall = computeOverallProgress(videoProgressStage, videoProgressComfyFraction);
+                const remaining = estimateRemainingSeconds(elapsedSeconds, overall);
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    <span>
+                      {t.preview.elapsedLabel(formatDuration(elapsedSeconds))}
+                      {remaining !== null ? t.preview.remainingLabel(formatDuration(remaining)) : ''}
+                    </span>
+                  </div>
+                );
+              })()}
+              {genStatus === 'generating' && currentMediaType !== 'video' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
                   <span>
                     {t.preview.elapsedLabel(formatDuration(elapsedSeconds))}
@@ -618,13 +645,34 @@ export function PreviewPanel({
             {/* Steps: the image pipeline's 3-node flow, or the video pipeline's
                 single current-stage label (ComfyUI's flow isn't naturally
                 discretized into fixed numbered steps like the image path). */}
-            {currentMediaType === 'video' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: genStatus === 'error' ? 'var(--danger)' : 'var(--text-primary)', fontWeight: '700' }}>
-                <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>
-                  {videoStageLabel(videoProgressStage)}
-                </span>
-              </div>
-            ) : (
+            {currentMediaType === 'video' ? (() => {
+              const overall = computeOverallProgress(videoProgressStage, videoProgressComfyFraction);
+              const pct = Math.round(overall * 100);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start', minWidth: '240px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: genStatus === 'error' ? 'var(--danger)' : 'var(--text-primary)', fontWeight: '700' }}>
+                    <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>
+                      {videoStageLabel(videoProgressStage)}
+                      {videoProgressNode ? ` · Node ${videoProgressNode}` : ''}
+                      {videoProgressStep && videoProgressStep.max > 0 ? ` (${videoProgressStep.value}/${videoProgressStep.max})` : ''}
+                    </span>
+                    {genStatus === 'generating' && (
+                      <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>{pct}%</span>
+                    )}
+                  </div>
+                  {genStatus === 'generating' && (
+                    <div style={{ width: '240px', height: '4px', borderRadius: '2px', background: 'var(--panel-border)', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${pct}%`,
+                        height: '100%',
+                        background: 'var(--pop-blue)',
+                        transition: 'width 0.3s ease',
+                      }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })() : (
             <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
                 <div style={{
