@@ -534,7 +534,7 @@ function App() {
         // If exiting fails for some reason, fall through — the close still needs to happen.
       }
     }
-    setShowLightboxInfo(true); // next open always starts with info visible
+    setShowLightboxInfo(false); // next open always starts with info hidden — users toggle it back with the Info button
     const start = (document as DocumentWithViewTransition).startViewTransition;
     if (!start) {
       setLightboxUrl(null);
@@ -638,7 +638,7 @@ function App() {
   // hiding it every time forces an extra click); toggled by the Info button in
   // the top toolbar; kept across left/right navigation within the same open
   // lightbox session.
-  const [showLightboxInfo, setShowLightboxInfo] = useState(true);
+  const [showLightboxInfo, setShowLightboxInfo] = useState(false);
 
   // Index of the lightbox image within the displayed gallery order (-1 if not listed),
   // used to disable the prev/next buttons at the ends.
