@@ -716,9 +716,15 @@ function App() {
     const parent = displayedHistory.find((r) => r.id === parentId)
       ?? history.find((r) => r.id === parentId);
     if (!parent) return;
-    closeLightbox();
-    // Give React a tick to re-render the closed lightbox before reopening with a new image.
-    setTimeout(() => openLightbox(parent.imageUrl, itemKey(parent)), 0);
+    // Swap the lightbox source atomically instead of closeLightbox() +
+    // setTimeout openLightbox(). The former racked the async View
+    // Transition of the close with the reopen — `lightboxUrl` moved to
+    // the parent's PNG but the derived `lightboxMeta` sometimes stayed on
+    // the video record for a frame, and `<video src={meta.videoUrl ?? url}>`
+    // kept the old video visible (looked like a "video reload"). Calling
+    // openLightbox directly updates both `lightboxUrl` and `morphSourceKey`
+    // in one transition, so the meta re-derives on the same render.
+    openLightbox(parent.imageUrl, itemKey(parent));
   };
 
   // Track the last valid lightboxIndex so we can recover the "next" item if
