@@ -14,6 +14,7 @@ export const ja = {
     serviceDisconnected: (label: string) => `${label} 未接続`,
     lmStudioLabel: 'LM Studio',
     sdLabel: 'SD',
+    comfyuiLabel: 'ComfyUI',
     notifyEnable: '通知を有効化',
     notifyDisable: '通知を無効化',
   },

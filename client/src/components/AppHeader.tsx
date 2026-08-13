@@ -5,6 +5,7 @@ import { t } from '../i18n';
 export interface HealthStatus {
   lmStudio: { connected: boolean; model: string | null; error: string | null };
   stableDiffusion: { connected: boolean; error: string | null };
+  comfyui: { connected: boolean; error: string | null };
 }
 
 // Top-right connection indicator for a single upstream service.
@@ -140,12 +141,13 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
 
           <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
 
-          {/* LM Studio Status (live health check) */}
+          {/* LM Studio Status (live health check). Model name is intentionally
+              not surfaced here — the header row has three services now, so a
+              per-service detail line would blow out the horizontal budget. */}
           <ServiceStatusBadge
             label={t.header.lmStudioLabel}
             checking={healthChecking && !health}
             connected={!!health?.lmStudio.connected}
-            detail={health?.lmStudio.model}
           />
 
           <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
@@ -155,6 +157,15 @@ export function AppHeader({ user, cloudActive, health, healthChecking, onSignInE
             label={t.header.sdLabel}
             checking={healthChecking && !health}
             connected={!!health?.stableDiffusion.connected}
+          />
+
+          <div style={{ width: '2px', height: '12px', background: 'var(--panel-border)' }}></div>
+
+          {/* ComfyUI Status (video generation) */}
+          <ServiceStatusBadge
+            label={t.header.comfyuiLabel}
+            checking={healthChecking && !health}
+            connected={!!health?.comfyui.connected}
           />
         </div>
       </div>

@@ -16,6 +16,7 @@ export const en: typeof ja = {
     serviceDisconnected: (label) => `${label} not connected`,
     lmStudioLabel: 'LM Studio',
     sdLabel: 'SD',
+    comfyuiLabel: 'ComfyUI',
     notifyEnable: 'Enable notifications',
     notifyDisable: 'Disable notifications',
   },
