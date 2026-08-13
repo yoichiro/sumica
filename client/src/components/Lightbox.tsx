@@ -109,6 +109,7 @@ export function Lightbox({
           controls
           playsInline
           loop
+          autoPlay
           onClick={(e) => e.stopPropagation()}
           style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
         />
