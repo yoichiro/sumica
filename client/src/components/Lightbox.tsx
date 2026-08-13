@@ -108,6 +108,7 @@ export function Lightbox({
           poster={meta.posterUrl}
           controls
           playsInline
+          loop
           onClick={(e) => e.stopPropagation()}
           style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
         />

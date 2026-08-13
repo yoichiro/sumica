@@ -231,6 +231,7 @@ export function PreviewPanel({
                 poster={videoItem.posterUrl}
                 controls
                 playsInline
+                loop
                 // HTML width/height attrs seed the intrinsic size before
                 // metadata loads (default is 300x150 otherwise).
                 width={videoItem.width}
