@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Cloud, Folder, Trash2, Sparkles, CheckCircle2, Circle, AlertTriangle, Star, RotateCcw } from 'lucide-react';
+import { Image as ImageIcon, Cloud, Folder, Trash2, Sparkles, CheckCircle2, Circle, AlertTriangle, Star, RotateCcw, Video, Film } from 'lucide-react';
 import type { GenerationData } from '../App';
 import { t } from '../i18n';
 import { computeOverallProgress, estimateRemainingSeconds } from '../utils/videoProgress';
@@ -114,6 +114,12 @@ interface PreviewPanelProps {
   onToggleSelect: (item: GenerationData) => void;
   onLoadIntoForm: (item: GenerationData) => void;
   onRequestDelete: (ids: string[]) => void;
+  // Image branch only: seed the video form with the current image and
+  // switch to video mode. onOpenChildVideos jumps to the gallery filtered
+  // to this image's children — only rendered when childVideoCount > 0.
+  onOpenVideoForm: (item: GenerationData) => void;
+  onOpenChildVideos: (imageId: string) => void;
+  childVideoCount: number;
   itemKey: (item: GenerationData) => string;
   onCancel: () => void;
   // The most recent successful generation from EITHER pipeline (image or
@@ -185,6 +191,9 @@ export function PreviewPanel({
   onToggleSelect,
   onLoadIntoForm,
   onRequestDelete,
+  onOpenVideoForm,
+  onOpenChildVideos,
+  childVideoCount,
   itemKey,
   onCancel,
   latestResult,
@@ -281,7 +290,7 @@ export function PreviewPanel({
                   type="button"
                   onClick={() => onRequestDelete([itemKey(videoItem)])}
                   className="scale-hover"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   <Trash2 size={15} /> {t.preview.deleteButton}
                 </button>
@@ -384,21 +393,41 @@ export function PreviewPanel({
 
             {/* Prompt Info column: fixed toolbar on top, scrollable detail below */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left', maxHeight: '48vh', minHeight: 0 }}>
-              {/* Toolbar — always visible */}
-              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+              {/* Toolbar — always visible. flex-wrap lets the row spill onto
+                  a second line on narrow panels so the delete button never
+                  gets pushed off-screen when the video buttons appear. */}
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => onLoadIntoForm(currentGeneration)}
                   className="scale-hover"
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                  style={{ flex: '1 1 140px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   <RotateCcw size={15} /> {t.preview.loadIntoFormButton}
                 </button>
                 <button
                   type="button"
+                  onClick={() => onOpenVideoForm(currentGeneration)}
+                  className="scale-hover"
+                  style={{ flex: '1 1 120px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  <Video size={15} /> {t.preview.loadIntoVideoFormButton}
+                </button>
+                {childVideoCount > 0 && currentGeneration.id && (
+                  <button
+                    type="button"
+                    onClick={() => currentGeneration.id && onOpenChildVideos(currentGeneration.id)}
+                    className="scale-hover"
+                    style={{ flex: '1 1 120px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    <Film size={15} /> {t.preview.viewChildVideosButton}
+                  </button>
+                )}
+                <button
+                  type="button"
                   onClick={() => onRequestDelete([itemKey(currentGeneration)])}
                   className="scale-hover"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255, 107, 107, 0.08)', border: '2px solid rgba(255, 107, 107, 0.25)', color: 'var(--danger)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   <Trash2 size={15} /> {t.preview.deleteButton}
                 </button>

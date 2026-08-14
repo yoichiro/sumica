@@ -682,18 +682,19 @@ function App() {
   // image as the video source, switch ControlPanel into Video mode (inheriting
   // the source's dimensions as sensible defaults), and close the lightbox so
   // the user immediately sees the video form.
-  const handleOpenVideoForm = () => {
-    const current = lightboxMeta;
-    if (!current) return;
-    setVideoSourceImage(current);
+  const handleOpenVideoForm = (item: GenerationData) => {
+    setVideoSourceImage(item);
     setVideoMode(true);
     // Inherit the ACTUAL image dimensions, not the pre-Hires base resolution.
     // `record.width/height` is the SD payload's base; when enableHr is on, the
     // saved PNG is hrScale× larger — so the video must default to the same
     // dimensions the user actually sees, not the 512-ish base they typed.
-    const scale = (current.enableHr && current.hrScale) ? current.hrScale : 1;
-    setVideoWidth(Math.round(current.width * scale));
-    setVideoHeight(Math.round(current.height * scale));
+    const scale = (item.enableHr && item.hrScale) ? item.hrScale : 1;
+    setVideoWidth(Math.round(item.width * scale));
+    setVideoHeight(Math.round(item.height * scale));
+    // If invoked from the Lightbox, close it so the video form is visible.
+    // (Best-effort — the lightbox may already be closed when called from
+    // the main preview panel, in which case setLightboxUrl(null) is a no-op.)
     closeLightbox();
     switchControlTab('form');
   };
@@ -2445,6 +2446,9 @@ function App() {
               )}
               videoProgressNode={videoProgress?.currentNode ?? null}
               videoProgressStep={videoProgress ? { value: videoProgress.stepValue, max: videoProgress.stepMax } : null}
+              onOpenVideoForm={handleOpenVideoForm}
+              onOpenChildVideos={handleOpenChildVideos}
+              childVideoCount={currentGeneration?.id ? (effectiveVideoParentCounts.get(currentGeneration.id) ?? 0) : 0}
             />
           )}
 
@@ -2511,7 +2515,7 @@ function App() {
         onDownload={() => { if (lightboxMeta) handleDownload(lightboxMeta); }}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
-        onOpenVideoForm={handleOpenVideoForm}
+        onOpenVideoForm={() => { if (lightboxMeta) handleOpenVideoForm(lightboxMeta); }}
         onOpenChildVideos={handleOpenChildVideos}
         onOpenParentImage={handleOpenParentImage}
         childVideoCount={lightboxChildVideoCount}
