@@ -699,6 +699,42 @@ function App() {
     switchControlTab('form');
   };
 
+  // Preview panel's video-branch "動画を生成" — reload every knob that
+  // produced `videoRecord` (parent image, LTX params, resolution) so the
+  // user can regenerate the exact same run (or tweak it and try again).
+  // Falls back to a Firestore fetch when the parent image is outside the
+  // date-scoped subscription window, mirroring handleOpenParentImage.
+  const handleReloadVideoRun = async (videoRecord: GenerationData) => {
+    if (!videoRecord.parentId) return;
+    let parent: GenerationData | undefined =
+      displayedHistory.find((r) => r.id === videoRecord.parentId)
+        ?? history.find((r) => r.id === videoRecord.parentId);
+    if (!parent && user) {
+      const fetched = await fetchGenerationById(user.uid, videoRecord.parentId);
+      if (fetched) parent = fetched as unknown as GenerationData;
+    }
+    if (!parent) return;
+    setVideoSourceImage(parent);
+    setVideoMode(true);
+    // Prefer the video record's own dimensions — they already reflect the
+    // Hires-scaled resolution used at generation time — over deriving from
+    // the parent again.
+    setVideoWidth(videoRecord.width);
+    setVideoHeight(videoRecord.height);
+    // Restore every LTX knob so the run is fully reproducible.
+    const ltx = videoRecord.ltxParams;
+    if (ltx) {
+      setVideoFidelity(ltx.fidelity);
+      setVideoMotion(ltx.motion);
+      setVideoIdentity(ltx.identity);
+      setVideoLength(ltx.length);
+      setVideoPositivePrompt(ltx.positivePrompt);
+      setVideoNegativePrompt(ltx.negativePrompt);
+    }
+    closeLightbox();
+    switchControlTab('form');
+  };
+
   // Called by the Lightbox's 📼 動画一覧 button: switch the gallery to the
   // Video tab filtered down to this image's children, switch to the gallery
   // right-column tab so the result is actually visible, then close the lightbox.
@@ -2449,6 +2485,8 @@ function App() {
               onOpenVideoForm={handleOpenVideoForm}
               onOpenChildVideos={handleOpenChildVideos}
               childVideoCount={currentGeneration?.id ? (effectiveVideoParentCounts.get(currentGeneration.id) ?? 0) : 0}
+              onOpenParentImage={handleOpenParentImage}
+              onReloadVideoRun={handleReloadVideoRun}
             />
           )}
 

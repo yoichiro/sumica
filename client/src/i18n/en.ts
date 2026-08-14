@@ -89,6 +89,7 @@ export const en: typeof ja = {
     loadIntoFormButton: 'Load into image form',
     loadIntoVideoFormButton: 'Generate video',
     viewChildVideosButton: 'View videos',
+    viewParentImageButton: 'View source image',
     deleteButton: 'Delete',
     originalPromptLabel: 'Original prompt',
     detailResolutionLabel: 'Resolution: ',

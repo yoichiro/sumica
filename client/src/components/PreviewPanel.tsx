@@ -120,6 +120,12 @@ interface PreviewPanelProps {
   onOpenVideoForm: (item: GenerationData) => void;
   onOpenChildVideos: (imageId: string) => void;
   childVideoCount: number;
+  // Video branch only: 元画像を表示 recalls the source image into the main
+  // preview; 動画を生成 reloads every knob (parent image + LTX params) so
+  // the same run can be regenerated. Both handlers reuse App.tsx logic
+  // that already backs the Lightbox equivalents.
+  onOpenParentImage: (parentId: string) => void;
+  onReloadVideoRun: (video: GenerationData) => void;
   itemKey: (item: GenerationData) => string;
   onCancel: () => void;
   // The most recent successful generation from EITHER pipeline (image or
@@ -194,6 +200,8 @@ export function PreviewPanel({
   onOpenVideoForm,
   onOpenChildVideos,
   childVideoCount,
+  onOpenParentImage,
+  onReloadVideoRun,
   itemKey,
   onCancel,
   latestResult,
@@ -277,14 +285,30 @@ export function PreviewPanel({
 
             {/* Info column: toolbar + LTX params, mirroring the image branch's layout */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left', maxHeight: '48vh', minHeight: 0 }}>
-              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+              {/* Video toolbar. 画像フォームにロード is intentionally omitted
+                  here — a video record's SD-side fields are inherited from
+                  the parent image and don't describe the video itself, so
+                  reusing them in the image form is misleading. Instead we
+                  offer 元画像を表示 (recall parent) + 動画を生成 (reload
+                  the exact run into the video form). */}
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+                {videoItem.parentId && (
+                  <button
+                    type="button"
+                    onClick={() => videoItem.parentId && onOpenParentImage(videoItem.parentId)}
+                    className="scale-hover"
+                    style={{ flex: '1 1 140px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    <ImageIcon size={15} /> {t.preview.viewParentImageButton}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => onLoadIntoForm(videoItem)}
+                  onClick={() => onReloadVideoRun(videoItem)}
                   className="scale-hover"
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                  style={{ flex: '1 1 120px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(51, 154, 240, 0.08)', border: '2px solid rgba(51, 154, 240, 0.2)', color: 'var(--pop-blue)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
-                  <RotateCcw size={15} /> {t.preview.loadIntoFormButton}
+                  <Video size={15} /> {t.preview.loadIntoVideoFormButton}
                 </button>
                 <button
                   type="button"

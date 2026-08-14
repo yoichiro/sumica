@@ -87,6 +87,7 @@ export const ja = {
     loadIntoFormButton: '画像フォームにロード',
     loadIntoVideoFormButton: '動画を生成',
     viewChildVideosButton: '動画を表示',
+    viewParentImageButton: '元画像を表示',
     deleteButton: '削除',
     originalPromptLabel: '元プロンプト',
     detailResolutionLabel: '解像度: ',
