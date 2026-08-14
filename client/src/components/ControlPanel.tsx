@@ -1091,14 +1091,15 @@ export function ControlPanel(p: ControlPanelProps) {
           </div>
 
           {/* Numeric mxSlider inputs */}
+          {/* Width / Height / Length stay as numeric inputs — they're
+              typically edited via the aspect-ratio picker rather than
+              scrubbed. Fidelity / Motion / Identity are subjective quality
+              knobs (no "true" value) so a slider communicates that better. */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             {[
               ['videoWidthLabel', p.videoWidth, p.setVideoWidth, 1] as const,
               ['videoHeightLabel', p.videoHeight, p.setVideoHeight, 1] as const,
               ['videoLengthLabel', p.videoLength, p.setVideoLength, 1] as const,
-              ['videoFidelityLabel', p.videoFidelity, p.setVideoFidelity, 0.1] as const,
-              ['videoMotionLabel', p.videoMotion, p.setVideoMotion, 1] as const,
-              ['videoIdentityLabel', p.videoIdentity, p.setVideoIdentity, 0.1] as const,
             ].map(([labelKey, value, setter, step]) => (
               <div key={labelKey} style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                 <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
@@ -1112,6 +1113,40 @@ export function ControlPanel(p: ControlPanelProps) {
                   onChange={(e) => setter(parseFloat(e.target.value) || 0)}
                   disabled={p.videoLoading}
                   style={{ borderRadius: '8px' }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Sliders for the three subjective knobs. Ranges come from the
+              i2v.json workflow defaults + typical IP-Adapter/FaceID
+              practice: Fidelity 0-2 (default 1.0), Motion 0-100
+              (default 35), Identity 0-1.5 (default 1.0). See docs for the
+              rationale; the caller stores whatever the slider produces. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {[
+              ['videoFidelityLabel', p.videoFidelity, p.setVideoFidelity, 0, 2, 0.1] as const,
+              ['videoMotionLabel', p.videoMotion, p.setVideoMotion, 0, 100, 1] as const,
+              ['videoIdentityLabel', p.videoIdentity, p.setVideoIdentity, 0, 1.5, 0.1] as const,
+            ].map(([labelKey, value, setter, min, max, step]) => (
+              <div key={labelKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
+                  <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                    {t.controlPanel[labelKey as keyof typeof t.controlPanel] as string}
+                  </label>
+                  <span style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: '800', fontVariantNumeric: 'tabular-nums' }}>
+                    {step < 1 ? value.toFixed(1) : value}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={min}
+                  max={max}
+                  step={step}
+                  value={value}
+                  onChange={(e) => setter(parseFloat(e.target.value) || 0)}
+                  disabled={p.videoLoading}
+                  style={{ width: '100%', cursor: p.videoLoading ? 'default' : 'pointer' }}
                 />
               </div>
             ))}
