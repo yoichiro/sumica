@@ -72,7 +72,7 @@ export const ja = {
     videoNegativePromptLabel: '❌ 動画ネガティブプロンプト',
     videoWidthLabel: '動画の幅 (px)',
     videoHeightLabel: '動画の高さ (px)',
-    videoLengthLabel: '長さ (フレーム、24fps = 秒 × 24)',
+    videoLengthLabel: '長さ (秒)',
     videoFidelityLabel: '入力画像への忠実度',
     videoMotionLabel: '動きの強さ',
     videoIdentityLabel: '顔の一致度',

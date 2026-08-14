@@ -74,7 +74,7 @@ export const en: typeof ja = {
     videoNegativePromptLabel: '❌ Video negative prompt',
     videoWidthLabel: 'Video width (px)',
     videoHeightLabel: 'Video height (px)',
-    videoLengthLabel: 'Length (frames, 24 fps = seconds × 24)',
+    videoLengthLabel: 'Length (seconds)',
     videoFidelityLabel: 'Fidelity to input image',
     videoMotionLabel: 'Motion strength',
     videoIdentityLabel: 'Face identity strength',

@@ -1091,15 +1091,12 @@ export function ControlPanel(p: ControlPanelProps) {
           </div>
 
           {/* Numeric mxSlider inputs */}
-          {/* Width / Height / Length stay as numeric inputs — they're
-              typically edited via the aspect-ratio picker rather than
-              scrubbed. Fidelity / Motion / Identity are subjective quality
-              knobs (no "true" value) so a slider communicates that better. */}
+          {/* Width / Height stay as numeric inputs — they're typically
+              edited via the aspect-ratio picker rather than scrubbed. */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             {[
               ['videoWidthLabel', p.videoWidth, p.setVideoWidth, 1] as const,
               ['videoHeightLabel', p.videoHeight, p.setVideoHeight, 1] as const,
-              ['videoLengthLabel', p.videoLength, p.setVideoLength, 1] as const,
             ].map(([labelKey, value, setter, step]) => (
               <div key={labelKey} style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                 <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
@@ -1116,6 +1113,32 @@ export function ControlPanel(p: ControlPanelProps) {
                 />
               </div>
             ))}
+          </div>
+
+          {/* Length slider — state stays in frames (the workflow's native
+              unit; see server/workflows/i2v.json node 796), but the UI
+              communicates seconds because that's how the user plans a clip.
+              LTX-Video is wired to 24 fps, so 1 second = 24 frames.
+              Range 1-15 s with 1 s (24 f) step. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                {t.controlPanel.videoLengthLabel}
+              </label>
+              <span style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: '800', fontVariantNumeric: 'tabular-nums' }}>
+                {(p.videoLength / 24).toFixed(0)}s
+              </span>
+            </div>
+            <input
+              type="range"
+              min={24}
+              max={360}
+              step={24}
+              value={p.videoLength}
+              onChange={(e) => p.setVideoLength(parseInt(e.target.value, 10) || 0)}
+              disabled={p.videoLoading}
+              style={{ width: '100%', cursor: p.videoLoading ? 'default' : 'pointer' }}
+            />
           </div>
 
           {/* Sliders for the three subjective knobs. Ranges come from the
