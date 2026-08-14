@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { isFirebaseConfigured, onAuth, saveGeneration, saveVideoGeneration, subscribeGenerations, subscribeFavorites, subscribeVideoParentIndex, updateFavorite, deleteGenerations, subscribeRankingRollups, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
+import { isFirebaseConfigured, onAuth, saveGeneration, saveVideoGeneration, subscribeGenerations, subscribeFavorites, subscribeVideoParentIndex, updateFavorite, deleteGenerations, subscribeRankingRollups, fetchGenerationById, type AuthUser, type GenerationRecord, type GenerationParams, type LtxParams } from './firebase';
 import { collectVideoParentCounts } from './utils/videoParentIndex';
 import { resolveVideoSeed } from './utils/videoSeed';
 import { createInitialVideoProgress, estimateComfyFractionByTime, loadLastComfyDurationSeconds, saveLastComfyDurationSeconds, DEFAULT_EXPECTED_COMFY_SECONDS, type VideoProgressState } from './utils/videoProgress';
@@ -712,19 +712,35 @@ function App() {
   // (respects the active gallery filters) and falls back to the raw `history`
   // list so this still works even when the parent image is hidden by the
   // current mediaType/date/favorites filters.
-  const handleOpenParentImage = (parentId: string) => {
-    const parent = displayedHistory.find((r) => r.id === parentId)
-      ?? history.find((r) => r.id === parentId);
+  const handleOpenParentImage = async (parentId: string) => {
+    // In-memory lookup first (matches the common case of the parent still
+    // being in view). `history` is authoritative when subscribed but is
+    // scoped to the currently-selected day, so a video and its parent
+    // image often live on different days — fall back to a direct
+    // Firestore fetch when signed in so that gap doesn't dead-end the
+    // 「元画像を見る」button.
+    let parent: GenerationData | undefined =
+      displayedHistory.find((r) => r.id === parentId)
+        ?? history.find((r) => r.id === parentId);
+    if (!parent && user) {
+      const fetched = await fetchGenerationById(user.uid, parentId);
+      if (fetched) parent = fetched as unknown as GenerationData;
+    }
     if (!parent) return;
-    // Swap the lightbox source atomically instead of closeLightbox() +
-    // setTimeout openLightbox(). The former racked the async View
-    // Transition of the close with the reopen — `lightboxUrl` moved to
-    // the parent's PNG but the derived `lightboxMeta` sometimes stayed on
-    // the video record for a frame, and `<video src={meta.videoUrl ?? url}>`
-    // kept the old video visible (looked like a "video reload"). Calling
-    // openLightbox directly updates both `lightboxUrl` and `morphSourceKey`
-    // in one transition, so the meta re-derives on the same render.
-    openLightbox(parent.imageUrl, itemKey(parent));
+    // Recall the parent image into the main preview...
+    openInPreview(parent);
+    // ...then dismiss the overlay. We inline the teardown instead of
+    // reusing closeLightbox() because the latter's startViewTransition
+    // tries to snapshot a video-side lightbox and a just-installed image
+    // preview at the same time, and the browser bails without invoking
+    // the callback — leaving `lightboxUrl` set and the overlay stuck.
+    // Exit OS fullscreen (if any), then clear the lightbox state directly.
+    if (document.fullscreenElement) {
+      try { await document.exitFullscreen(); } catch { /* best effort */ }
+    }
+    setShowLightboxInfo(false);
+    setLightboxUrl(null);
+    setMorphSourceKey(null);
   };
 
   // Track the last valid lightboxIndex so we can recover the "next" item if

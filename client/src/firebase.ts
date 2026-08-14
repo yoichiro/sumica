@@ -310,6 +310,24 @@ export async function saveVideoGeneration(uid: string, args: SaveVideoArgs): Pro
 
 // Subscribe to a user's generations. When `dateYMD` (local YYYY-MM-DD) is provided,
 // the query is narrowed server-side to that single local day's timestamp range, so
+// Fetch a single generation record by doc id. Useful when a Lightbox/preview
+// action needs a record that lives outside the currently-subscribed
+// date-scoped history (e.g. "元画像を見る" from a video whose parent image
+// was generated on a different day than the video itself). Returns null on
+// missing doc, permission failure, or when Firebase isn't configured.
+export async function fetchGenerationById(uid: string, id: string): Promise<GenerationRecord | null> {
+  if (!dbInstance) return null;
+  try {
+    const docRef = doc(dbInstance, `users/${uid}/generations/${id}`);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...(snap.data() as Omit<GenerationRecord, 'id'>) };
+  } catch (e) {
+    console.error('fetchGenerationById failed:', e);
+    return null;
+  }
+}
+
 // EVERY generation from that day is returned (no count cap) — matching the gallery's
 // date-filter UI. When `dateYMD` is null, falls back to the full collection (no limit).
 // Same field (`timestamp`) for where + orderBy → Firestore handles this with the
