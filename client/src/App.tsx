@@ -2174,6 +2174,13 @@ function App() {
               fetchHistory(); // signed-out history isn't a live subscription — refresh it
               fetchRollups();
             }
+            // Clear the SSE stage now that we're done — otherwise, if the
+            // loading UI is still on screen for any reason (transition
+            // between panels, latestResult not yet reflected), it would keep
+            // showing "保存中" long after saving finished. Image mode gets
+            // this for free because its step ticks flip to success on
+            // genStatus === 'success'.
+            setVideoProgressStage('');
             setGenStatus('success');
             // Persist how long this run's comfy stage took so the next run's
             // progress bar can crawl at the right pace from the very start.
@@ -2204,6 +2211,7 @@ function App() {
       setElapsedSeconds(0);
       setVideoComfyElapsedSeconds(0);
       setVideoProgress(null);
+      setVideoProgressStage('');
       setVideoLoading(false);
       videoAbortRef.current = null;
     }
