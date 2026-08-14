@@ -1048,7 +1048,7 @@ export function ControlPanel(p: ControlPanelProps) {
               {t.controlPanel.videoSourceLabel}
             </label>
             {p.videoSourceImage ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
                 <img
                   src={p.videoSourceImage.thumbnailUrl ?? p.videoSourceImage.imageUrl}
                   alt={t.controlPanel.videoSourceLabel}
