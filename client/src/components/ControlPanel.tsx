@@ -1119,7 +1119,8 @@ export function ControlPanel(p: ControlPanelProps) {
               unit; see server/workflows/i2v.json node 796), but the UI
               communicates seconds because that's how the user plans a clip.
               LTX-Video is wired to 24 fps, so 1 second = 24 frames.
-              Range 1-15 s with 1 s (24 f) step. */}
+              Range 1-20 s with 1 s (24 f) step. 20 s (480 f) is the
+              practical ceiling on a ~16 GB VRAM box; over that risks OOM. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
               <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
@@ -1132,7 +1133,7 @@ export function ControlPanel(p: ControlPanelProps) {
             <input
               type="range"
               min={24}
-              max={360}
+              max={480}
               step={24}
               value={p.videoLength}
               onChange={(e) => p.setVideoLength(parseInt(e.target.value, 10) || 0)}
