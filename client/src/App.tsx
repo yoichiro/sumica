@@ -1472,6 +1472,11 @@ function App() {
   // in loadIntoFormState.ts (which has full unit-test coverage). This function
   // only wires the resulting state into the React setState calls.
   const loadIntoForm = (item: GenerationData) => {
+    // Force the image control form to be visible — the user pressed
+    // 画像フォームにロード, so leaving the video form open would silently
+    // overwrite image state the user can't see. No-op when the image form
+    // is already active.
+    setVideoMode(false);
     setPrompt(item.originalPrompt);
     const s = computeLoadIntoFormState(item, sdModels);
     // Flip the SD/SDXL toggle to match the loaded image's architecture BEFORE
