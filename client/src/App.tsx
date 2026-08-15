@@ -881,9 +881,14 @@ function App() {
   // When the lightbox image is removed from displayedHistory (e.g. due to
   // unfavoriting in favoritesOnly mode), auto-advance to the item at the
   // previous index (clamped to the new list length), or close the lightbox
-  // if the list is now empty.
+  // if the list is now empty. Preview-mode lightbox targets are decoupled
+  // from displayedHistory on purpose — the preview may show an image that
+  // does not belong to the currently-filtered gallery (e.g. an image parent
+  // while the gallery is on the video tab). Skip this fallback in that case
+  // so it never overwrites the preview target with an unrelated gallery item.
   useEffect(() => {
     if (!lightboxUrl) return;
+    if (morphSourceKey === '__preview__') return;
     if (lightboxIndex >= 0) return; // current image still listed; nothing to do
     if (displayedHistory.length === 0) {
       closeLightbox();
@@ -897,7 +902,7 @@ function App() {
     const target = displayedHistory[targetIdx];
     setMorphSourceKey(itemKey(target));
     setLightboxUrl(target.imageUrl);
-  }, [displayedHistory, lightboxIndex, lightboxUrl]);
+  }, [displayedHistory, lightboxIndex, lightboxUrl, morphSourceKey]);
   type GenStatus = 'idle' | 'enhancing' | 'generating' | 'saving' | 'success' | 'error';
   const [genStatus, setGenStatus] = useState<GenStatus>('idle');
   const [errorStep, setErrorStep] = useState<number | null>(null);
@@ -1665,6 +1670,10 @@ function App() {
     setGenStatus('success');
     setLoadingStep(3);
     setRightTab('preview');
+    // Close any open lightbox and clear its morph source so a subsequent
+    // openLightbox() call from the preview starts from a clean state.
+    setLightboxUrl(null);
+    setMorphSourceKey(null);
   };
 
   // Raw result of POST /api/generate, before client-side persistence.
