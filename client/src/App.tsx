@@ -53,7 +53,7 @@ type DocumentWithViewTransition = Document & {
 // lightbox toolbar; the current value drives the setInterval that advances the
 // visible image. Kept at module scope so the presets are shared with the
 // localStorage validator below and never re-allocated on render.
-const SLIDESHOW_INTERVALS_MS = [5000, 15000, 30000, 60000] as const;
+const SLIDESHOW_INTERVALS_MS = [5000, 10000, 15000, 30000, 60000] as const;
 const DEFAULT_SLIDESHOW_INTERVAL_MS = 5000;
 const SLIDESHOW_INTERVAL_STORAGE_KEY = 'sumica.slideshow.intervalMs';
 

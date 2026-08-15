@@ -165,7 +165,7 @@ export function Lightbox({
           slideshowIntervalMs. Whether the advance is sequential or random
           depends on the shared randomMode flag above. Same disabled gate as
           the random toggle. Right-clicking the button cycles through interval
-          presets (5s → 15s → 30s → 60s → 5s); the current pace is shown as a
+          presets (5s → 10s → 15s → 30s → 60s → 5s); the current pace is shown as a
           small badge on the bottom-right so the user always sees the value
           without hovering for a tooltip. */}
       <button
