@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Star, Cloud, Folder, CheckCircle2, Circle } from 'lucide-react';
 import type { GenerationData } from '../App';
@@ -243,6 +243,15 @@ export function HistoryGallery({
     else setFilterPanelOpen(next);
   };
 
+  // Parent-only view is exclusive: it hides the date / favorites / detail
+  // filter row entirely (see the disabled props below) and forces the filter
+  // panel closed so the user can't leave a stale open panel dangling behind
+  // the disabled toggle button.
+  const parentIdActive = !!galleryFilters.parentId;
+  useEffect(() => {
+    if (parentIdActive && filterPanelOpen) setFilterPanelOpen(false);
+  }, [parentIdActive, filterPanelOpen]);
+
   const handleSelectClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const anchor = lastClickedIdRef.current;
@@ -341,23 +350,25 @@ export function HistoryGallery({
             filters={galleryFilters}
             open={filterPanelOpen}
             onToggle={setFilterPanelOpenWithTransition}
+            disabled={parentIdActive}
           />
-          <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', opacity: favoritesOnly ? 0.4 : 1 }}>
+          <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', opacity: (favoritesOnly || parentIdActive) ? 0.4 : 1 }}>
             📅
             <input
               type="date"
               className="input-field"
               value={filterDate}
               onChange={(e) => { if (e.target.value) onSetFilterDate(e.target.value); }}
-              disabled={favoritesOnly}
+              disabled={favoritesOnly || parentIdActive}
               style={{ borderRadius: '8px', padding: '5px 8px', fontSize: '13px', width: 'auto' }}
             />
           </label>
           <button
             type="button"
-            onClick={() => onSetFavoritesOnly((v) => !v)}
+            onClick={() => { if (!parentIdActive) onSetFavoritesOnly((v) => !v); }}
             title={favoritesOnly ? t.gallery.favoritesOnlyToggleOn : t.gallery.favoritesOnlyToggleOff}
-            className="scale-hover"
+            disabled={parentIdActive}
+            className={parentIdActive ? '' : 'scale-hover'}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -369,7 +380,8 @@ export function HistoryGallery({
               color: favoritesOnly ? '#fff' : 'var(--text-secondary)',
               fontSize: '12px',
               fontWeight: 800,
-              cursor: 'pointer',
+              cursor: parentIdActive ? 'not-allowed' : 'pointer',
+              opacity: parentIdActive ? 0.4 : 1,
             }}
           >
             {favoritesOnly

@@ -20,15 +20,17 @@ export interface GalleryFilterToggleButtonProps {
   filters: GalleryFilters;
   open: boolean;
   onToggle: (next: boolean) => void;
+  disabled?: boolean;
 }
 
-export function GalleryFilterToggleButton({ filters, open, onToggle }: GalleryFilterToggleButtonProps) {
+export function GalleryFilterToggleButton({ filters, open, onToggle, disabled = false }: GalleryFilterToggleButtonProps) {
   const active = countActiveFilters(filters);
   return (
     <button
       type="button"
-      onClick={() => onToggle(!open)}
-      className="scale-hover"
+      onClick={() => { if (!disabled) onToggle(!open); }}
+      disabled={disabled}
+      className={disabled ? '' : 'scale-hover'}
       style={{
         // The button itself is a transparent frame — its background/border
         // live on a sibling `<span>` below, which is what actually carries
@@ -45,7 +47,8 @@ export function GalleryFilterToggleButton({ filters, open, onToggle }: GalleryFi
         color: active > 0 ? '#fff' : 'var(--text-secondary)',
         fontSize: '12px',
         fontWeight: 800,
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
       }}
     >
       {/* Border-only frame: this is the sole element that morphs into the

@@ -275,9 +275,12 @@ function App() {
   // can distinguish "no data for this date" from "no data matches your gallery filters"
   // in the empty-state message.
   const baseScopedHistory = useMemo(() => {
+    // Parent-only view overrides every base scope: show every child video of
+    // the target image no matter the date or favorites state.
+    if (galleryFilters.parentId) return history;
     if (favoritesOnly) return user ? history : history.filter((h) => !!h.isFavorite);
     return filterDate ? history.filter((it) => localYMD(it.timestamp) === filterDate) : history;
-  }, [history, favoritesOnly, filterDate, user]);
+  }, [history, favoritesOnly, filterDate, user, galleryFilters.parentId]);
 
   const displayedHistory = useMemo(
     () => applyGalleryFilters(baseScopedHistory, galleryFilters, sdModels),
@@ -738,8 +741,22 @@ function App() {
   // Called by the Lightbox's 📼 動画一覧 button: switch the gallery to the
   // Video tab filtered down to this image's children, switch to the gallery
   // right-column tab so the result is actually visible, then close the lightbox.
+  // Also hard-resets every other gallery scope (arch/model/sampler/aspect/
+  // orientation + favoritesOnly) so the parent-only view shows every child of
+  // this image regardless of what filter the user last had active. The date
+  // filter is preserved in state but is bypassed while parentId is set (see
+  // baseScopedHistory and the Firestore subscription).
   const handleOpenChildVideos = (parentId: string) => {
-    setGalleryFilters((f) => ({ ...f, mediaType: 'video', parentId }));
+    setGalleryFilters({
+      arch: null,
+      model: null,
+      sampler: null,
+      aspectRatio: null,
+      orientation: null,
+      mediaType: 'video',
+      parentId,
+    });
+    setFavoritesOnly(false);
     setRightTab('gallery');
     closeLightbox();
   };
@@ -1296,7 +1313,9 @@ function App() {
           )
         : subscribeGenerations(
             user.uid,
-            filterDate || null,
+            // Parent-only view: subscribe without a date scope so every child
+            // video of the target image loads regardless of when it was made.
+            galleryFilters.parentId ? null : (filterDate || null),
             (records) => setHistory(records as unknown as GenerationData[]),
             (err) => {
               const e = err as unknown as { code?: string; message?: string };
@@ -1308,7 +1327,7 @@ function App() {
     }
     fetchHistory();
     return undefined;
-  }, [user, filterDate, favoritesOnly]);
+  }, [user, filterDate, favoritesOnly, galleryFilters.parentId]);
 
   // Favorite-recipe ranking rollups: live Firestore subscription when signed
   // in (cleaned up on unmount / uid change via the returned unsubscribe),
