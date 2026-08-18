@@ -54,6 +54,15 @@ type DocumentWithViewTransition = Document & {
 // visible image. Kept at module scope so the presets are shared with the
 // localStorage validator below and never re-allocated on render.
 const SLIDESHOW_INTERVALS_MS = [5000, 10000, 15000, 30000, 60000] as const;
+
+// Fixed prefixes prepended to every video generation's positive/negative
+// prompt. They anchor the LTX-Video-2 image-to-video model to the source
+// still image (positive) and steer it away from the still-image/text-overlay
+// failure modes the model tends toward (negative). The server-side LM Studio
+// system prompt (VIDEO_SYSTEM_PROMPT) knows the caller prepends these and
+// deliberately omits them from its own output.
+const VIDEO_POSITIVE_PREFIX = 'Use the provided start image exactly as the first frame.';
+const VIDEO_NEGATIVE_PREFIX = 'still image, watermark, subtitles, text, 3D, VR';
 const DEFAULT_SLIDESHOW_INTERVAL_MS = 5000;
 const SLIDESHOW_INTERVAL_STORAGE_KEY = 'sumica.slideshow.intervalMs';
 
@@ -731,8 +740,10 @@ function App() {
       setVideoMotion(ltx.motion);
       setVideoIdentity(ltx.identity);
       setVideoLength(ltx.length);
-      setVideoPositivePrompt(ltx.positivePrompt);
-      setVideoNegativePrompt(ltx.negativePrompt);
+      // New records store the original natural-language prompt; legacy
+      // records don't and reload as empty (the enhanced positive/negative
+      // pair on those records can't be reconstructed back to Japanese).
+      setVideoPrompt(ltx.videoPrompt ?? '');
     }
     closeLightbox();
     switchControlTab('form');
@@ -937,8 +948,12 @@ function App() {
   // mode with nothing picked yet also defaults it to the current preview
   // image (see the effect below) so the pipeline is exercisable directly.
   const [videoSourceImage, setVideoSourceImage] = useState<GenerationData | null>(null);
-  const [videoPositivePrompt, setVideoPositivePrompt] = useState('Use the provided start image exactly as the first frame.');
-  const [videoNegativePrompt, setVideoNegativePrompt] = useState('still image, watermark, subtitles, text, 3D, VR');
+  // Single natural-language input the user types in the video form. When empty
+  // the video-generation flow skips LM Studio entirely and sends only
+  // VIDEO_POSITIVE_PREFIX / VIDEO_NEGATIVE_PREFIX to ComfyUI. When non-empty
+  // it is POSTed to /api/video/enhance and the returned positive/negative are
+  // prepended with the fixed prefixes before being sent to /api/video/generate.
+  const [videoPrompt, setVideoPrompt] = useState('');
   const [videoWidth, setVideoWidth] = useState(1024);
   const [videoHeight, setVideoHeight] = useState(1088);
   const [videoLength, setVideoLength] = useState(240);
@@ -2156,11 +2171,38 @@ function App() {
       // /api/download-proxy; local mode fetches directly.
       const sourceBase64 = await fetchImageAsBase64(videoSourceImage);
 
+      // Resolve effective ComfyUI prompts. When the user leaves videoPrompt
+      // empty we skip LM Studio entirely and hand ComfyUI only the fixed
+      // prefixes — a "safe minimum" video generation. Otherwise we round-trip
+      // through /api/video/enhance and prepend the fixed prefixes to what the
+      // LLM emitted (VIDEO_SYSTEM_PROMPT deliberately omits them).
+      const trimmedVideoPrompt = videoPrompt.trim();
+      let effectivePositive: string;
+      let effectiveNegative: string;
+      if (trimmedVideoPrompt === '') {
+        effectivePositive = VIDEO_POSITIVE_PREFIX;
+        effectiveNegative = VIDEO_NEGATIVE_PREFIX;
+      } else {
+        const enhanceRes = await fetch(`${API_BASE}/video/enhance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: trimmedVideoPrompt }),
+          signal: abortController.signal,
+        });
+        if (!enhanceRes.ok) {
+          throw new Error(`video enhance HTTP ${enhanceRes.status} ${enhanceRes.statusText}`);
+        }
+        const enhanced = await enhanceRes.json() as { positive: string; negative: string };
+        effectivePositive = `${VIDEO_POSITIVE_PREFIX} ${enhanced.positive}`;
+        effectiveNegative = `${VIDEO_NEGATIVE_PREFIX}, ${enhanced.negative}`;
+      }
+
       const body = {
         sourceImageBytesBase64: sourceBase64,
         sourceImageFilename: `sumica-source-${Date.now()}.png`,
-        positivePrompt: videoPositivePrompt,
-        negativePrompt: videoNegativePrompt,
+        positivePrompt: effectivePositive,
+        negativePrompt: effectiveNegative,
+        videoPrompt: trimmedVideoPrompt || undefined,
         width: videoWidth,
         height: videoHeight,
         length: videoLength,
@@ -2413,10 +2455,8 @@ function App() {
           videoMode={videoMode}
           setVideoMode={setVideoMode}
           videoSourceImage={videoSourceImage}
-          videoPositivePrompt={videoPositivePrompt}
-          setVideoPositivePrompt={setVideoPositivePrompt}
-          videoNegativePrompt={videoNegativePrompt}
-          setVideoNegativePrompt={setVideoNegativePrompt}
+          videoPrompt={videoPrompt}
+          setVideoPrompt={setVideoPrompt}
           videoWidth={videoWidth}
           setVideoWidth={setVideoWidth}
           videoHeight={videoHeight}

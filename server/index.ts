@@ -235,6 +235,36 @@ You MUST encapsulate your prompts using the following XML tags:
 
 Do not include any introductory or concluding text, explanations, or notes. Reply ONLY with the XML structure.`;
 
+// System prompt for the ComfyUI + LTX-Video-2 (LTXV-2) image-to-video pipeline.
+// Distinct from SD_SYSTEM_PROMPT because video prompts describe motion/camera/
+// atmosphere rather than a still frame's composition, and the negative side
+// polices video-specific artifacts (jitter/morphing/flicker). The client
+// ALWAYS prepends fixed prefixes to both sides, so the LLM must NOT repeat
+// them — its output is the additional tags on top.
+const VIDEO_SYSTEM_PROMPT = `You are an expert prompt engineer for ComfyUI + LTX-Video-2 (LTXV-2) image-to-video generation. Translate the user's input (any language, typically Japanese) into English and produce a positive and a negative prompt tuned for image-to-video.
+
+## Content guidance
+
+- Positive prompt: focus on subject motion / action, camera movement (pan / tilt / dolly / orbit / handheld), lighting shifts, atmosphere, and concise cinematographic tags. Prefer verbs of motion (walking, spinning, flowing, drifting) over static descriptors. Keep it comma-separated.
+- Negative prompt: focus on video-specific artifacts (jitter, morphing, flicker, ghost limbs, warping, temporal inconsistency) plus whatever the user explicitly asks to avoid.
+
+## Fixed prefixes — DO NOT REPEAT
+
+The caller ALWAYS prepends these fixed prefixes to your output. You MUST NOT include them in your response. Emit only the ADDITIONAL content that goes after them.
+
+- Positive prefix (already prepended by caller): "Use the provided start image exactly as the first frame."
+- Negative prefix (already prepended by caller): "still image, watermark, subtitles, text, 3D, VR"
+
+## Output format
+
+You MUST encapsulate your prompts using the following XML tags:
+<prompts>
+  <positive>comma-separated additional positive tags...</positive>
+  <negative>comma-separated additional negative tags...</negative>
+</prompts>
+
+Do not include any introductory or concluding text, explanations, or notes. Reply ONLY with the XML structure.`;
+
 // Helper: Translate and enhance prompt via LM Studio, returning positive and negative prompts in XML format
 async function enhancePrompt(userPrompt: string): Promise<EnhancedPrompt> {
   const defaultNegative = 'nsfw, low quality, worst quality, deformed, bad anatomy, blurry, disfigured';
@@ -271,6 +301,49 @@ async function enhancePrompt(userPrompt: string): Promise<EnhancedPrompt> {
     throw new Error('Unexpected response format from LM Studio');
   } catch (error) {
     console.error('LM Studio prompt enhancement failed:', (error as Error).message);
+    throw new Error(`LM Studioへの接続またはパースに失敗しました: ${(error as Error).message}`);
+  }
+}
+
+// Helper: Translate and enhance a video prompt via LM Studio using the
+// video-specific system prompt. Mirrors enhancePrompt() structure but with a
+// video-tuned default negative that stays useful even if the LLM omits the
+// negative tag (e.g., short outputs).
+async function enhanceVideoPrompt(userPrompt: string): Promise<EnhancedPrompt> {
+  const defaultNegative = 'jitter, morphing, flicker, ghost limbs, warping, temporal inconsistency';
+  const systemPrompt = VIDEO_SYSTEM_PROMPT;
+  try {
+    console.log(`Sending video prompt to LM Studio (${lmStudioUrl}/v1/chat/completions)...`);
+    const response = await axios.post(`${lmStudioUrl}/v1/chat/completions`, {
+      model: lmStudioModel || undefined,
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: `Translate and expand this concept into additional positive and negative video prompts (do NOT include the caller's fixed prefixes): "${userPrompt}"`
+        }
+      ],
+      temperature: 0.7
+    });
+
+    if (response.data && response.data.choices && response.data.choices[0]) {
+      const content: string = response.data.choices[0].message.content.trim();
+      console.log(`LM Studio Raw Video Response:\n${content}`);
+
+      const positiveMatch = content.match(/<positive>([\s\S]*?)<\/positive>/);
+      const negativeMatch = content.match(/<negative>([\s\S]*?)<\/negative>/);
+
+      const positive = positiveMatch ? positiveMatch[1].trim() : userPrompt;
+      const negative = negativeMatch ? negativeMatch[1].trim() : defaultNegative;
+
+      return { positive, negative };
+    }
+    throw new Error('Unexpected response format from LM Studio');
+  } catch (error) {
+    console.error('LM Studio video prompt enhancement failed:', (error as Error).message);
     throw new Error(`LM Studioへの接続またはパースに失敗しました: ${(error as Error).message}`);
   }
 }
@@ -456,6 +529,29 @@ app.post('/api/enhance', async (req: Request, res: Response) => {
   }
   try {
     const enhanced = await enhancePrompt(prompt);
+    res.json({
+      success: true,
+      positive: enhanced.positive,
+      negative: enhanced.negative
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Video-specific prompt enhancement — same XML-envelope contract as
+// /api/enhance but routed through enhanceVideoPrompt() so ComfyUI +
+// LTX-Video-2 callers get motion/camera/atmosphere language and video-
+// artifact negatives instead of Stable Diffusion still-image guidance.
+// The client is responsible for prepending the fixed prefixes to the
+// returned positive/negative before submitting to /api/video/generate.
+app.post('/api/video/enhance', async (req: Request, res: Response) => {
+  const { prompt } = req.body as { prompt: string };
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+  try {
+    const enhanced = await enhanceVideoPrompt(prompt);
     res.json({
       success: true,
       positive: enhanced.positive,
@@ -677,6 +773,7 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
     clientId?: string;
     parentId?: string;             // source image record id, for signed-out cascade-delete + linkage
     params?: GenerationMetadata;   // inherited fields from the source image record (signed-out only)
+    videoPrompt?: string;          // original natural-language prompt (pre-enhancement); persisted for reload
   };
   if (!body.sourceImageBytesBase64 || typeof body.sourceImageBytesBase64 !== 'string') {
     return res.status(400).json({ error: 'sourceImageBytesBase64 (base64 PNG) is required' });
@@ -815,6 +912,7 @@ app.post('/api/video/generate', async (req: Request, res: Response) => {
           length: args.length,
           positivePrompt: args.positivePrompt,
           negativePrompt: args.negativePrompt,
+          ...(body.videoPrompt ? { videoPrompt: body.videoPrompt } : {}),
         },
       };
       const history = getLocalHistory();

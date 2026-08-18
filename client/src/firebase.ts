@@ -110,6 +110,11 @@ export type LtxParams = {
   length: number;
   positivePrompt: string;
   negativePrompt: string;
+  // Original natural-language prompt the user typed (before LM Studio
+  // enhancement). Optional because legacy records (persisted before the
+  // enhance flow was introduced) do not carry it — "load into form" of
+  // those records restores an empty input per the intended fallback.
+  videoPrompt?: string;
 };
 
 // Keep this shape in sync with GenerationData in App.tsx.

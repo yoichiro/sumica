@@ -133,10 +133,11 @@ export interface ControlPanelProps {
   // only its thumbnail is displayed.
   videoSourceImage: GenerationData | null;
 
-  videoPositivePrompt: string;
-  setVideoPositivePrompt: (v: string) => void;
-  videoNegativePrompt: string;
-  setVideoNegativePrompt: (v: string) => void;
+  // Single natural-language input. Empty → the app skips LM Studio and only
+  // sends the fixed prefixes to ComfyUI. Non-empty → the app enhances it via
+  // /api/video/enhance and prepends the fixed prefixes to the LLM output.
+  videoPrompt: string;
+  setVideoPrompt: (v: string) => void;
 
   // ComfyUI LTX-Video numeric parameters (mxSlider-style plain number inputs).
   videoWidth: number;
@@ -1062,29 +1063,17 @@ export function ControlPanel(p: ControlPanelProps) {
             )}
           </div>
 
-          {/* Prompts */}
+          {/* Prompt (single natural-language input; enhanced server-side) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
             <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-              {t.controlPanel.videoPositivePromptLabel}
+              {t.controlPanel.videoPromptLabel}
             </label>
             <textarea
               className="input-field"
-              rows={3}
-              value={p.videoPositivePrompt}
-              onChange={(e) => p.setVideoPositivePrompt(e.target.value)}
-              disabled={p.videoLoading}
-              style={{ borderRadius: '12px', resize: 'vertical', lineHeight: '1.4' }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-            <label style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: '700' }}>
-              {t.controlPanel.videoNegativePromptLabel}
-            </label>
-            <textarea
-              className="input-field"
-              rows={2}
-              value={p.videoNegativePrompt}
-              onChange={(e) => p.setVideoNegativePrompt(e.target.value)}
+              rows={4}
+              value={p.videoPrompt}
+              onChange={(e) => p.setVideoPrompt(e.target.value)}
+              placeholder={t.controlPanel.videoPromptPlaceholder}
               disabled={p.videoLoading}
               style={{ borderRadius: '12px', resize: 'vertical', lineHeight: '1.4' }}
             />
