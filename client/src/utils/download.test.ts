@@ -15,6 +15,16 @@ describe('formatDownloadFilename', () => {
     expect(formatDownloadFilename(ms)).toBe('sumica_20260107_090501.png');
   });
 
+  it('uses .mp4 for video mediaType', () => {
+    const ms = Date.UTC(2026, 7, 7, 8, 5, 1);
+    expect(formatDownloadFilename(ms, 'video')).toBe('sumica_20260807_170501.mp4');
+  });
+
+  it('uses .png for explicit image mediaType', () => {
+    const ms = Date.UTC(2026, 7, 7, 8, 5, 1);
+    expect(formatDownloadFilename(ms, 'image')).toBe('sumica_20260807_170501.png');
+  });
+
   describe('fallback to Date.now() for invalid timestamps', () => {
     beforeEach(() => {
       // Freeze Date.now() to 2027-03-15 04:30:45 JST == 2027-03-14 19:30:45 UTC

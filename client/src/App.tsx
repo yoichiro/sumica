@@ -620,7 +620,11 @@ function App() {
   // allows, so they go through the plain fetch path unchanged.
   const handleDownload = async (item: GenerationData) => {
     if (!item.imageUrl) return;
-    const filename = formatDownloadFilename(item.timestamp);
+    // Video records store the .mp4 URL in imageUrl (see saveVideoGeneration),
+    // so fetching item.imageUrl already grabs the right bytes — we only need
+    // to switch the filename extension so the browser saves it as a video
+    // instead of a broken .png.
+    const filename = formatDownloadFilename(item.timestamp, item.mediaType === 'video' ? 'video' : 'image');
     const fetchUrl = item.storagePath
       ? `${API_BASE}/download-proxy?url=${encodeURIComponent(item.imageUrl)}`
       : item.imageUrl;

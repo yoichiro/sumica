@@ -2,11 +2,16 @@
 // from the Lightbox. Split into a pure function (unit tested) and a DOM
 // side-effect function (not unit tested — same pattern as `utils/thumbnail.ts`).
 
-// Build a "sumica_YYYYMMDD_HHMMSS.png" filename from a unix millisecond
+// Build a "sumica_YYYYMMDD_HHMMSS.<ext>" filename from a unix millisecond
 // timestamp, always rendered in JST (UTC+9) so the value is deterministic
 // regardless of the user's OS timezone. Invalid input (undefined / 0 / NaN
 // / negative) falls back to Date.now() so a filename is always producible.
-export function formatDownloadFilename(timestamp: number | undefined): string {
+// The extension follows mediaType: 'video' → .mp4, otherwise → .png (the
+// default so existing image callers keep their pre-video behavior).
+export function formatDownloadFilename(
+  timestamp: number | undefined,
+  mediaType: 'image' | 'video' = 'image',
+): string {
   const validMs =
     typeof timestamp === 'number' && Number.isFinite(timestamp) && timestamp > 0
       ? timestamp
@@ -20,7 +25,8 @@ export function formatDownloadFilename(timestamp: number | undefined): string {
   const hh = String(d.getUTCHours()).padStart(2, '0');
   const mi = String(d.getUTCMinutes()).padStart(2, '0');
   const ss = String(d.getUTCSeconds()).padStart(2, '0');
-  return `sumica_${yyyy}${mm}${dd}_${hh}${mi}${ss}.png`;
+  const ext = mediaType === 'video' ? 'mp4' : 'png';
+  return `sumica_${yyyy}${mm}${dd}_${hh}${mi}${ss}.${ext}`;
 }
 
 // Trigger a browser download of a Blob using the objectURL → <a download> →
