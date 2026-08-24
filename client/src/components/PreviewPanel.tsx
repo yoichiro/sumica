@@ -702,26 +702,94 @@ export function PreviewPanel({
                 </div>
               )}
 
-            {/* Steps: the image pipeline's 3-node flow, or the video pipeline's
-                single current-stage label (ComfyUI's flow isn't naturally
-                discretized into fixed numbered steps like the image path). */}
-            {currentMediaType === 'video' ? (() => {
-              const overall = computeOverallProgress(videoProgressStage, videoProgressComfyFraction);
-              const pct = Math.round(overall * 100);
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start', minWidth: '240px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: genStatus === 'error' ? 'var(--danger)' : 'var(--text-primary)', fontWeight: '700' }}>
-                    <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>
-                      {videoStageLabel(videoProgressStage)}
-                      {videoProgressNode ? ` · Node ${videoProgressNode}` : ''}
-                      {videoProgressStep && videoProgressStep.max > 0 ? ` (${videoProgressStep.value}/${videoProgressStep.max})` : ''}
-                    </span>
-                    {genStatus === 'generating' && (
-                      <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>{pct}%</span>
-                    )}
+            {/* Steps: same 3-circle indicator for both image and video pipelines so
+                the two modes read symmetrically. The step-2 label swaps to
+                「動画生成」in video mode, and the shared batchCounter format works
+                for both image and video batches (both are simple "current/total"
+                progress indicators; no need for a separate video counter). */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    background: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep > 1 || genStatus === 'success' ? 'var(--success)' : loadingStep === 1 ? 'var(--pop-blue)' : 'none',
+                    border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'),
+                    color: (loadingStep >= 1 || genStatus === 'success' || (genStatus === 'error' && errorStep === 1)) ? '#fff' : 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '9px',
+                    fontWeight: 'bold'
+                  }}>
+                    {(genStatus === 'error' && errorStep === 1) ? '✗' : loadingStep > 1 || genStatus === 'success' ? '✓' : '1'}
                   </div>
-                  {genStatus === 'generating' && (
-                    <div style={{ width: '240px', height: '4px', borderRadius: '2px', background: 'var(--panel-border)', overflow: 'hidden' }}>
+                  <span className={genStatus === 'enhancing' ? 'processing-shimmer' : undefined}>{t.preview.stepEnhanceLabel}</span>
+                </div>
+
+                <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    background: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep > 2 || genStatus === 'success' ? 'var(--success)' : loadingStep === 2 ? 'var(--pop-teal)' : 'none',
+                    border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'),
+                    color: (loadingStep >= 2 || genStatus === 'success' || (genStatus === 'error' && errorStep === 2)) ? '#fff' : 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '9px',
+                    fontWeight: 'bold'
+                  }}>
+                    {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 || genStatus === 'success' ? '✓' : '2'}
+                  </div>
+                  <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>{currentMediaType === 'video' ? t.preview.stepVideoGenerateLabel : t.preview.stepGenerateLabel}{batchProgress ? t.preview.batchCounter(batchProgress.current, batchProgress.total) : ''}</span>
+                </div>
+
+                <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : (loadingStep >= 3 || genStatus === 'success') ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    background: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : genStatus === 'success' ? 'var(--success)' : loadingStep === 3 ? 'var(--pop-orange)' : 'none',
+                    border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep === 3 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'),
+                    color: (loadingStep === 3 || genStatus === 'success' || (genStatus === 'error' && errorStep === 3)) ? '#fff' : 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '9px',
+                    fontWeight: 'bold'
+                  }}>
+                    {(genStatus === 'error' && errorStep === 3) ? '✗' : genStatus === 'success' ? '✓' : '3'}
+                  </div>
+                  <span>{t.preview.stepSaveLabel}</span>
+                </div>
+              </div>
+
+              {/* Video-only secondary progress line: multi-minute ComfyUI runs make
+                  a plain 3-circle indicator too coarse, so keep the granular stage
+                  label + pipeline-wide % bar below the shared indicator. Image
+                  runs don't need this — their SD progress bar already lives beside
+                  the elapsed/remaining chip above. */}
+              {currentMediaType === 'video' && genStatus === 'generating' && (() => {
+                const overall = computeOverallProgress(videoProgressStage, videoProgressComfyFraction);
+                const pct = Math.round(overall * 100);
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start', paddingLeft: '2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>
+                      <span className="processing-shimmer">
+                        {videoStageLabel(videoProgressStage)}
+                        {videoProgressNode ? ` · Node ${videoProgressNode}` : ''}
+                        {videoProgressStep && videoProgressStep.max > 0 ? ` (${videoProgressStep.value}/${videoProgressStep.max})` : ''}
+                      </span>
+                      <span>{pct}%</span>
+                    </div>
+                    <div style={{ width: '240px', height: '3px', borderRadius: '2px', background: 'var(--panel-border)', overflow: 'hidden' }}>
                       <div style={{
                         width: `${pct}%`,
                         height: '100%',
@@ -729,73 +797,10 @@ export function PreviewPanel({
                         transition: 'width 0.3s ease',
                       }} />
                     </div>
-                  )}
-                </div>
-              );
-            })() : (
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                <div style={{
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  background: (genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep > 1 || genStatus === 'success' ? 'var(--success)' : loadingStep === 1 ? 'var(--pop-blue)' : 'none',
-                  border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 1) ? 'var(--danger)' : loadingStep >= 1 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'),
-                  color: (loadingStep >= 1 || genStatus === 'success' || (genStatus === 'error' && errorStep === 1)) ? '#fff' : 'var(--text-muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '9px',
-                  fontWeight: 'bold'
-                }}>
-                  {(genStatus === 'error' && errorStep === 1) ? '✗' : loadingStep > 1 || genStatus === 'success' ? '✓' : '1'}
-                </div>
-                <span className={genStatus === 'enhancing' ? 'processing-shimmer' : undefined}>{t.preview.stepEnhanceLabel}</span>
-              </div>
-
-              <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                <div style={{
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  background: (genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep > 2 || genStatus === 'success' ? 'var(--success)' : loadingStep === 2 ? 'var(--pop-teal)' : 'none',
-                  border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 2) ? 'var(--danger)' : loadingStep >= 2 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'),
-                  color: (loadingStep >= 2 || genStatus === 'success' || (genStatus === 'error' && errorStep === 2)) ? '#fff' : 'var(--text-muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '9px',
-                  fontWeight: 'bold'
-                }}>
-                  {(genStatus === 'error' && errorStep === 2) ? '✗' : loadingStep > 2 || genStatus === 'success' ? '✓' : '2'}
-                </div>
-                <span className={genStatus === 'generating' ? 'processing-shimmer' : undefined}>{t.preview.stepGenerateLabel}{batchProgress ? t.preview.batchCounter(batchProgress.current, batchProgress.total) : ''}</span>
-              </div>
-
-              <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>➔</span>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : (loadingStep >= 3 || genStatus === 'success') ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: '700' }}>
-                <div style={{
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  background: (genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : genStatus === 'success' ? 'var(--success)' : loadingStep === 3 ? 'var(--pop-orange)' : 'none',
-                  border: '1.5px solid ' + (((genStatus === 'error' && errorStep === 3) ? 'var(--danger)' : loadingStep === 3 || genStatus === 'success') ? 'transparent' : 'var(--text-muted)'),
-                  color: (loadingStep === 3 || genStatus === 'success' || (genStatus === 'error' && errorStep === 3)) ? '#fff' : 'var(--text-muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '9px',
-                  fontWeight: 'bold'
-                }}>
-                  {(genStatus === 'error' && errorStep === 3) ? '✗' : genStatus === 'success' ? '✓' : '3'}
-                </div>
-                <span>{t.preview.stepSaveLabel}</span>
-              </div>
+                  </div>
+                );
+              })()}
             </div>
-            )}
             </div>
           </div>
         </div>

@@ -100,6 +100,8 @@ export interface ControlPanelProps {
 
   onGenerate: (e: FormEvent<HTMLFormElement>) => void;
   onOpenBatchModal: () => void;
+  onOpenVideoBatchModal: () => void;
+  videoBatchModalOpen: boolean;
   // True while the batch modal is mounted. Used to switch the batch button's
   // `view-transition-name` off so the modal panel (which also carries the
   // same name) doesn't collide with it during the View Transition — the API
@@ -1217,6 +1219,31 @@ export function ControlPanel(p: ControlPanelProps) {
                   <span>{t.controlPanel.videoGenerateButton}</span>
                 </>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={p.onOpenVideoBatchModal}
+              disabled={p.videoLoading || !p.videoSourceImage}
+              className="scale-hover"
+              title={t.controlPanel.videoBatchButtonTitle}
+              aria-label={t.controlPanel.videoBatchButtonTitle}
+              style={{
+                flexShrink: 0,
+                padding: '16px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--panel-bg)',
+                color: 'var(--pop-blue)',
+                border: '2px solid var(--pop-blue)',
+                cursor: (p.videoLoading || !p.videoSourceImage) ? 'not-allowed' : 'pointer',
+                opacity: (p.videoLoading || !p.videoSourceImage) ? 0.5 : 1,
+                // Shared with VideoBatchGenerationModal for the open/close morph.
+                viewTransitionName: p.videoBatchModalOpen ? undefined : 'video-batch-morph',
+              }}
+            >
+              <Layers size={22} />
             </button>
           </div>
         </div>

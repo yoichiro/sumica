@@ -9,6 +9,7 @@ import { AppHeader, type HealthStatus } from './components/AppHeader';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { Lightbox } from './components/Lightbox';
 import { BatchGenerationModal, type BatchJob } from './components/BatchGenerationModal';
+import { VideoBatchGenerationModal } from './components/VideoBatchGenerationModal';
 import { PreviewPanel } from './components/PreviewPanel';
 import { HistoryGallery } from './components/HistoryGallery';
 import { ControlPanel } from './components/ControlPanel';
@@ -875,6 +876,10 @@ function App() {
   // a cancel that arrives during the inter-iteration gap (e.g. while the
   // client is uploading to Firebase and SD is idle) would otherwise be lost.
   const batchCancelledRef = useRef(false);
+  // Same shape as batchCancelledRef but for the video batch loop; kept
+  // separate so cancelling a video batch doesn't leak into a subsequent
+  // image batch (or vice versa) if both are triggered in quick succession.
+  const videoBatchCancelledRef = useRef(false);
 
   // OS notification opt-in. Loaded from localStorage on mount; the toggle in
   // the header updates both state and storage. `notify` is the fire-and-forget
@@ -1000,7 +1005,9 @@ function App() {
   // Batch generation state
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [showVideoBatchModal, setShowVideoBatchModal] = useState(false);
   const [batchCount, setBatchCount] = useState(5);
+  const [videoBatchCount, setVideoBatchCount] = useState(2);
   const [batchMode, setBatchMode] = useState<'count' | 'size' | 'model'>('count');
   // SDXL picker state (aspect ratio + orientation + size). Only used when
   // modelTypeFilter === 'sdxl'.
@@ -2135,12 +2142,23 @@ function App() {
   // SSE stream via `fetch` + ReadableStream (browser EventSource is GET-only
   // and this endpoint is POST), parses each SSE frame by hand, and threads
   // progress/completion into the shared genStatus/latestResult state.
-  const handleVideoGenerate = async () => {
-    if (!videoSourceImage || videoLoading) return;
+  // Kick off a single ComfyUI image-to-video run. Normally called with no
+  // arguments — enhance + seed are resolved from the current form state.
+  // The video batch loop calls it with `overrides` so all N iterations share
+  // one LM Studio call and get per-iteration seeds; when overrides is set the
+  // caller (handleVideoBatchGenerate) owns videoLoading / genStatus lifecycle,
+  // so this function skips its own setVideoLoading(false) in `finally`.
+  const handleVideoGenerate = async (
+    overrides?: { effectivePositive: string; effectiveNegative: string; videoPromptOriginal: string; seed: number },
+  ): Promise<{ success: boolean; cancelled: boolean } | void> => {
+    if (!videoSourceImage || (videoLoading && !overrides)) return;
 
-    setVideoLoading(true);
+    if (!overrides) setVideoLoading(true);
     setErrorStep(null);
     setRightTab('preview');
+    // Track outcome so batch callers can count success/fail and stop on cancel.
+    let jobSucceeded = false;
+    let jobCancelled = false;
     // Mirror the image-generation open: clear both preview slots so the
     // PreviewPanel falls through to its loading branch (which shows the
     // video-mode stage label + cancel button) instead of leaving a stale
@@ -2148,6 +2166,11 @@ function App() {
     setCurrentGeneration(null);
     setLatestResult(null);
     setGenStatus('generating');
+    // Start the 3-step indicator at step 1 (prompt enhance). Batch mode passes
+    // overrides carrying the already-enhanced prompts, and empty-prompt runs
+    // skip LM Studio, so both jump straight to step 2 below without flashing 1.
+    if (!overrides && videoPrompt.trim() !== '') setLoadingStep(1);
+    else setLoadingStep(2);
     setVideoProgressStage('preparing');
     setVideoProgress(null);
 
@@ -2179,27 +2202,38 @@ function App() {
       // empty we skip LM Studio entirely and hand ComfyUI only the fixed
       // prefixes — a "safe minimum" video generation. Otherwise we round-trip
       // through /api/video/enhance and prepend the fixed prefixes to what the
-      // LLM emitted (VIDEO_SYSTEM_PROMPT deliberately omits them).
-      const trimmedVideoPrompt = videoPrompt.trim();
+      // LLM emitted (VIDEO_SYSTEM_PROMPT deliberately omits them). Batch mode
+      // passes overrides so a single enhance is reused across every iteration.
+      let trimmedVideoPrompt: string;
       let effectivePositive: string;
       let effectiveNegative: string;
-      if (trimmedVideoPrompt === '') {
-        effectivePositive = VIDEO_POSITIVE_PREFIX;
-        effectiveNegative = VIDEO_NEGATIVE_PREFIX;
+      if (overrides) {
+        trimmedVideoPrompt = overrides.videoPromptOriginal;
+        effectivePositive = overrides.effectivePositive;
+        effectiveNegative = overrides.effectiveNegative;
       } else {
-        const enhanceRes = await fetch(`${API_BASE}/video/enhance`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: trimmedVideoPrompt }),
-          signal: abortController.signal,
-        });
-        if (!enhanceRes.ok) {
-          throw new Error(`video enhance HTTP ${enhanceRes.status} ${enhanceRes.statusText}`);
+        trimmedVideoPrompt = videoPrompt.trim();
+        if (trimmedVideoPrompt === '') {
+          effectivePositive = VIDEO_POSITIVE_PREFIX;
+          effectiveNegative = VIDEO_NEGATIVE_PREFIX;
+        } else {
+          const enhanceRes = await fetch(`${API_BASE}/video/enhance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: trimmedVideoPrompt }),
+            signal: abortController.signal,
+          });
+          if (!enhanceRes.ok) {
+            throw new Error(`video enhance HTTP ${enhanceRes.status} ${enhanceRes.statusText}`);
+          }
+          const enhanced = await enhanceRes.json() as { positive: string; negative: string };
+          effectivePositive = `${VIDEO_POSITIVE_PREFIX} ${enhanced.positive}`;
+          effectiveNegative = `${VIDEO_NEGATIVE_PREFIX}, ${enhanced.negative}`;
         }
-        const enhanced = await enhanceRes.json() as { positive: string; negative: string };
-        effectivePositive = `${VIDEO_POSITIVE_PREFIX} ${enhanced.positive}`;
-        effectiveNegative = `${VIDEO_NEGATIVE_PREFIX}, ${enhanced.negative}`;
       }
+
+      // Prompt is ready — advance to the "generate" step of the 3-step indicator.
+      setLoadingStep(2);
 
       const body = {
         sourceImageBytesBase64: sourceBase64,
@@ -2213,7 +2247,7 @@ function App() {
         fidelity: videoFidelity,
         motion: videoMotion,
         identity: videoIdentity,
-        seed: resolveVideoSeed(videoSeed, videoSeedLocked),
+        seed: overrides?.seed ?? resolveVideoSeed(videoSeed, videoSeedLocked),
         clientId: `sumica-${Date.now()}`,
         parentId: videoSourceImage.id,
         params: user ? undefined : videoSourceImage, // local mode: server inherits fields straight from the parent record
@@ -2292,6 +2326,7 @@ function App() {
             // persisted to server/outputs/, so the record is ready to display.
             if (user && dataJson.videoBase64) {
               setVideoProgressStage('saving');
+              setLoadingStep(3);
               const saved = await saveVideoGeneration(user.uid, {
                 parentId: body.parentId!,
                 videoBase64: dataJson.videoBase64,
@@ -2302,6 +2337,7 @@ function App() {
               });
               setLatestResult(saved as unknown as GenerationData);
             } else if (dataJson.record) {
+              setLoadingStep(3);
               setLatestResult(dataJson.record as GenerationData);
               fetchHistory(); // signed-out history isn't a live subscription — refresh it
               fetchRollups();
@@ -2313,30 +2349,44 @@ function App() {
             // this for free because its step ticks flip to success on
             // genStatus === 'success'.
             setVideoProgressStage('');
-            setGenStatus('success');
+            jobSucceeded = true;
+            // In batch mode the outer loop owns genStatus / success toast — a
+            // per-iteration success toast would spam the user and the batch's
+            // summary toast at the end covers it.
+            if (!overrides) {
+              setGenStatus('success');
+              addToast(t.toast.videoGenerateSuccess, 'success');
+            }
             // Persist how long this run's comfy stage took so the next run's
             // progress bar can crawl at the right pace from the very start.
             if (comfyStartTime !== null) {
               saveLastComfyDurationSeconds((Date.now() - comfyStartTime) / 1000);
             }
-            addToast(t.toast.videoGenerateSuccess, 'success');
           } else if (eventName === 'error') {
             if (dataJson.cancelled) {
-              setGenStatus('idle');
-              addToast(t.toast.videoGenerateCancelled, 'error');
+              jobCancelled = true;
+              if (!overrides) {
+                setGenStatus('idle');
+                addToast(t.toast.videoGenerateCancelled, 'error');
+              }
             } else {
-              setGenStatus('error');
-              addToast(t.toast.videoGenerateFailed(dataJson.message ?? 'unknown'), 'error');
+              if (!overrides) {
+                setGenStatus('error');
+                addToast(t.toast.videoGenerateFailed(dataJson.message ?? 'unknown'), 'error');
+              }
             }
           }
         }
       }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
-        setGenStatus('error');
-        addToast(t.toast.videoGenerateFailed((e as Error).message), 'error');
+        if (!overrides) {
+          setGenStatus('error');
+          addToast(t.toast.videoGenerateFailed((e as Error).message), 'error');
+        }
       } else {
-        setGenStatus('idle');
+        jobCancelled = true;
+        if (!overrides) setGenStatus('idle');
       }
     } finally {
       clearInterval(videoElapsedTimer);
@@ -2344,8 +2394,99 @@ function App() {
       setVideoComfyElapsedSeconds(0);
       setVideoProgress(null);
       setVideoProgressStage('');
-      setVideoLoading(false);
+      // Batch mode owns videoLoading for the whole run; only single-shot mode
+      // flips it back here so the button re-enables when this one job ends.
+      if (!overrides) setVideoLoading(false);
       videoAbortRef.current = null;
+    }
+    if (overrides) return { success: jobSucceeded, cancelled: jobCancelled };
+  };
+
+  // Sequential-loop counterpart to handleBatchGenerate on the video side. The
+  // count-only variant of the image batch (Q4 of the design chat: size/model
+  // cross-product will land later); enhances the videoPrompt ONCE, then runs
+  // N iterations of handleVideoGenerate with per-iteration seed (seed-lock
+  // ON keeps them all identical on purpose; OFF randomizes each), sharing
+  // the existing batchProgress state so PreviewPanel's "動画 i/N" chip works
+  // without new plumbing. Continues on failure and summarizes via toast.
+  const handleVideoBatchGenerate = async (count: number) => {
+    if (!videoSourceImage || videoLoading || count < 2) return;
+    videoBatchCancelledRef.current = false;
+    setVideoLoading(true);
+    setErrorStep(null);
+    setRightTab('preview');
+    setCurrentGeneration(null);
+    setLatestResult(null);
+    setGenStatus('generating');
+    // Batch owns the enhance step for all N iterations: flash step 1 only
+    // when we're actually about to call LM Studio, otherwise land on step 2
+    // straight away (image batch does the same in handleBatchGenerate).
+    if (videoPrompt.trim() !== '') setLoadingStep(1);
+    else setLoadingStep(2);
+
+    try {
+      // Enhance ONCE — same skip-if-empty rule as single-shot.
+      const trimmedVideoPrompt = videoPrompt.trim();
+      let effectivePositive: string;
+      let effectiveNegative: string;
+      if (trimmedVideoPrompt === '') {
+        effectivePositive = VIDEO_POSITIVE_PREFIX;
+        effectiveNegative = VIDEO_NEGATIVE_PREFIX;
+      } else {
+        const enhanceRes = await fetch(`${API_BASE}/video/enhance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: trimmedVideoPrompt }),
+        });
+        if (!enhanceRes.ok) throw new Error(`video enhance HTTP ${enhanceRes.status} ${enhanceRes.statusText}`);
+        const enhanced = await enhanceRes.json() as { positive: string; negative: string };
+        effectivePositive = `${VIDEO_POSITIVE_PREFIX} ${enhanced.positive}`;
+        effectiveNegative = `${VIDEO_NEGATIVE_PREFIX}, ${enhanced.negative}`;
+      }
+      // Enhance done — loop now stays on step 2 (video generation) until each
+      // iteration's saving stage flips it to 3 inside handleVideoGenerate.
+      setLoadingStep(2);
+
+      let succeeded = 0;
+      let failed = 0;
+      let cancelledInLoop = false;
+      for (let i = 0; i < count; i++) {
+        if (videoBatchCancelledRef.current) { cancelledInLoop = true; break; }
+        setBatchProgress({ current: i + 1, total: count });
+        const seed = resolveVideoSeed(videoSeed, videoSeedLocked);
+        const outcome = await handleVideoGenerate({
+          effectivePositive,
+          effectiveNegative,
+          videoPromptOriginal: trimmedVideoPrompt,
+          seed,
+        });
+        if (outcome?.cancelled) { cancelledInLoop = true; break; }
+        if (outcome?.success) succeeded++;
+        else failed++;
+      }
+
+      if (cancelledInLoop) {
+        setGenStatus(succeeded > 0 ? 'success' : 'idle');
+        addToast(t.toast.videoBatchCancelled(succeeded), 'success');
+      } else if (succeeded === 0) {
+        setErrorStep(2);
+        setGenStatus('error');
+        addToast(t.toast.videoBatchPartial(count, succeeded, failed), 'error');
+      } else if (failed === 0) {
+        setGenStatus('success');
+        addToast(t.toast.videoBatchAllSuccess(succeeded), 'success');
+      } else {
+        setGenStatus('success');
+        addToast(t.toast.videoBatchPartial(count, succeeded, failed), 'error');
+      }
+    } catch (error: any) {
+      // The one-time enhance failed before the loop even started.
+      setErrorStep(1);
+      setGenStatus('error');
+      addToast(t.toast.videoGenerateFailed(error.message), 'error');
+    } finally {
+      setVideoLoading(false);
+      setBatchProgress(null);
     }
   };
 
@@ -2354,6 +2495,13 @@ function App() {
   // so the loop above doesn't keep waiting on a stream the server may not
   // close promptly.
   const handleVideoCancel = async () => {
+    // When a video batch is running, also raise the batch-level flag so the
+    // outer loop stops between iterations instead of just interrupting the
+    // current job and immediately queuing the next one. Mirrors ADR-17's
+    // client-side cancel flag for image batches.
+    if (batchProgress) {
+      videoBatchCancelledRef.current = true;
+    }
     try {
       await fetch(`${API_BASE}/video/generate/interrupt`, { method: 'POST' });
     } catch {
@@ -2447,6 +2595,8 @@ function App() {
           onGenerate={handleGenerate}
           onOpenBatchModal={openBatchModal}
           batchModalOpen={showBatchModal}
+          onOpenVideoBatchModal={() => setShowVideoBatchModal(true)}
+          videoBatchModalOpen={showVideoBatchModal}
           activeTab={activeControlTab}
           onTabChange={switchControlTab}
           rollups={rollups}
@@ -2477,7 +2627,7 @@ function App() {
           setVideoSeed={setVideoSeed}
           videoSeedLocked={videoSeedLocked}
           setVideoSeedLocked={setVideoSeedLocked}
-          onVideoGenerate={handleVideoGenerate}
+          onVideoGenerate={() => handleVideoGenerate()}
           videoLoading={videoLoading}
         />
 
@@ -2681,6 +2831,17 @@ function App() {
           addToast(t.toast.batchStarted, 'success');
           setShowBatchModal(false);
           handleBatchGenerate(jobs);
+        }}
+      />
+
+      <VideoBatchGenerationModal
+        open={showVideoBatchModal}
+        onClose={() => setShowVideoBatchModal(false)}
+        batchCount={videoBatchCount}
+        setBatchCount={setVideoBatchCount}
+        onStartBatch={() => {
+          setShowVideoBatchModal(false);
+          handleVideoBatchGenerate(videoBatchCount);
         }}
       />
 

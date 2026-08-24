@@ -61,6 +61,7 @@ export const en: typeof ja = {
     generateButton: 'Generate image 🎨⚡️',
     generateButtonLoading: 'Generating request... ⚡️',
     batchButtonTitle: 'Batch generate multiple images',
+    videoBatchButtonTitle: 'Batch generate multiple videos',
     tabForm: '📝 Form',
     tabRanking: '🏆 Ranking',
     loadedEnhancedPanelTitle: '📎 Loaded enhanced prompt',
@@ -114,6 +115,7 @@ export const en: typeof ja = {
     remainingLabel: (duration) => ` / ~${duration} remaining`,
     stepEnhanceLabel: 'Prompt enhancement',
     stepGenerateLabel: 'Image generation',
+    stepVideoGenerateLabel: 'Video generation',
     batchCounter: (current, total) => ` (${current}/${total})`,
     stepSaveLabel: 'Save complete',
     badgeAriaBatch: (current, total) => `Generating image ${current}/${total}`,
@@ -231,6 +233,14 @@ export const en: typeof ja = {
     generateSizeButton: (n) => `Generate ${n} combinations`,
     generateModelButton: (n) => `Generate with ${n} models`,
   },
+  videoBatchModal: {
+    title: 'Batch generate 🎬',
+    countDescription: 'Runs several videos sequentially with the same prompt, one at a time. Seed changes per iteration unless seed-lock is ON.',
+    countUnitLabel: 'videos',
+    countRangeLabel: (n: number) => `${n}`,
+    cancelButton: 'Cancel',
+    generateCountButton: (n: number) => `Generate ${n} videos`,
+  },
   deleteConfirm: {
     title: 'Are you sure?',
     message: (n) => `${n} image${n === 1 ? '' : 's'} will be deleted. This cannot be undone.`,
@@ -285,6 +295,10 @@ export const en: typeof ja = {
     videoGenerateFailed: (details: string) =>
       `Video generation failed.\n\nDetails: ${details}\n\nCheck that ComfyUI is running locally.`,
     videoGenerateCancelled: 'Video generation stopped 🛑',
+    videoBatchAllSuccess: (n: number) => `Generated ${n} videos! 🎬⚡️`,
+    videoBatchPartial: (total: number, ok: number, fail: number) =>
+      `Generated ${ok} of ${total} videos (${fail} failed).\n\nCheck that ComfyUI is running locally.`,
+    videoBatchCancelled: (n: number) => `Stopped after generating ${n} videos 🛑`,
   },
   tabs: {
     preview: '🎨 Preview & progress',

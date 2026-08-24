@@ -59,6 +59,7 @@ export const ja = {
     generateButton: '画像を生成する 🎨⚡️',
     generateButtonLoading: '生成リクエストを実行中... ⚡️',
     batchButtonTitle: '複数枚をまとめて生成',
+    videoBatchButtonTitle: '複数本をまとめて生成',
     tabForm: '📝 フォーム',
     tabRanking: '🏆 ランキング',
     loadedEnhancedPanelTitle: '📎 ロード済み拡張プロンプト',
@@ -112,6 +113,7 @@ export const ja = {
     remainingLabel: (duration: string) => ` / 残り約${duration}`,
     stepEnhanceLabel: 'プロンプト拡張',
     stepGenerateLabel: '画像生成',
+    stepVideoGenerateLabel: '動画生成',
     batchCounter: (current: number, total: number) => ` (${current}/${total})`,
     stepSaveLabel: '保存完了',
     badgeAriaBatch: (current: number, total: number) => `画像 ${current}/${total} 生成中`,
@@ -229,6 +231,14 @@ export const ja = {
     generateSizeButton: (n: number) => `${n}通り生成する`,
     generateModelButton: (n: number) => `${n}モデルで生成する`,
   },
+  videoBatchModal: {
+    title: 'まとめて生成 🎬',
+    countDescription: '同じプロンプトで複数本を1本ずつ順番に生成します。生成する本数を選んでください。 seed ロックが OFF なら本ごとにランダム seed になります。',
+    countUnitLabel: '本',
+    countRangeLabel: (n: number) => `${n}本`,
+    cancelButton: 'キャンセル',
+    generateCountButton: (n: number) => `${n}本生成する`,
+  },
   deleteConfirm: {
     title: '本当に削除しますか？',
     message: (n: number) => `${n}件の画像を削除します。選択した画像とその生成情報が完全に削除されます。この操作は取り消せません。`,
@@ -284,6 +294,10 @@ export const ja = {
     videoGenerateFailed: (details: string) =>
       `動画生成に失敗しました。\n\n詳細: ${details}\n\nComfyUI がローカルで正常に起動しているか確認してください。`,
     videoGenerateCancelled: '動画生成を止めました🛑',
+    videoBatchAllSuccess: (n: number) => `${n} 本の動画を生成しました！🎬⚡️`,
+    videoBatchPartial: (total: number, ok: number, fail: number) =>
+      `${total} 本中 ${ok} 本を生成しました（${fail} 本失敗）。\n\nComfyUI がローカルで正常に起動しているか確認してください。`,
+    videoBatchCancelled: (n: number) => `${n} 本生成した時点で止めました🛑`,
   },
   tabs: {
     preview: '🎨 プレビュー＆進捗',
