@@ -71,6 +71,7 @@ export const en: typeof ja = {
     modeImage: '📷 Image',
     modeVideo: '🎬 Video',
     videoSourceLabel: 'Source image',
+    videoSourceRemoveTitle: 'Remove this image',
     videoPromptLabel: 'Video prompt (any language — describe motion / atmosphere)',
     videoPromptPlaceholder: 'e.g. camera slowly pulls back, hair drifting in the breeze',
     videoWidthLabel: 'Video width (px)',

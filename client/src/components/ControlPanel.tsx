@@ -133,7 +133,8 @@ export interface ControlPanelProps {
 
   // Source image chosen via Lightbox → 🎬 動画にする. Read-only in this form —
   // only its thumbnail is displayed.
-  videoSourceImage: GenerationData | null;
+  videoSourceImages: GenerationData[];
+  onRemoveVideoSourceAt: (index: number) => void;
 
   // Single natural-language input. Empty → the app skips LM Studio and only
   // sends the fixed prefixes to ComfyUI. Non-empty → the app enhances it via
@@ -1045,18 +1046,55 @@ export function ControlPanel(p: ControlPanelProps) {
       {p.videoMode && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '6px' }}>
 
-          {/* Source image thumbnail (readonly — chosen from Lightbox) */}
+          {/* Source image thumbnails. Lightbox's 「🎬 動画にする」 appends to
+              this row (dedup by id). Each thumbnail has a small × to drop
+              it individually. Wrap-horizontal so 3+ images stay legible in
+              the fixed-width video form column. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
             <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
               {t.controlPanel.videoSourceLabel}
+              {p.videoSourceImages.length > 1 ? ` (${p.videoSourceImages.length})` : ''}
             </label>
-            {p.videoSourceImage ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
-                <img
-                  src={p.videoSourceImage.thumbnailUrl ?? p.videoSourceImage.imageUrl}
-                  alt={t.controlPanel.videoSourceLabel}
-                  style={{ maxWidth: '96px', maxHeight: '96px', borderRadius: '6px', display: 'block' }}
-                />
+            {p.videoSourceImages.length > 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px', flexWrap: 'wrap' }}>
+                {p.videoSourceImages.map((src, idx) => (
+                  <div key={src.id ?? idx} style={{ position: 'relative' }}>
+                    <img
+                      src={src.thumbnailUrl ?? src.imageUrl}
+                      alt={t.controlPanel.videoSourceLabel}
+                      style={{ maxWidth: '96px', maxHeight: '96px', borderRadius: '6px', display: 'block' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => p.onRemoveVideoSourceAt(idx)}
+                      disabled={p.videoLoading}
+                      title={t.controlPanel.videoSourceRemoveTitle}
+                      aria-label={t.controlPanel.videoSourceRemoveTitle}
+                      style={{
+                        position: 'absolute',
+                        top: '-6px',
+                        right: '-6px',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: 'var(--danger)',
+                        color: '#fff',
+                        border: '2px solid var(--panel-bg)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: p.videoLoading ? 'not-allowed' : 'pointer',
+                        opacity: p.videoLoading ? 0.5 : 1,
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        padding: 0,
+                        lineHeight: 1,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
               </div>
             ) : (
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px', background: 'var(--panel-bg)', border: '2px dashed var(--panel-border)', borderRadius: '8px', textAlign: 'center' }}>
@@ -1194,7 +1232,7 @@ export function ControlPanel(p: ControlPanelProps) {
               type="button"
               onClick={p.onVideoGenerate}
               className="btn-neon"
-              disabled={p.videoLoading || !p.videoSourceImage}
+              disabled={p.videoLoading || p.videoSourceImages.length === 0}
               style={{
                 flex: 1,
                 padding: '16px',
@@ -1223,7 +1261,7 @@ export function ControlPanel(p: ControlPanelProps) {
             <button
               type="button"
               onClick={p.onOpenVideoBatchModal}
-              disabled={p.videoLoading || !p.videoSourceImage}
+              disabled={p.videoLoading || p.videoSourceImages.length === 0}
               className="scale-hover"
               title={t.controlPanel.videoBatchButtonTitle}
               aria-label={t.controlPanel.videoBatchButtonTitle}
@@ -1237,8 +1275,8 @@ export function ControlPanel(p: ControlPanelProps) {
                 background: 'var(--panel-bg)',
                 color: 'var(--pop-blue)',
                 border: '2px solid var(--pop-blue)',
-                cursor: (p.videoLoading || !p.videoSourceImage) ? 'not-allowed' : 'pointer',
-                opacity: (p.videoLoading || !p.videoSourceImage) ? 0.5 : 1,
+                cursor: (p.videoLoading || p.videoSourceImages.length === 0) ? 'not-allowed' : 'pointer',
+                opacity: (p.videoLoading || p.videoSourceImages.length === 0) ? 0.5 : 1,
                 // Shared with VideoBatchGenerationModal for the open/close morph.
                 viewTransitionName: p.videoBatchModalOpen ? undefined : 'video-batch-morph',
               }}

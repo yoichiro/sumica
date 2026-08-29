@@ -700,20 +700,27 @@ function App() {
   // the source's dimensions as sensible defaults), and close the lightbox so
   // the user immediately sees the video form.
   const handleOpenVideoForm = (item: GenerationData) => {
-    setVideoSourceImage(item);
-    setVideoMode(true);
-    // Inherit the ACTUAL image dimensions, not the pre-Hires base resolution.
-    // `record.width/height` is the SD payload's base; when enableHr is on, the
-    // saved PNG is hrScale× larger — so the video must default to the same
-    // dimensions the user actually sees, not the 512-ish base they typed.
-    const scale = (item.enableHr && item.hrScale) ? item.hrScale : 1;
-    setVideoWidth(Math.round(item.width * scale));
-    setVideoHeight(Math.round(item.height * scale));
+    // Push onto the source array (dedup by id — clicking 🎬 動画にする twice
+    // on the same image is a no-op). Only the FIRST addition seeds the
+    // dimensions and flips into video mode, so subsequent additions from
+    // the gallery just append silently to the queue.
+    const alreadyStaged = videoSourceImages.some((r) => r.id === item.id);
+    addVideoSourceImage(item);
+    if (videoSourceImages.length === 0 && !alreadyStaged) {
+      setVideoMode(true);
+      // Inherit the ACTUAL image dimensions, not the pre-Hires base resolution.
+      // `record.width/height` is the SD payload's base; when enableHr is on, the
+      // saved PNG is hrScale× larger — so the video must default to the same
+      // dimensions the user actually sees, not the 512-ish base they typed.
+      const scale = (item.enableHr && item.hrScale) ? item.hrScale : 1;
+      setVideoWidth(Math.round(item.width * scale));
+      setVideoHeight(Math.round(item.height * scale));
+      switchControlTab('form');
+    }
     // If invoked from the Lightbox, close it so the video form is visible.
     // (Best-effort — the lightbox may already be closed when called from
     // the main preview panel, in which case setLightboxUrl(null) is a no-op.)
     closeLightbox();
-    switchControlTab('form');
   };
 
   // Preview panel's video-branch "動画を生成" — reload every knob that
@@ -731,7 +738,10 @@ function App() {
       if (fetched) parent = fetched as unknown as GenerationData;
     }
     if (!parent) return;
-    setVideoSourceImage(parent);
+    // "動画を生成" from a video record replaces the source list with the
+    // parent image alone — reloading a single run's config, not stacking on
+    // top of whatever the user was staging.
+    setVideoSourceImages([parent]);
     setVideoMode(true);
     // Prefer the video record's own dimensions — they already reflect the
     // Hires-scaled resolution used at generation time — over deriving from
@@ -956,7 +966,19 @@ function App() {
   // the Lightbox's 🎬 動画にする action (handleOpenVideoForm); entering video
   // mode with nothing picked yet also defaults it to the current preview
   // image (see the effect below) so the pipeline is exercisable directly.
-  const [videoSourceImage, setVideoSourceImage] = useState<GenerationData | null>(null);
+  // Ordered list of source images the video pipeline will iterate over. The
+  // Lightbox's 「🎬 動画にする」 accumulates into this array (dedup by id) so
+  // the user can stage N images without leaving the gallery. Single-image
+  // runs and every legacy code path that used the old `videoSourceImage`
+  // singular read videoSourceImages[0] and write via addVideoSourceImage /
+  // setVideoSourceImages([single]). Empty means "no source picked yet".
+  const [videoSourceImages, setVideoSourceImages] = useState<GenerationData[]>([]);
+  const addVideoSourceImage = (item: GenerationData) => {
+    setVideoSourceImages((prev) => (prev.some((r) => r.id === item.id) ? prev : [...prev, item]));
+  };
+  const removeVideoSourceImageAt = (idx: number) => {
+    setVideoSourceImages((prev) => prev.filter((_, i) => i !== idx));
+  };
   // Single natural-language input the user types in the video form. When empty
   // the video-generation flow skips LM Studio entirely and sends only
   // VIDEO_POSITIVE_PREFIX / VIDEO_NEGATIVE_PREFIX to ComfyUI. When non-empty
@@ -997,10 +1019,10 @@ function App() {
   // is exercisable without going through the Lightbox first. The Lightbox's
   // 🎬 動画にする button (handleOpenVideoForm) overrides this with any history item.
   useEffect(() => {
-    if (videoMode && !videoSourceImage && currentGeneration && (currentGeneration.mediaType ?? 'image') === 'image') {
-      setVideoSourceImage(currentGeneration);
+    if (videoMode && videoSourceImages.length === 0 && currentGeneration && (currentGeneration.mediaType ?? 'image') === 'image') {
+      setVideoSourceImages([currentGeneration]);
     }
-  }, [videoMode, videoSourceImage, currentGeneration]);
+  }, [videoMode, videoSourceImages.length, currentGeneration]);
 
   // Batch generation state
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
@@ -2149,9 +2171,14 @@ function App() {
   // caller (handleVideoBatchGenerate) owns videoLoading / genStatus lifecycle,
   // so this function skips its own setVideoLoading(false) in `finally`.
   const handleVideoGenerate = async (
-    overrides?: { effectivePositive: string; effectiveNegative: string; videoPromptOriginal: string; seed: number },
+    overrides?: { effectivePositive: string; effectiveNegative: string; videoPromptOriginal: string; seed: number; sourceImage?: GenerationData },
   ): Promise<{ success: boolean; cancelled: boolean } | void> => {
-    if (!videoSourceImage || (videoLoading && !overrides)) return;
+    // Which source image to feed ComfyUI. Batch / multi-image callers pin the
+    // specific record via overrides.sourceImage; single-shot calls (no
+    // overrides at all) fall back to the first staged image, matching the
+    // previous singleton behavior when only one image is staged.
+    const activeSource = overrides?.sourceImage ?? videoSourceImages[0];
+    if (!activeSource || (videoLoading && !overrides)) return;
 
     if (!overrides) setVideoLoading(true);
     setErrorStep(null);
@@ -2196,7 +2223,7 @@ function App() {
     try {
       // Fetch source image bytes as base64. Firebase mode routes through
       // /api/download-proxy; local mode fetches directly.
-      const sourceBase64 = await fetchImageAsBase64(videoSourceImage);
+      const sourceBase64 = await fetchImageAsBase64(activeSource);
 
       // Resolve effective ComfyUI prompts. When the user leaves videoPrompt
       // empty we skip LM Studio entirely and hand ComfyUI only the fixed
@@ -2249,8 +2276,8 @@ function App() {
         identity: videoIdentity,
         seed: overrides?.seed ?? resolveVideoSeed(videoSeed, videoSeedLocked),
         clientId: `sumica-${Date.now()}`,
-        parentId: videoSourceImage.id,
-        params: user ? undefined : videoSourceImage, // local mode: server inherits fields straight from the parent record
+        parentId: activeSource.id,
+        params: user ? undefined : activeSource, // local mode: server inherits fields straight from the parent record
       };
 
       const res = await fetch(`${API_BASE}/video/generate`, {
@@ -2333,7 +2360,7 @@ function App() {
                 posterBase64: dataJson.posterBase64,
                 ltxParams: dataJson.ltxParams as LtxParams,
                 timestamp: Date.now(),
-                params: { ...videoSourceImage, model: videoSourceImage.model ?? null },
+                params: { ...activeSource, model: activeSource.model ?? null },
               });
               setLatestResult(saved as unknown as GenerationData);
             } else if (dataJson.record) {
@@ -2409,8 +2436,15 @@ function App() {
   // ON keeps them all identical on purpose; OFF randomizes each), sharing
   // the existing batchProgress state so PreviewPanel's "動画 i/N" chip works
   // without new plumbing. Continues on failure and summarizes via toast.
-  const handleVideoBatchGenerate = async (count: number) => {
-    if (!videoSourceImage || videoLoading || count < 2) return;
+  // Full video-batch runner: outer image loop × inner count loop, so
+  // total = videoSourceImages.length * countPerImage. Also drives the plain
+  // "動画を生成する" single-shot button — that one just calls this with
+  // countPerImage=1, so the array-of-N staging path is exercised by both
+  // buttons and there is no separate 1-image-1-video code path to maintain.
+  const handleVideoBatchGenerate = async (countPerImage: number) => {
+    if (videoSourceImages.length === 0 || videoLoading || countPerImage < 1) return;
+    const sources = videoSourceImages;
+    const total = sources.length * countPerImage;
     videoBatchCancelledRef.current = false;
     setVideoLoading(true);
     setErrorStep(null);
@@ -2418,14 +2452,16 @@ function App() {
     setCurrentGeneration(null);
     setLatestResult(null);
     setGenStatus('generating');
-    // Batch owns the enhance step for all N iterations: flash step 1 only
-    // when we're actually about to call LM Studio, otherwise land on step 2
-    // straight away (image batch does the same in handleBatchGenerate).
+    // Enhance step (1) is only visible while LM Studio is actually being
+    // called. Otherwise jump straight to step 2 — same rule as the image
+    // pipelines. Batch counter — always {current, total} — is what
+    // PreviewPanel uses to render the "動画 i/N" chip.
     if (videoPrompt.trim() !== '') setLoadingStep(1);
     else setLoadingStep(2);
 
     try {
-      // Enhance ONCE — same skip-if-empty rule as single-shot.
+      // Enhance ONCE — same skip-if-empty rule as single-shot. The enhanced
+      // prompt is reused for every image AND every iteration.
       const trimmedVideoPrompt = videoPrompt.trim();
       let effectivePositive: string;
       let effectiveNegative: string;
@@ -2443,26 +2479,31 @@ function App() {
         effectivePositive = `${VIDEO_POSITIVE_PREFIX} ${enhanced.positive}`;
         effectiveNegative = `${VIDEO_NEGATIVE_PREFIX}, ${enhanced.negative}`;
       }
-      // Enhance done — loop now stays on step 2 (video generation) until each
-      // iteration's saving stage flips it to 3 inside handleVideoGenerate.
+      // Enhance done — the double loop stays on step 2 until each iteration's
+      // saving stage flips it to 3 inside handleVideoGenerate.
       setLoadingStep(2);
 
       let succeeded = 0;
       let failed = 0;
       let cancelledInLoop = false;
-      for (let i = 0; i < count; i++) {
-        if (videoBatchCancelledRef.current) { cancelledInLoop = true; break; }
-        setBatchProgress({ current: i + 1, total: count });
-        const seed = resolveVideoSeed(videoSeed, videoSeedLocked);
-        const outcome = await handleVideoGenerate({
-          effectivePositive,
-          effectiveNegative,
-          videoPromptOriginal: trimmedVideoPrompt,
-          seed,
-        });
-        if (outcome?.cancelled) { cancelledInLoop = true; break; }
-        if (outcome?.success) succeeded++;
-        else failed++;
+      let runningIndex = 0;
+      outer: for (const src of sources) {
+        for (let i = 0; i < countPerImage; i++) {
+          if (videoBatchCancelledRef.current) { cancelledInLoop = true; break outer; }
+          runningIndex++;
+          setBatchProgress({ current: runningIndex, total });
+          const seed = resolveVideoSeed(videoSeed, videoSeedLocked);
+          const outcome = await handleVideoGenerate({
+            effectivePositive,
+            effectiveNegative,
+            videoPromptOriginal: trimmedVideoPrompt,
+            seed,
+            sourceImage: src,
+          });
+          if (outcome?.cancelled) { cancelledInLoop = true; break outer; }
+          if (outcome?.success) succeeded++;
+          else failed++;
+        }
       }
 
       if (cancelledInLoop) {
@@ -2471,13 +2512,16 @@ function App() {
       } else if (succeeded === 0) {
         setErrorStep(2);
         setGenStatus('error');
-        addToast(t.toast.videoBatchPartial(count, succeeded, failed), 'error');
+        addToast(t.toast.videoBatchPartial(total, succeeded, failed), 'error');
       } else if (failed === 0) {
         setGenStatus('success');
-        addToast(t.toast.videoBatchAllSuccess(succeeded), 'success');
+        // Single-video case falls through to the plain success toast so
+        // nothing user-visible changes for a 1-source, 1-count run.
+        if (total === 1) addToast(t.toast.videoGenerateSuccess, 'success');
+        else addToast(t.toast.videoBatchAllSuccess(succeeded), 'success');
       } else {
         setGenStatus('success');
-        addToast(t.toast.videoBatchPartial(count, succeeded, failed), 'error');
+        addToast(t.toast.videoBatchPartial(total, succeeded, failed), 'error');
       }
     } catch (error: any) {
       // The one-time enhance failed before the loop even started.
@@ -2608,7 +2652,8 @@ function App() {
           // Video-mode state and handlers (Task 5, Plan 2).
           videoMode={videoMode}
           setVideoMode={setVideoMode}
-          videoSourceImage={videoSourceImage}
+          videoSourceImages={videoSourceImages}
+          onRemoveVideoSourceAt={removeVideoSourceImageAt}
           videoPrompt={videoPrompt}
           setVideoPrompt={setVideoPrompt}
           videoWidth={videoWidth}
@@ -2627,7 +2672,14 @@ function App() {
           setVideoSeed={setVideoSeed}
           videoSeedLocked={videoSeedLocked}
           setVideoSeedLocked={setVideoSeedLocked}
-          onVideoGenerate={() => handleVideoGenerate()}
+          onVideoGenerate={() => {
+            // Single- and multi-image runs both flow through the batch
+            // runner with countPerImage=1. A 1-source, 1-count call keeps
+            // batchProgress at {1,1} and falls back to the plain single-
+            // shot success toast, so nothing changes for the classic path.
+            if (videoSourceImages.length === 1) handleVideoGenerate();
+            else handleVideoBatchGenerate(1);
+          }}
           videoLoading={videoLoading}
         />
 
