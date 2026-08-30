@@ -64,6 +64,22 @@ const SLIDESHOW_INTERVALS_MS = [5000, 10000, 15000, 30000, 60000] as const;
 // deliberately omits them from its own output.
 const VIDEO_POSITIVE_PREFIX = 'Use the provided start image exactly as the first frame.';
 const VIDEO_NEGATIVE_PREFIX = 'still image, watermark, subtitles, text, 3D, VR';
+// Whether the ComfyUI job takes width/height from the source image (with Hires
+// scale applied, matching handleOpenVideoForm's dimension inheritance) or from
+// the numeric inputs on the video form. Persisted so the choice survives page
+// reloads.
+type VideoDimensionMode = 'inherit' | 'fixed';
+const VIDEO_DIMENSION_MODE_STORAGE_KEY = 'sumica.videoDimensionMode';
+const DEFAULT_VIDEO_DIMENSION_MODE: VideoDimensionMode = 'inherit';
+function loadVideoDimensionMode(): VideoDimensionMode {
+  try {
+    const raw = localStorage.getItem(VIDEO_DIMENSION_MODE_STORAGE_KEY);
+    if (raw === 'inherit' || raw === 'fixed') return raw;
+    return DEFAULT_VIDEO_DIMENSION_MODE;
+  } catch {
+    return DEFAULT_VIDEO_DIMENSION_MODE;
+  }
+}
 const DEFAULT_SLIDESHOW_INTERVAL_MS = 5000;
 const SLIDESHOW_INTERVAL_STORAGE_KEY = 'sumica.slideshow.intervalMs';
 
@@ -987,6 +1003,11 @@ function App() {
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoWidth, setVideoWidth] = useState(1024);
   const [videoHeight, setVideoHeight] = useState(1088);
+  const [videoDimensionMode, setVideoDimensionMode] = useState<VideoDimensionMode>(loadVideoDimensionMode);
+  useEffect(() => {
+    try { localStorage.setItem(VIDEO_DIMENSION_MODE_STORAGE_KEY, videoDimensionMode); }
+    catch { /* storage disabled — the choice just won't persist */ }
+  }, [videoDimensionMode]);
   const [videoLength, setVideoLength] = useState(240);
   const [videoFidelity, setVideoFidelity] = useState(1.0);
   const [videoMotion, setVideoMotion] = useState(35);
@@ -2164,6 +2185,19 @@ function App() {
   // SSE stream via `fetch` + ReadableStream (browser EventSource is GET-only
   // and this endpoint is POST), parses each SSE frame by hand, and threads
   // progress/completion into the shared genStatus/latestResult state.
+  // Resolve the width / height ComfyUI should render at, given the active
+  // source image and the mode toggle. 'inherit' matches handleOpenVideoForm's
+  // dimension-inheritance rule — the ACTUAL image dimensions (Hires-scaled
+  // when the source used it), so the video sizes to what the user actually
+  // sees rather than SD's pre-Hires base. 'fixed' returns the numeric inputs
+  // verbatim so a user who intentionally set a specific size (e.g. matching a
+  // downstream video canvas) still gets it, even across multi-source batches.
+  const resolveVideoDimensions = (source: GenerationData, mode: VideoDimensionMode, fixedW: number, fixedH: number): { width: number; height: number } => {
+    if (mode === 'fixed') return { width: fixedW, height: fixedH };
+    const scale = (source.enableHr && source.hrScale) ? source.hrScale : 1;
+    return { width: Math.round(source.width * scale), height: Math.round(source.height * scale) };
+  };
+
   // Kick off a single ComfyUI image-to-video run. Normally called with no
   // arguments — enhance + seed are resolved from the current form state.
   // The video batch loop calls it with `overrides` so all N iterations share
@@ -2262,14 +2296,15 @@ function App() {
       // Prompt is ready — advance to the "generate" step of the 3-step indicator.
       setLoadingStep(2);
 
+      const resolvedDims = resolveVideoDimensions(activeSource, videoDimensionMode, videoWidth, videoHeight);
       const body = {
         sourceImageBytesBase64: sourceBase64,
         sourceImageFilename: `sumica-source-${Date.now()}.png`,
         positivePrompt: effectivePositive,
         negativePrompt: effectiveNegative,
         videoPrompt: trimmedVideoPrompt || undefined,
-        width: videoWidth,
-        height: videoHeight,
+        width: resolvedDims.width,
+        height: resolvedDims.height,
         length: videoLength,
         fidelity: videoFidelity,
         motion: videoMotion,
@@ -2655,6 +2690,8 @@ function App() {
           videoSourceImages={videoSourceImages}
           onRemoveVideoSourceAt={removeVideoSourceImageAt}
           onClearVideoSources={() => setVideoSourceImages([])}
+          videoDimensionMode={videoDimensionMode}
+          setVideoDimensionMode={setVideoDimensionMode}
           videoPrompt={videoPrompt}
           setVideoPrompt={setVideoPrompt}
           videoWidth={videoWidth}

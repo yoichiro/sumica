@@ -136,6 +136,8 @@ export interface ControlPanelProps {
   videoSourceImages: GenerationData[];
   onRemoveVideoSourceAt: (index: number) => void;
   onClearVideoSources: () => void;
+  videoDimensionMode: 'inherit' | 'fixed';
+  setVideoDimensionMode: (mode: 'inherit' | 'fixed') => void;
 
   // Single natural-language input. Empty → the app skips LM Studio and only
   // sends the fixed prefixes to ComfyUI. Non-empty → the app enhances it via
@@ -1143,10 +1145,50 @@ export function ControlPanel(p: ControlPanelProps) {
             />
           </div>
 
-          {/* Numeric mxSlider inputs */}
-          {/* Width / Height stay as numeric inputs — they're typically
-              edited via the aspect-ratio picker rather than scrubbed. */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {/* Dimension mode toggle + width/height inputs. In 'inherit' mode
+              ComfyUI receives each source image's own dimensions (Hires-
+              scaled), so the numeric inputs are disabled+dimmed — a hint
+              below the row explains why they're greyed out and what the
+              actual sizes will be. In 'fixed' mode the numeric inputs are
+              authoritative (and shared across every source image in a
+              multi-source batch, which was the original behavior). */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+              {t.controlPanel.videoDimensionModeLabel}
+            </label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {(['inherit', 'fixed'] as const).map((mode) => {
+                const active = p.videoDimensionMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => p.setVideoDimensionMode(mode)}
+                    disabled={p.videoLoading}
+                    className={p.videoLoading ? '' : 'scale-hover'}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      borderRadius: '10px',
+                      border: active ? '2px solid var(--pop-blue)' : '2px solid var(--panel-border)',
+                      background: active ? 'var(--pop-blue)' : 'var(--panel-bg)',
+                      color: active ? '#fff' : 'var(--text-secondary)',
+                      fontWeight: 800,
+                      fontSize: '12px',
+                      cursor: p.videoLoading ? 'not-allowed' : 'pointer',
+                      opacity: p.videoLoading ? 0.6 : 1,
+                    }}
+                  >
+                    {mode === 'inherit' ? t.controlPanel.videoDimensionModeInherit : t.controlPanel.videoDimensionModeFixed}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {/* Width / Height numeric inputs — disabled in 'inherit' mode
+              (dimmed) so the fixed values stay visible but don't drive
+              generation. */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', opacity: p.videoDimensionMode === 'inherit' ? 0.4 : 1 }}>
             {[
               ['videoWidthLabel', p.videoWidth, p.setVideoWidth, 1] as const,
               ['videoHeightLabel', p.videoHeight, p.setVideoHeight, 1] as const,
@@ -1161,12 +1203,17 @@ export function ControlPanel(p: ControlPanelProps) {
                   step={step}
                   value={value}
                   onChange={(e) => setter(parseFloat(e.target.value) || 0)}
-                  disabled={p.videoLoading}
+                  disabled={p.videoLoading || p.videoDimensionMode === 'inherit'}
                   style={{ borderRadius: '8px' }}
                 />
               </div>
             ))}
           </div>
+          {p.videoDimensionMode === 'inherit' && (
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '-6px' }}>
+              {t.controlPanel.videoDimensionModeInheritHint}
+            </div>
+          )}
 
           {/* Length slider — state stays in frames (the workflow's native
               unit; see server/workflows/i2v.json node 796), but the UI
