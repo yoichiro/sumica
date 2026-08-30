@@ -70,6 +70,8 @@ export const ja = {
     modeVideo: '🎬 動画',
     videoSourceLabel: '元画像',
     videoSourceRemoveTitle: 'この画像を外す',
+    videoSourceClearAllButton: '全解除',
+    videoSourceClearAllTitle: '選択中の元画像をすべて外す',
     videoPromptLabel: '動画プロンプト (日本語でOK — 動きや雰囲気を書いてね)',
     videoPromptPlaceholder: '例: ゆっくりカメラが引きながら、髪がふわりと揺れる',
     videoWidthLabel: '動画の幅 (px)',

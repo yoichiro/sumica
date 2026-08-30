@@ -135,6 +135,7 @@ export interface ControlPanelProps {
   // only its thumbnail is displayed.
   videoSourceImages: GenerationData[];
   onRemoveVideoSourceAt: (index: number) => void;
+  onClearVideoSources: () => void;
 
   // Single natural-language input. Empty → the app skips LM Studio and only
   // sends the fixed prefixes to ComfyUI. Non-empty → the app enhances it via
@@ -1051,10 +1052,33 @@ export function ControlPanel(p: ControlPanelProps) {
               it individually. Wrap-horizontal so 3+ images stay legible in
               the fixed-width video form column. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
-              {t.controlPanel.videoSourceLabel}
-              {p.videoSourceImages.length > 1 ? ` (${p.videoSourceImages.length})` : ''}
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                {t.controlPanel.videoSourceLabel}
+                {p.videoSourceImages.length > 1 ? ` (${p.videoSourceImages.length})` : ''}
+              </label>
+              {p.videoSourceImages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={p.onClearVideoSources}
+                  disabled={p.videoLoading}
+                  title={t.controlPanel.videoSourceClearAllTitle}
+                  className={p.videoLoading ? '' : 'scale-hover'}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--pop-blue)',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    cursor: p.videoLoading ? 'not-allowed' : 'pointer',
+                    opacity: p.videoLoading ? 0.4 : 1,
+                    padding: '2px 4px',
+                  }}
+                >
+                  {t.controlPanel.videoSourceClearAllButton}
+                </button>
+              )}
+            </div>
             {p.videoSourceImages.length > 0 ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px', flexWrap: 'wrap' }}>
                 {p.videoSourceImages.map((src, idx) => (

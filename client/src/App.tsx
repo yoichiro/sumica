@@ -2654,6 +2654,7 @@ function App() {
           setVideoMode={setVideoMode}
           videoSourceImages={videoSourceImages}
           onRemoveVideoSourceAt={removeVideoSourceImageAt}
+          onClearVideoSources={() => setVideoSourceImages([])}
           videoPrompt={videoPrompt}
           setVideoPrompt={setVideoPrompt}
           videoWidth={videoWidth}
