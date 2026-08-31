@@ -299,6 +299,7 @@ export const en: typeof ja = {
     imageDownloaded: 'Image downloaded 💾',
     imageDownloadFailed: (details: string) => `Image download failed.\n\nDetails: ${details}`,
     videoGenerateSuccess: 'Video generated! 🎬⚡️',
+    videoSourceStaged: 'Added as a video source 🎬',
     videoGenerateFailed: (details: string) =>
       `Video generation failed.\n\nDetails: ${details}\n\nCheck that ComfyUI is running locally.`,
     videoGenerateCancelled: 'Video generation stopped 🛑',

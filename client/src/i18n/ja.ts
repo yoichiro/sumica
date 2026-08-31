@@ -298,6 +298,7 @@ export const ja = {
     imageDownloaded: '画像をダウンロードしました 💾',
     imageDownloadFailed: (details: string) => `画像のダウンロードに失敗しました。\n\n詳細: ${details}`,
     videoGenerateSuccess: '動画を生成しました！🎬⚡️',
+    videoSourceStaged: '動画生成の対象として追加しました 🎬',
     videoGenerateFailed: (details: string) =>
       `動画生成に失敗しました。\n\n詳細: ${details}\n\nComfyUI がローカルで正常に起動しているか確認してください。`,
     videoGenerateCancelled: '動画生成を止めました🛑',

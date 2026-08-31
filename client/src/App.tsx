@@ -733,10 +733,15 @@ function App() {
       setVideoHeight(Math.round(item.height * scale));
       switchControlTab('form');
     }
-    // If invoked from the Lightbox, close it so the video form is visible.
-    // (Best-effort — the lightbox may already be closed when called from
-    // the main preview panel, in which case setLightboxUrl(null) is a no-op.)
-    closeLightbox();
+    // Keep the Lightbox / fullscreen open so the user can navigate to the
+    // next image with ← / → and stage several sources in a row without
+    // reopening anything. A toast confirms each successful stage; dedup
+    // hits skip the toast because the thumbnail row already shows the
+    // image is present, so a "動画生成の対象に追加しました" flash after a
+    // no-op click would misrepresent what happened.
+    if (!alreadyStaged) {
+      addToast(t.toast.videoSourceStaged, 'success');
+    }
   };
 
   // Preview panel's video-branch "動画を生成" — reload every knob that
