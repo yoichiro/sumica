@@ -39,6 +39,11 @@ interface LightboxProps {
   // toggle button so the user always knows the current pace at a glance.
   slideshowIntervalMs: number;
   onCycleSlideshowInterval: () => void;
+  // Slideshow advance for the video branch. When slideshowPlaying is true and
+  // the current item is a video, App wants the next-item transition to happen
+  // when the video finishes playing rather than after a fixed timer. Undefined
+  // outside slideshow so the video can honor its normal loop attribute.
+  onSlideshowVideoEnded?: () => void;
   onOpenInPreview: () => void;
   // True while a generation is running (enhancing / generating / saving) —
   // the open-in-preview button is disabled in that window because sending
@@ -73,6 +78,7 @@ export function Lightbox({
   onToggleSlideshow,
   slideshowIntervalMs,
   onCycleSlideshowInterval,
+  onSlideshowVideoEnded,
   onOpenInPreview,
   openInPreviewDisabled,
   onClose,
@@ -108,8 +114,13 @@ export function Lightbox({
           poster={meta.posterUrl}
           controls
           playsInline
-          loop
+          // Slideshow advances by video end, so we suppress the loop
+          // attribute during slideshow so `ended` actually fires. When the
+          // slideshow is off the video loops as usual so the user can
+          // linger on a single clip.
+          loop={!onSlideshowVideoEnded}
           autoPlay
+          onEnded={onSlideshowVideoEnded}
           onClick={(e) => e.stopPropagation()}
           style={{ width: '100%', height: '100%', objectFit: 'contain', viewTransitionName: 'lightbox-morph' }}
         />
@@ -210,8 +221,11 @@ export function Lightbox({
             keyed on both `lightboxIndex` and `slideshowIntervalMs` so it
             remounts (and the CSS animation restarts from 0) on every tick,
             every manual ← / → nav, and every interval cycle. Only rendered
-            while the slideshow is active and the disabled gate is clear. */}
-        {slideshowPlaying && lightboxIndex >= 0 && displayedHistory.length >= 2 && (
+            while the slideshow is active and the disabled gate is clear.
+            SUPPRESSED on video items because the advance timing is governed
+            by the video's own `ended` event, not the interval — animating a
+            countdown that has no bearing on the actual switch would mislead. */}
+        {slideshowPlaying && lightboxIndex >= 0 && displayedHistory.length >= 2 && (meta?.mediaType ?? 'image') !== 'video' && (
           <svg
             key={`${lightboxIndex}-${slideshowIntervalMs}`}
             aria-hidden="true"
@@ -250,32 +264,38 @@ export function Lightbox({
         {/* Interval badge, bottom-right. Positioned outside the icon glyph so
             the Play/Pause visual stays intact; sized small enough to read but
             not compete for attention. Rendered even when disabled — a dim
-            preview is still useful context. */}
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            bottom: '-2px',
-            right: '-2px',
-            minWidth: '18px',
-            height: '14px',
-            padding: '0 3px',
-            borderRadius: '7px',
-            background: 'rgba(0, 0, 0, 0.72)',
-            color: '#fff',
-            fontSize: '9px',
-            fontWeight: 800,
-            letterSpacing: 0.3,
-            lineHeight: '14px',
-            textAlign: 'center',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '1px solid rgba(255, 255, 255, 0.35)',
-          }}
-        >
-          {Math.round(slideshowIntervalMs / 1000)}s
-        </span>
+            preview is still useful context.
+            HIDDEN on video items because the slideshow advances on the
+            video's own `ended` event, not on this interval — showing "30s"
+            beside a Play button that ignores the interval would mislead the
+            user into expecting a hard cutover 30 seconds in. */}
+        {(meta?.mediaType ?? 'image') !== 'video' && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              bottom: '-2px',
+              right: '-2px',
+              minWidth: '18px',
+              height: '14px',
+              padding: '0 3px',
+              borderRadius: '7px',
+              background: 'rgba(0, 0, 0, 0.72)',
+              color: '#fff',
+              fontSize: '9px',
+              fontWeight: 800,
+              letterSpacing: 0.3,
+              lineHeight: '14px',
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid rgba(255, 255, 255, 0.35)',
+            }}
+          >
+            {Math.round(slideshowIntervalMs / 1000)}s
+          </span>
+        )}
       </button>
       {/* Random-mode toggle: when ON, both manual ← / → and the slideshow
           timer pick a random next image (excluding the current one). Same

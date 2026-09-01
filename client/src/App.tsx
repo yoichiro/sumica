@@ -852,26 +852,38 @@ function App() {
     if (lightboxIndex >= 0) prevLightboxIndexRef.current = lightboxIndex;
   }, [lightboxIndex]);
 
+  // Advance the lightbox to the next slideshow item. Shared between the
+  // setInterval loop (images) and the video onEnded handler (videos), so both
+  // paths agree on the sequential-vs-random policy and on the fallback rule
+  // when displayedHistory is shorter than 2. Uses lightboxIndex from closure
+  // — the effect below re-runs whenever it changes, so a new interval or a
+  // new onEnded handler always sees the fresh index.
+  const advanceSlideshow = () => {
+    if (lightboxIndex < 0 || displayedHistory.length < 2) return;
+    const nextIdx = nextSlideshowIndex(lightboxIndex, displayedHistory.length, randomMode);
+    if (nextIdx === lightboxIndex) return;
+    const target = displayedHistory[nextIdx];
+    setMorphSourceKey(itemKey(target));
+    setLightboxUrl(target.imageUrl);
+  };
+
   // Slideshow: while slideshowPlaying is true and the lightbox is on a gallery-
-  // backed item (lightboxIndex >= 0), advance to the next index every
-  // slideshowIntervalMs. The `lightboxIndex` dep means any manual ← / → click
-  // resets the timer for free (effect cleans up + re-runs with the new index).
-  // The `slideshowIntervalMs` dep means right-click cycling the interval also
-  // resets the timer immediately, so the user sees the new pace on the very
-  // next tick instead of waiting out the old one. Sequential mode wraps at the
-  // end; random mode uses the same rejection-free draw as randomizeLightbox.
+  // backed IMAGE item, advance to the next index every slideshowIntervalMs.
+  // Video items are handled through the <video> element's onEnded callback
+  // instead (see onSlideshowVideoEnded passed to Lightbox below) — the timer
+  // would otherwise cut a video off mid-playback. The `lightboxIndex` dep
+  // means any manual ← / → click resets the timer for free (effect cleans up
+  // + re-runs with the new index); the `lightboxMeta` dep does the same when
+  // the user navigates between an image and a video. Sequential mode wraps at
+  // the end; random mode uses the same rejection-free draw as randomizeLightbox.
   useEffect(() => {
     if (!slideshowPlaying) return;
     if (lightboxIndex < 0 || displayedHistory.length < 2) return;
-    const id = setInterval(() => {
-      const nextIdx = nextSlideshowIndex(lightboxIndex, displayedHistory.length, randomMode);
-      if (nextIdx === lightboxIndex) return;
-      const target = displayedHistory[nextIdx];
-      setMorphSourceKey(itemKey(target));
-      setLightboxUrl(target.imageUrl);
-    }, slideshowIntervalMs);
+    if ((lightboxMeta?.mediaType ?? 'image') === 'video') return;
+    const id = setInterval(advanceSlideshow, slideshowIntervalMs);
     return () => clearInterval(id);
-  }, [slideshowPlaying, lightboxIndex, randomMode, displayedHistory, slideshowIntervalMs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slideshowPlaying, lightboxIndex, randomMode, displayedHistory, slideshowIntervalMs, lightboxMeta]);
 
   // Any exit from the lightbox (Esc, close button, background click) pauses
   // the slideshow so it never keeps ticking on a hidden surface. The user
@@ -2864,6 +2876,7 @@ function App() {
         onToggleSlideshow={() => setSlideshowPlaying((v) => !v)}
         slideshowIntervalMs={slideshowIntervalMs}
         onCycleSlideshowInterval={cycleSlideshowInterval}
+        onSlideshowVideoEnded={slideshowPlaying ? advanceSlideshow : undefined}
         onOpenInPreview={() => {
           const item = displayedHistory[lightboxIndex];
           if (!item) return;
