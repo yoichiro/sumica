@@ -37,6 +37,17 @@ interface BatchGenerationModalProps {
 
   batchMode: BatchMode;
   setBatchMode: (mode: BatchMode) => void;
+  // Which of the three axes contribute to the cross-product job list. The
+  // batchMode above still drives which tab is currently VISIBLE; these flags
+  // drive whether the tab's controls actually take effect when the user hits
+  // 生成する. They are independent so any combination — including all three —
+  // is allowed.
+  useCountCondition: boolean;
+  setUseCountCondition: (v: boolean) => void;
+  useSizeCondition: boolean;
+  setUseSizeCondition: (v: boolean) => void;
+  useModelCondition: boolean;
+  setUseModelCondition: (v: boolean) => void;
 
   batchCount: number;
   setBatchCount: (n: number) => void;
@@ -74,6 +85,9 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
   const {
     open, onClose, modelTypeFilter, sdModels, width, height,
     batchMode, setBatchMode,
+    useCountCondition, setUseCountCondition,
+    useSizeCondition, setUseSizeCondition,
+    useModelCondition, setUseModelCondition,
     batchCount, setBatchCount,
     selectedBatchRatios, setSelectedBatchRatios,
     selectedBatchOrientations, setSelectedBatchOrientations,
@@ -231,7 +245,12 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
         </div>
 
         {batchMode === 'count' ? (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer', padding: '8px 10px', borderRadius: '10px', background: 'var(--panel-bg-sunk)' }}>
+              <input type="checkbox" checked={useCountCondition} onChange={(e) => setUseCountCondition(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+              {t.batchModal.applyConditionLabel}
+            </label>
+            <div style={{ opacity: useCountCondition ? 1 : 0.4, pointerEvents: useCountCondition ? 'auto' : 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
               {t.batchModal.countDescription}
             </p>
@@ -253,9 +272,16 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                 <span>{t.batchModal.countRangeLabel(10)}</span>
               </div>
             </div>
-          </>
+            </div>
+          </div>
         ) : batchMode === 'size' ? (
-          modelTypeFilter === 'sdxl' ? (() => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer', padding: '8px 10px', borderRadius: '10px', background: 'var(--panel-bg-sunk)' }}>
+              <input type="checkbox" checked={useSizeCondition} onChange={(e) => setUseSizeCondition(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+              {t.batchModal.applyConditionLabel}
+            </label>
+            <div style={{ opacity: useSizeCondition ? 1 : 0.4, pointerEvents: useSizeCondition ? 'auto' : 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {modelTypeFilter === 'sdxl' ? (() => {
             const sdxlJobs = buildSdxlBatchJobs();
             return (
               <>
@@ -452,9 +478,16 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                 </div>
               </>
             );
-          })()
+          })()}
+            </div>
+          </div>
         ) : (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer', padding: '8px 10px', borderRadius: '10px', background: 'var(--panel-bg-sunk)' }}>
+              <input type="checkbox" checked={useModelCondition} onChange={(e) => setUseModelCondition(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+              {t.batchModal.applyConditionLabel}
+            </label>
+            <div style={{ opacity: useModelCondition ? 1 : 0.4, pointerEvents: useModelCondition ? 'auto' : 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
               {t.batchModal.modelDescription(width, height)}
             </p>
@@ -523,7 +556,8 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
                   : t.batchModal.noModelsOfType(getArchLabel(modelTypeFilter))}
               </div>
             ); })()}
-          </>
+            </div>
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -536,33 +570,40 @@ export function BatchGenerationModal(props: BatchGenerationModalProps) {
             {t.batchModal.cancelButton}
           </button>
           {(() => {
-            const sizeJobs = batchMode === 'size'
+            // Cross-product of the enabled axes. Each disabled axis contributes
+            // a single "no-op" slot so it drops out of the multiplication —
+            // e.g. only-size gives [size1, size2, ...] × [{} model] × [1 count],
+            // enable count as well and every size gets repeated batchCount times,
+            // enable model too and every (size, count) pair gets one job per model.
+            const sizeSlots: BatchJob[] = useSizeCondition
               ? (modelTypeFilter === 'sdxl' ? buildSdxlBatchJobs() : buildSd15BatchJobs())
-              : [];
-            const sizeModeInvalid = sizeJobs.length === 0;
+              : [{ width, height }];
+            const modelSlots: (string | undefined)[] = useModelCondition
+              ? sdModels.filter((m) => selectedBatchModels.has(m.title)).map((m) => m.title)
+              : [undefined];
+            const countSlots = useCountCondition ? batchCount : 1;
+            const jobs: BatchJob[] = [];
+            for (const modelName of modelSlots) {
+              for (const sizeSlot of sizeSlots) {
+                for (let i = 0; i < countSlots; i++) {
+                  jobs.push({ width: sizeSlot.width, height: sizeSlot.height, ...(modelName ? { model: modelName } : {}) });
+                }
+              }
+            }
+            const noneChecked = !useCountCondition && !useSizeCondition && !useModelCondition;
+            const sizeInvalid = useSizeCondition && sizeSlots.length === 0;
+            const modelInvalid = useModelCondition && (sdModels.filter((m) => m.type === modelTypeFilter).length === 0 || selectedBatchModels.size === 0);
+            const disabled = noneChecked || sizeInvalid || modelInvalid || jobs.length === 0;
             return (
               <button
                 type="button"
-                disabled={
-                  (batchMode === 'size' && sizeModeInvalid) ||
-                  (batchMode === 'model' && (sdModels.filter((m) => m.type === modelTypeFilter).length === 0 || selectedBatchModels.size === 0))
-                }
-                onClick={() => {
-                  const jobs: BatchJob[] = batchMode === 'count'
-                    ? Array(batchCount).fill({ width, height })
-                    : batchMode === 'size'
-                      ? sizeJobs
-                      : sdModels.filter(m => selectedBatchModels.has(m.title)).map(m => ({ width, height, model: m.title }));
-                  onStartBatch(jobs);
-                }}
+                disabled={disabled}
+                onClick={() => onStartBatch(jobs)}
                 className="btn-neon"
                 style={{ flex: 1, padding: '12px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
+                title={noneChecked ? t.batchModal.noConditionsSelectedHint : undefined}
               >
-                {batchMode === 'count'
-                  ? t.batchModal.generateCountButton(batchCount)
-                  : batchMode === 'size'
-                    ? t.batchModal.generateSizeButton(sizeJobs.length)
-                    : t.batchModal.generateModelButton(selectedBatchModels.size)}
+                {t.batchModal.generateCountButton(jobs.length)}
               </button>
             );
           })()}

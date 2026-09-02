@@ -1069,6 +1069,13 @@ function App() {
   const [batchCount, setBatchCount] = useState(5);
   const [videoBatchCount, setVideoBatchCount] = useState(2);
   const [batchMode, setBatchMode] = useState<'count' | 'size' | 'model'>('count');
+  // Whether each of the three axes contributes to the generated job list.
+  // With multiple axes enabled the batch modal takes the cross-product of the
+  // enabled ones. Default: count only, matching the historical single-axis
+  // behavior — the user opts into additional axes on the modal.
+  const [useCountCondition, setUseCountCondition] = useState(true);
+  const [useSizeCondition, setUseSizeCondition] = useState(false);
+  const [useModelCondition, setUseModelCondition] = useState(false);
   // SDXL picker state (aspect ratio + orientation + size). Only used when
   // modelTypeFilter === 'sdxl'.
   const [selectedRatio, setSelectedRatio] = useState<SdxlRatio>('1:1');
@@ -2913,6 +2920,12 @@ function App() {
         height={height}
         batchMode={batchMode}
         setBatchMode={setBatchMode}
+        useCountCondition={useCountCondition}
+        setUseCountCondition={setUseCountCondition}
+        useSizeCondition={useSizeCondition}
+        setUseSizeCondition={setUseSizeCondition}
+        useModelCondition={useModelCondition}
+        setUseModelCondition={setUseModelCondition}
         batchCount={batchCount}
         setBatchCount={setBatchCount}
         selectedBatchRatios={selectedBatchRatios}

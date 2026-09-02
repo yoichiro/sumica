@@ -237,6 +237,8 @@ export const ja = {
     generateCountButton: (n: number) => `${n}枚生成する`,
     generateSizeButton: (n: number) => `${n}通り生成する`,
     generateModelButton: (n: number) => `${n}モデルで生成する`,
+    applyConditionLabel: 'この条件を適用する',
+    noConditionsSelectedHint: '生成に適用する条件を少なくとも1つ選んでください。',
   },
   videoBatchModal: {
     title: 'まとめて生成 🎬',

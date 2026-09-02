@@ -239,6 +239,8 @@ export const en: typeof ja = {
     generateCountButton: (n) => `Generate ${n} images`,
     generateSizeButton: (n) => `Generate ${n} combinations`,
     generateModelButton: (n) => `Generate with ${n} models`,
+    applyConditionLabel: 'Apply this condition',
+    noConditionsSelectedHint: 'Enable at least one condition to run the batch.',
   },
   videoBatchModal: {
     title: 'Batch generate 🎬',
