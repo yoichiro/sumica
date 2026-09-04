@@ -2248,8 +2248,12 @@ function App() {
     // PreviewPanel falls through to its loading branch (which shows the
     // video-mode stage label + cancel button) instead of leaving a stale
     // image or video from a previous run visible while the new run runs.
+    // Batch mode intentionally KEEPS latestResult so the just-completed video
+    // from the previous iteration stays on screen until this iteration's own
+    // completion event replaces it — matching the image batch's
+    // setCurrentGeneration(saved) live-update UX (see handleBatchGenerate).
     setCurrentGeneration(null);
-    setLatestResult(null);
+    if (!overrides) setLatestResult(null);
     setGenStatus('generating');
     // Start the 3-step indicator at step 1 (prompt enhance). Batch mode passes
     // overrides carrying the already-enhanced prompts, and empty-prompt runs
