@@ -142,6 +142,8 @@ export const ja = {
     favoritesOnlyToggleOff: 'お気に入りのみ表示',
     selectAll: '全選択',
     selectNone: '全解除',
+    videoGenerateForSelectedButton: '動画生成',
+    videoGenerateForSelectedTitle: '選択中の画像を動画生成の対象として追加',
     selectTooltip: '選択',
     deselectTooltip: '選択を解除',
     recallToPreview: 'プレビューに表示',
@@ -301,6 +303,8 @@ export const ja = {
     imageDownloadFailed: (details: string) => `画像のダウンロードに失敗しました。\n\n詳細: ${details}`,
     videoGenerateSuccess: '動画を生成しました！🎬⚡️',
     videoSourceStaged: '動画生成の対象として追加しました 🎬',
+    videoSourcesStaged: (n: number) => `${n}枚を動画生成の対象として追加しました 🎬`,
+    videoSourcesStagedNothing: '追加できる画像がありません (動画は元画像にできません)',
     videoGenerateFailed: (details: string) =>
       `動画生成に失敗しました。\n\n詳細: ${details}\n\nComfyUI がローカルで正常に起動しているか確認してください。`,
     videoGenerateCancelled: '動画生成を止めました🛑',

@@ -180,6 +180,7 @@ interface HistoryGalleryProps {
   onToggleSelected: (id: string) => void;
   onToggleFavorite: (item: GenerationData) => void;
   onRequestDelete: (ids: string[]) => void;
+  onStageVideoSources: (ids: string[]) => void;
   onOpenLightbox: (url: string, sourceKey: string) => void;
   onOpenInPreview: (item: GenerationData) => void;
   morphSourceKey: string | null;
@@ -210,6 +211,7 @@ export function HistoryGallery({
   onToggleSelected,
   onToggleFavorite,
   onRequestDelete,
+  onStageVideoSources,
   onOpenLightbox,
   onOpenInPreview,
   morphSourceKey,
@@ -437,6 +439,25 @@ export function HistoryGallery({
           }}
         >
           {t.gallery.selectNone}
+        </button>
+        <button
+          type="button"
+          onClick={() => onStageVideoSources([...selectedIds])}
+          disabled={selectedIds.size === 0}
+          title={t.gallery.videoGenerateForSelectedTitle}
+          className={selectedIds.size === 0 ? '' : 'scale-hover'}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: selectedIds.size === 0 ? 'var(--text-muted)' : 'var(--pop-blue)',
+            padding: '4px 8px',
+            fontSize: '13px',
+            fontWeight: 800,
+            cursor: selectedIds.size === 0 ? 'not-allowed' : 'pointer',
+            opacity: selectedIds.size === 0 ? 0.6 : 1
+          }}
+        >
+          {t.gallery.videoGenerateForSelectedButton}
         </button>
         <button
           type="button"

@@ -744,6 +744,49 @@ function App() {
     }
   };
 
+  // Bulk-stage from the history gallery: given a set of selected item ids,
+  // look up each record, keep only image records (a video record can't be
+  // the source of itself), and append them to videoSourceImages in order via
+  // the same addVideoSourceImage helper the Lightbox uses. Seeds video mode
+  // + dimensions on the very first addition (delegated to handleOpenVideoForm
+  // for the first eligible image), then silently appends the rest so we only
+  // touch the video-mode side effects once. One aggregate toast fires at the
+  // end so a 5-image bulk stage doesn't spam 5 individual toasts.
+  const handleStageVideoSourcesForSelectedIds = (ids: string[]) => {
+    const records: GenerationData[] = [];
+    for (const id of ids) {
+      const rec = displayedHistory.find((r) => itemKey(r) === id) ?? history.find((r) => itemKey(r) === id);
+      if (rec && (rec.mediaType ?? 'image') !== 'video') records.push(rec);
+    }
+    if (records.length === 0) {
+      addToast(t.toast.videoSourcesStagedNothing, 'error');
+      return;
+    }
+    // Track which were actually newly added (dedup by id) so the toast count
+    // reflects the real staged count, not the raw selection count.
+    const beforeIds = new Set(videoSourceImages.map((r) => r.id));
+    let addedCount = 0;
+    // First eligible image goes through handleOpenVideoForm so mode/dims
+    // seeding happens exactly once and matches the Lightbox path. The rest
+    // append via the low-level helper — no need to switch tabs again.
+    handleOpenVideoForm(records[0]);
+    if (!beforeIds.has(records[0].id)) addedCount++;
+    for (let i = 1; i < records.length; i++) {
+      const r = records[i];
+      if (!beforeIds.has(r.id) && !records.slice(0, i).some((prev) => prev.id === r.id)) {
+        addVideoSourceImage(r);
+        addedCount++;
+      }
+    }
+    // handleOpenVideoForm already toasts on its single-image path; suppress
+    // that here by only firing the bulk toast when we added more than one
+    // image OR when the single image wasn't a fresh add. For the classic
+    // 1-image case handleOpenVideoForm's own toast is the right message.
+    if (records.length > 1) {
+      addToast(t.toast.videoSourcesStaged(addedCount), 'success');
+    }
+  };
+
   // Preview panel's video-branch "動画を生成" — reload every knob that
   // produced `videoRecord` (parent image, LTX params, resolution) so the
   // user can regenerate the exact same run (or tweak it and try again).
@@ -2850,6 +2893,7 @@ function App() {
               onToggleSelected={toggleSelected}
               onToggleFavorite={toggleFavorite}
               onRequestDelete={requestDelete}
+              onStageVideoSources={handleStageVideoSourcesForSelectedIds}
               onOpenLightbox={openLightbox}
               onOpenInPreview={openInPreview}
               morphSourceKey={morphSourceKey}

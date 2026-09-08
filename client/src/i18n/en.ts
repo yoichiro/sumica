@@ -144,6 +144,8 @@ export const en: typeof ja = {
     favoritesOnlyToggleOff: 'Show favorites only',
     selectAll: 'Select all',
     selectNone: 'Deselect all',
+    videoGenerateForSelectedButton: 'Generate video',
+    videoGenerateForSelectedTitle: 'Stage selected images as video sources',
     selectTooltip: 'Select',
     deselectTooltip: 'Deselect',
     recallToPreview: 'Show in preview',
@@ -302,6 +304,8 @@ export const en: typeof ja = {
     imageDownloadFailed: (details: string) => `Image download failed.\n\nDetails: ${details}`,
     videoGenerateSuccess: 'Video generated! 🎬⚡️',
     videoSourceStaged: 'Added as a video source 🎬',
+    videoSourcesStaged: (n: number) => `Added ${n} image${n === 1 ? '' : 's'} as video source${n === 1 ? '' : 's'} 🎬`,
+    videoSourcesStagedNothing: 'No eligible images to stage (video records can\'t be a video source)',
     videoGenerateFailed: (details: string) =>
       `Video generation failed.\n\nDetails: ${details}\n\nCheck that ComfyUI is running locally.`,
     videoGenerateCancelled: 'Video generation stopped 🛑',
