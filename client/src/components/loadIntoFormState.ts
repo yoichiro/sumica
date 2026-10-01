@@ -174,7 +174,7 @@ export interface FormLora {
  * when present and falling back to a storage lookup (e.g. localStorage) for legacy records.
  */
 export function resolveLoadedLoras(
-  loras: LoadedLora[] | undefined,
+  loras: readonly LoadedLora[] | undefined,
   getFallbackKeywords: (name: string) => string
 ): FormLora[] {
   if (!loras || !Array.isArray(loras)) return [];
