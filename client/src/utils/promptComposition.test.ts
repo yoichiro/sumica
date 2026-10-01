@@ -38,7 +38,7 @@ describe('composePositivePrompt', () => {
     expect(result).toBe('flat color, retro style, cat on a roof');
   });
 
-  it('cleans up leading, trailing, and duplicate commas inside parts', () => {
+  it('cleans up leading and trailing commas and whitespace on parts', () => {
     const result = composePositivePrompt({
       modelKeywords: ' , score_9, score_8_up , , ',
       loraKeywords: [', ribbon ,'],

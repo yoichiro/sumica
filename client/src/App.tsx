@@ -1227,6 +1227,15 @@ function App() {
     }
   }, [health?.stableDiffusion.connected]);
 
+  // Synchronize modelKeywords whenever the active checkpoint changes.
+  useEffect(() => {
+    if (selectedModel) {
+      setModelKeywords(localStorage.getItem(`sumica.modelKeywords.${selectedModel}`) || '');
+    } else {
+      setModelKeywords('');
+    }
+  }, [selectedModel]);
+
   // Re-validate everything that depends on the active architecture whenever the
   // toggle flips. sdModels is intentionally not a dependency here — this should
   // only run on an explicit toggle flip, not every time the model list happens
@@ -1242,16 +1251,7 @@ function App() {
     // the same base filename's current title — otherwise loadIntoForm's
     // setSelectedModel(item.model) would fall through to the first-of-arch
     // fallback on any hash mismatch.
-    setSelectedModel((prev) => {
-      const next = resolveSelectedModel(prev, modelTypeFilter, sdModels);
-      if (next) {
-        const saved = localStorage.getItem(`sumica.modelKeywords.${next}`) || '';
-        setModelKeywords(saved);
-      } else {
-        setModelKeywords('');
-      }
-      return next;
-    });
+    setSelectedModel((prev) => resolveSelectedModel(prev, modelTypeFilter, sdModels));
 
     if (modelTypeFilter === 'sdxl') {
       // Seed the SDXL picker from the current width/height if they map to a preset;
@@ -1545,14 +1545,7 @@ function App() {
         const models: SdModel[] = Array.isArray(data.models) ? data.models : [];
         setSdModels(models);
         const initialModel = data.current || '';
-        setSelectedModel((prev) => {
-          const next = prev || initialModel;
-          if (next) {
-            const saved = localStorage.getItem(`sumica.modelKeywords.${next}`) || '';
-            setModelKeywords(saved);
-          }
-          return next;
-        });
+        setSelectedModel((prev) => prev || initialModel);
         if (!modelTypeInitialized.current && data.current) {
           const currentType = models.find((m) => m.title === data.current)?.type;
           if (currentType) {
@@ -1649,12 +1642,6 @@ function App() {
 
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
-    if (model) {
-      const saved = localStorage.getItem(`sumica.modelKeywords.${model}`) || '';
-      setModelKeywords(saved);
-    } else {
-      setModelKeywords('');
-    }
   };
 
   // LoRA stack helpers (default weight 0.8; applied as <lora:name:weight> at generation).
@@ -1714,11 +1701,6 @@ function App() {
     setCfgScale(item.cfgScale);
     const resolvedModel = resolveSelectedModel(item.model || '', s.archToSet, sdModels);
     setSelectedModel(resolvedModel);
-    if (resolvedModel) {
-      setModelKeywords(localStorage.getItem(`sumica.modelKeywords.${resolvedModel}`) || '');
-    } else {
-      setModelKeywords('');
-    }
     setSelectedSampler(item.sampler || '');
     setSelectedScheduler(item.scheduler || '');
     setSelectedLoras(
@@ -1800,11 +1782,6 @@ function App() {
     // apply to loadIntoForm, applyRecipe, and the modelTypeFilter effect at once.
     const resolvedModel = resolveSelectedModel(rp.model, s.archToSet, sdModels);
     setSelectedModel(resolvedModel);
-    if (resolvedModel) {
-      setModelKeywords(localStorage.getItem(`sumica.modelKeywords.${resolvedModel}`) || '');
-    } else {
-      setModelKeywords('');
-    }
     setSelectedSampler(rp.sampler);
     setSelectedScheduler(rp.scheduler);
     setSteps(rp.steps);
