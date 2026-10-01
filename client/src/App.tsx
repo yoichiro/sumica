@@ -31,7 +31,14 @@ import {
   type SdLora,
   type Architecture,
 } from './components/presets';
-import { computeLoadIntoFormState, inferSdArchitectureFromTitle, resolveSelectedModel } from './components/loadIntoFormState';
+import {
+  computeLoadIntoFormState,
+  inferSdArchitectureFromTitle,
+  resolveSelectedModel,
+  resolveLoadedLoras,
+  type FormLora,
+} from './components/loadIntoFormState';
+import { composePositivePrompt } from './utils/promptComposition';
 import { resolveLightboxKey } from './components/lightboxKeyboard';
 import { nextSlideshowIndex } from './components/slideshowStep';
 import { formatDownloadFilename, downloadImage } from './utils/download';
@@ -128,7 +135,7 @@ export interface GenerationData {
   hrScale?: number;
   hrSecondPassSteps?: number;
   denoisingStrength?: number;
-  loras?: { name: string; weight: number }[];
+  loras?: { name: string; weight: number; keywords?: string }[];
   // SDXL-only extras. Both absent means the pipeline ran without the refinement
   // pass / external VAE, identical to pre-feature generations.
   refiner?: string;
@@ -221,7 +228,8 @@ function App() {
   // first time fetchSdModels() succeeds (see modelTypeInitialized below).
   const [modelTypeFilter, setModelTypeFilter] = useState<Architecture>('sd15');
   const modelTypeInitialized = useRef(false);
-  const [selectedLoras, setSelectedLoras] = useState<{ name: string; weight: number }[]>([]);
+  const [modelKeywords, setModelKeywords] = useState<string>('');
+  const [selectedLoras, setSelectedLoras] = useState<FormLora[]>([]);
   const [sdUpscalers, setSdUpscalers] = useState<string[]>([]);
   const [hiresFixEnabled, setHiresFixEnabled] = useState(false);
   const [selectedUpscaler, setSelectedUpscaler] = useState('');
@@ -1234,7 +1242,16 @@ function App() {
     // the same base filename's current title — otherwise loadIntoForm's
     // setSelectedModel(item.model) would fall through to the first-of-arch
     // fallback on any hash mismatch.
-    setSelectedModel((prev) => resolveSelectedModel(prev, modelTypeFilter, sdModels));
+    setSelectedModel((prev) => {
+      const next = resolveSelectedModel(prev, modelTypeFilter, sdModels);
+      if (next) {
+        const saved = localStorage.getItem(`sumica.modelKeywords.${next}`) || '';
+        setModelKeywords(saved);
+      } else {
+        setModelKeywords('');
+      }
+      return next;
+    });
 
     if (modelTypeFilter === 'sdxl') {
       // Seed the SDXL picker from the current width/height if they map to a preset;
@@ -1527,7 +1544,15 @@ function App() {
         const data = await res.json();
         const models: SdModel[] = Array.isArray(data.models) ? data.models : [];
         setSdModels(models);
-        setSelectedModel((prev) => prev || data.current || '');
+        const initialModel = data.current || '';
+        setSelectedModel((prev) => {
+          const next = prev || initialModel;
+          if (next) {
+            const saved = localStorage.getItem(`sumica.modelKeywords.${next}`) || '';
+            setModelKeywords(saved);
+          }
+          return next;
+        });
         if (!modelTypeInitialized.current && data.current) {
           const currentType = models.find((m) => m.title === data.current)?.type;
           if (currentType) {
@@ -1615,14 +1640,38 @@ function App() {
     }
   };
 
+  const handleModelKeywordsChange = (val: string) => {
+    setModelKeywords(val);
+    if (selectedModel) {
+      localStorage.setItem(`sumica.modelKeywords.${selectedModel}`, val);
+    }
+  };
+
+  const handleSelectModel = (model: string) => {
+    setSelectedModel(model);
+    if (model) {
+      const saved = localStorage.getItem(`sumica.modelKeywords.${model}`) || '';
+      setModelKeywords(saved);
+    } else {
+      setModelKeywords('');
+    }
+  };
+
   // LoRA stack helpers (default weight 0.8; applied as <lora:name:weight> at generation).
   const addLora = (name: string) => {
     if (!name) return;
-    setSelectedLoras((prev) => (prev.some((l) => l.name === name) ? prev : [...prev, { name, weight: 0.8 }]));
+    const saved = localStorage.getItem(`sumica.loraKeywords.${name}`) || '';
+    setSelectedLoras((prev) =>
+      prev.some((l) => l.name === name) ? prev : [...prev, { name, weight: 0.8, keywords: saved }]
+    );
   };
   const removeLora = (name: string) => setSelectedLoras((prev) => prev.filter((l) => l.name !== name));
   const setLoraWeight = (name: string, weight: number) =>
     setSelectedLoras((prev) => prev.map((l) => (l.name === name ? { ...l, weight } : l)));
+  const setLoraKeywords = (name: string, keywords: string) => {
+    setSelectedLoras((prev) => prev.map((l) => (l.name === name ? { ...l, keywords } : l)));
+    localStorage.setItem(`sumica.loraKeywords.${name}`, keywords);
+  };
 
   // Populate the left-panel form fields from a history item so the user can
   // tweak and regenerate. If the item carries a seed, lock the seed field to
@@ -1663,12 +1712,18 @@ function App() {
     }
     setSteps(item.steps);
     setCfgScale(item.cfgScale);
-    // Rebind item.model (which carries the hash it had at save time) to the
-    // currently-loaded sdModels title. See resolveSelectedModel's docstring.
-    setSelectedModel(resolveSelectedModel(item.model || '', s.archToSet, sdModels));
+    const resolvedModel = resolveSelectedModel(item.model || '', s.archToSet, sdModels);
+    setSelectedModel(resolvedModel);
+    if (resolvedModel) {
+      setModelKeywords(localStorage.getItem(`sumica.modelKeywords.${resolvedModel}`) || '');
+    } else {
+      setModelKeywords('');
+    }
     setSelectedSampler(item.sampler || '');
     setSelectedScheduler(item.scheduler || '');
-    setSelectedLoras(item.loras || []);
+    setSelectedLoras(
+      resolveLoadedLoras(item.loras, (name) => localStorage.getItem(`sumica.loraKeywords.${name}`) || '')
+    );
     setHiresFixEnabled(!!item.enableHr);
     setSelectedUpscaler(item.hrUpscaler || '');
     setHiresScale(item.hrScale ?? 2);
@@ -1743,7 +1798,13 @@ function App() {
     // title (with hash) so the model <select> shows a matching option. Uses the
     // shared resolveSelectedModel helper so any future hash-normalization tweaks
     // apply to loadIntoForm, applyRecipe, and the modelTypeFilter effect at once.
-    setSelectedModel(resolveSelectedModel(rp.model, s.archToSet, sdModels));
+    const resolvedModel = resolveSelectedModel(rp.model, s.archToSet, sdModels);
+    setSelectedModel(resolvedModel);
+    if (resolvedModel) {
+      setModelKeywords(localStorage.getItem(`sumica.modelKeywords.${resolvedModel}`) || '');
+    } else {
+      setModelKeywords('');
+    }
     setSelectedSampler(rp.sampler);
     setSelectedScheduler(rp.scheduler);
     setSteps(rp.steps);
@@ -1753,7 +1814,9 @@ function App() {
     setHiresScale(rp.hiresScale);
     setHiresSteps(rp.hiresSteps);
     setHiresDenoising(rp.hiresDenoising);
-    setSelectedLoras(rp.loras.map((l) => ({ name: l.name, weight: l.weight })));
+    setSelectedLoras(
+      resolveLoadedLoras(rp.loras, (name) => localStorage.getItem(`sumica.loraKeywords.${name}`) || '')
+    );
     setSelectedRefiner(rp.refiner);
     setRefinerSwitchAt(rp.refinerSwitchAt);
     setSelectedVae(rp.vae);
@@ -2052,8 +2115,14 @@ function App() {
       setLoadingStep(2);
       setGenStatus('generating');
 
+      const effectivePositive = composePositivePrompt({
+        modelKeywords,
+        loraKeywords: selectedLoras.map((l) => l.keywords),
+        enhancedPrompt: positive,
+      });
+
       const result = await runWithProgressTracking(() =>
-        generateImage(positive, negative, prompt, seedLocked ? seedValue : -1, width, height)
+        generateImage(effectivePositive, negative, prompt, seedLocked ? seedValue : -1, width, height)
       );
 
       if (result.success) {
@@ -2155,6 +2224,12 @@ function App() {
       setLoadingStep(2);
       setGenStatus('generating');
 
+      const effectivePositive = composePositivePrompt({
+        modelKeywords,
+        loraKeywords: selectedLoras.map((l) => l.keywords),
+        enhancedPrompt: positive,
+      });
+
       let succeeded = 0;
       let failed = 0;
       let cancelledInLoop = false;
@@ -2171,9 +2246,19 @@ function App() {
         const job = jobs[i];
         setBatchProgress({ current: i + 1, total: jobs.length });
         const seed = seedLocked ? seedValue : -1;
+        const jobModelKeywords = job.model
+          ? (localStorage.getItem(`sumica.modelKeywords.${job.model}`) || '')
+          : modelKeywords;
+        const jobPositive = job.model
+          ? composePositivePrompt({
+              modelKeywords: jobModelKeywords,
+              loraKeywords: selectedLoras.map((l) => l.keywords),
+              enhancedPrompt: positive,
+            })
+          : effectivePositive;
         try {
           const saved = await runWithProgressTracking(() =>
-            generateAndPersist(positive, negative, prompt, seed, job.width, job.height, job.model)
+            generateAndPersist(jobPositive, negative, prompt, seed, job.width, job.height, job.model)
           );
           succeeded++;
           setCurrentGeneration(saved); // live preview update
@@ -2689,7 +2774,9 @@ function App() {
           modelTypeFilter={modelTypeFilter}
           setModelTypeFilter={setModelTypeFilter}
           selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
+          setSelectedModel={handleSelectModel}
+          modelKeywords={modelKeywords}
+          setModelKeywords={handleModelKeywordsChange}
           sdModels={sdModels}
           selectedSampler={selectedSampler}
           setSelectedSampler={setSelectedSampler}
@@ -2731,6 +2818,7 @@ function App() {
           addLora={addLora}
           removeLora={removeLora}
           setLoraWeight={setLoraWeight}
+          setLoraKeywords={setLoraKeywords}
           selectedRefiner={selectedRefiner}
           setSelectedRefiner={setSelectedRefiner}
           refinerSwitchAt={refinerSwitchAt}
