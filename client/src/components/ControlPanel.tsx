@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction, FormEvent } from 'react';
-import { Sparkles, RotateCw, Layers, X, Video } from 'lucide-react';
+import { Sparkles, RotateCw, Layers, Video } from 'lucide-react';
 import { t } from '../i18n';
 import type { GenerationData } from '../App';
 import {
@@ -33,6 +33,8 @@ export interface ControlPanelProps {
   setModelTypeFilter: (v: Architecture) => void;
   selectedModel: string;
   setSelectedModel: (v: string) => void;
+  modelKeywords: string;
+  setModelKeywords: (v: string) => void;
   sdModels: SdModel[];
 
   selectedSampler: string;
@@ -79,10 +81,11 @@ export interface ControlPanelProps {
   setHiresDenoising: (v: number) => void;
 
   sdLoras: SdLora[];
-  selectedLoras: { name: string; weight: number }[];
+  selectedLoras: { name: string; weight: number; keywords: string }[];
   addLora: (name: string) => void;
   removeLora: (name: string) => void;
   setLoraWeight: (name: string, w: number) => void;
+  setLoraKeywords: (name: string, keywords: string) => void;
 
   // SDXL-only extras
   selectedRefiner: string;
@@ -429,6 +432,23 @@ export function ControlPanel(p: ControlPanelProps) {
                   </select>
                 );
               })()}
+              {/* Checkpoint Keywords Input */}
+              {p.selectedModel && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                    {t.controlPanel.modelKeywordsLabel}
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={p.modelKeywords}
+                    onChange={(e) => p.setModelKeywords(e.target.value)}
+                    placeholder={t.controlPanel.modelKeywordsPlaceholder}
+                    disabled={p.loading}
+                    style={{ borderRadius: '8px', fontSize: '12px', padding: '6px 10px' }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Sampler + Schedule Type */}
@@ -872,22 +892,39 @@ export function ControlPanel(p: ControlPanelProps) {
                 </select>
               )}
               {p.selectedLoras.map((l) => (
-                <div key={l.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '6px 8px' }}>
-                  <span style={{ flex: 1, fontSize: '11px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.name}>{l.name}</span>
+                <div key={l.name} style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--panel-bg)', border: '2px solid var(--panel-border)', borderRadius: '8px', padding: '8px 10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ flex: 1, fontSize: '11px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.name}>{l.name}</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.05"
+                      value={l.weight}
+                      onChange={(e) => p.setLoraWeight(l.name, parseFloat(e.target.value))}
+                      disabled={p.loading}
+                      style={{ width: '80px', accentColor: 'var(--pop-blue)' }}
+                    />
+                    <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-secondary)', width: '32px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{l.weight.toFixed(2)}</span>
+                    <button
+                      type="button"
+                      onClick={() => p.removeLora(l.name)}
+                      disabled={p.loading}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '2px 4px' }}
+                      title="Remove LoRA"
+                    >
+                      ×
+                    </button>
+                  </div>
                   <input
-                    type="range"
-                    min="0"
-                    max="1.5"
-                    step="0.05"
-                    value={l.weight}
-                    onChange={(e) => p.setLoraWeight(l.name, parseFloat(e.target.value))}
+                    type="text"
+                    className="input-field"
+                    value={l.keywords || ''}
+                    onChange={(e) => p.setLoraKeywords(l.name, e.target.value)}
+                    placeholder={t.controlPanel.loraKeywordsPlaceholder}
                     disabled={p.loading}
-                    style={{ width: '90px' }}
+                    style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '6px' }}
                   />
-                  <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--pop-blue)', width: '30px', textAlign: 'right' }}>{l.weight.toFixed(2)}</span>
-                  <button type="button" onClick={() => p.removeLora(l.name)} disabled={p.loading} title={t.controlPanel.removeLoraTitle} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
-                    <X size={14} />
-                  </button>
                 </div>
               ))}
             </div>
