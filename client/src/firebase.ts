@@ -84,7 +84,7 @@ export type GenerationParams = {
   hrScale?: number;
   hrSecondPassSteps?: number;
   denoisingStrength?: number;
-  loras?: { name: string; weight: number }[];
+  loras?: { name: string; weight: number; keywords?: string }[];
   // SDXL-only refinement pass: `refiner` is the checkpoint title, `refinerSwitchAt`
   // is the 0.0-1.0 fraction of steps at which SD switches from the base model to
   // the refiner. Both absent (or refiner === '') means no refinement.

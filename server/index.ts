@@ -81,7 +81,7 @@ interface GenerationMetadata {
   hrScale?: number;
   hrSecondPassSteps?: number;
   denoisingStrength?: number;
-  loras?: { name: string; weight: number }[];
+  loras?: { name: string; weight: number; keywords?: string }[];
   // SDXL-only refinement pass: a second checkpoint applied for the last
   // (1 − refinerSwitchAt) fraction of steps. Both fields are absent when the
   // user didn't opt in.
@@ -573,9 +573,13 @@ app.post('/api/generate', async (req: Request, res: Response) => {
   cancelRequested = false; // defensive reset — clears any stale flag from an unrelated, already-finished request
   const seedVal = seed !== undefined ? parseInt(seed) : -1;
   // Normalize the selected LoRAs (default weight 0.8); applied as <lora:name:weight> in the prompt.
-  const loraList: { name: string; weight: number }[] = (Array.isArray(loras) ? loras : [])
+  const loraList: { name: string; weight: number; keywords?: string }[] = (Array.isArray(loras) ? loras : [])
     .filter((l: { name?: string }) => l && l.name)
-    .map((l: { name: string; weight?: number }) => ({ name: l.name, weight: typeof l.weight === 'number' ? l.weight : 0.8 }));
+    .map((l: { name: string; weight?: number; keywords?: string }) => ({
+      name: l.name,
+      weight: typeof l.weight === 'number' ? l.weight : 0.8,
+      ...(l.keywords ? { keywords: l.keywords } : {}),
+    }));
 
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
