@@ -156,3 +156,32 @@ export function computeLoadIntoFormState(
 
   return state;
 }
+
+export interface LoadedLora {
+  name: string;
+  weight: number;
+  keywords?: string;
+}
+
+export interface FormLora {
+  name: string;
+  weight: number;
+  keywords: string;
+}
+
+/**
+ * Resolves LoRA items loaded from past history or recipes, preserving explicit keywords
+ * when present and falling back to a storage lookup (e.g. localStorage) for legacy records.
+ */
+export function resolveLoadedLoras(
+  loras: LoadedLora[] | undefined,
+  getFallbackKeywords: (name: string) => string
+): FormLora[] {
+  if (!loras || !Array.isArray(loras)) return [];
+  return loras.map((l) => ({
+    name: l.name,
+    weight: typeof l.weight === 'number' ? l.weight : 0.8,
+    keywords: l.keywords !== undefined ? l.keywords : (getFallbackKeywords(l.name) || ''),
+  }));
+}
+

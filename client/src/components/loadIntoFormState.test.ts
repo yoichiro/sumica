@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeLoadIntoFormState,
   inferSdArchitectureFromTitle,
+  resolveLoadedLoras,
   resolveSelectedModel,
 } from './loadIntoFormState';
 import type { SdModel } from './presets';
@@ -318,3 +319,35 @@ describe('resolveSelectedModel', () => {
     expect(resolveSelectedModel('', 'sdxl', [])).toBe('');
   });
 });
+
+describe('resolveLoadedLoras', () => {
+  it('preserves keywords when present on the loaded item', () => {
+    const input = [
+      { name: 'lora1', weight: 0.8, keywords: 'costume_a, ribbon' },
+      { name: 'lora2', weight: 1.0, keywords: 'hatsune miku' },
+    ];
+    const resolved = resolveLoadedLoras(input, () => 'fallback');
+    expect(resolved).toEqual([
+      { name: 'lora1', weight: 0.8, keywords: 'costume_a, ribbon' },
+      { name: 'lora2', weight: 1.0, keywords: 'hatsune miku' },
+    ]);
+  });
+
+  it('falls back to getter when keywords are missing or undefined on legacy records', () => {
+    const input = [
+      { name: 'lora1', weight: 0.8 },
+      { name: 'lora2', weight: 1.0, keywords: '' },
+    ];
+    const resolved = resolveLoadedLoras(input, (name) => (name === 'lora1' ? 'saved_lora1_tag' : ''));
+    expect(resolved).toEqual([
+      { name: 'lora1', weight: 0.8, keywords: 'saved_lora1_tag' },
+      { name: 'lora2', weight: 1.0, keywords: '' },
+    ]);
+  });
+
+  it('handles empty or undefined loras array', () => {
+    expect(resolveLoadedLoras(undefined, () => 'test')).toEqual([]);
+    expect(resolveLoadedLoras([], () => 'test')).toEqual([]);
+  });
+});
+
